@@ -13,3 +13,15 @@ __pycache__/
 # OS Files
 .DS_Store
 Thumbs.db
+# Node.js
+node_modules/
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Mac/Windows system files
+.DS_Store
+Thumbs.db
