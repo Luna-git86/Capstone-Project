@@ -1,0 +1,15 @@
+# Node.js (Vite Frontend & Express Backend)
+node_modules/
+.env
+
+# Python (FastAPI ML-Engine)
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# OS Files
+.DS_Store
+Thumbs.db
