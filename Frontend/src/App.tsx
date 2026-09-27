@@ -1,26 +1,21 @@
 import { useState, useEffect } from 'react';
 import './App.css';
 
-// 1. Definisikan Struktur Data Tiket (TypeScript Interface)
 interface Ticket {
   id: string;
   title: string;
   reporter: string;
   urgency: 'Low' | 'Medium' | 'High' | 'Urgent';
   status: 'Open' | 'In Progress' | 'Under Evaluation' | 'Closed';
-  deadline: string; // Format ISO Date
-  isOverdue?: boolean; // Label SLA
+  deadline: string; 
+  isOverdue?: boolean; 
 }
 
 function App() {
-  // 2. React State untuk menyimpan data tiket (Pengganti DOM Manipulation manual)
   const [tickets, setTickets] = useState<Ticket[]>([]);
 
-  // 3. Logika Real-Time Fetch & SLA
   const fetchTickets = async () => {
     try {
-      // CATATAN: Nanti fetch ke backend Express Anda (misal: fetch('http://localhost:3000/api/tickets'))
-      // Sementara kita gunakan dummy data untuk merender UI
       const dummyData: Ticket[] = [
         {
           id: "TCK-001",
@@ -28,7 +23,7 @@ function App() {
           reporter: "Koordinator UGD",
           urgency: "Urgent",
           status: "Open",
-          deadline: "2026-09-25T10:00:00", // Coba ubah tanggal ini menjadi kemarin untuk melihat efek OVERDUE
+          deadline: "2026-09-25T10:00:00",
         },
         {
           id: "TCK-002",
@@ -40,23 +35,19 @@ function App() {
         }
       ];
 
-      // Kalkulasi SLA: Cek apakah waktu saat ini melebihi deadline
       const currentTime = new Date();
       const ticketsWithSLA = dummyData.map(ticket => {
         const deadlineDate = new Date(ticket.deadline);
         const isOverdue = ticket.status !== 'Closed' && currentTime > deadlineDate;
-        
         return { ...ticket, isOverdue };
       });
 
-      // Update state, React akan otomatis merender ulang UI (Real-time DOM Manipulation)
       setTickets(ticketsWithSLA);
     } catch (error) {
       console.error("Gagal mengambil data tiket", error);
     }
   };
 
-  // 4. useEffect: Menjalankan Fetch pertama kali & interval (polling) tiap 5 detik
   useEffect(() => {
     fetchTickets();
     const interval = setInterval(fetchTickets, 5000);
@@ -64,38 +55,75 @@ function App() {
   }, []);
 
   return (
-    <div className="dashboard-container">
-      <header className="header">
-        <h1>Dasbor Manajerial (E-Ticketing & SLA)</h1>
-        <p>Memantau antrean tiket dan pelanggaran batas waktu</p>
-      </header>
+    <div className="app-layout">
+      {/* SIDEBAR */}
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-icon"></div>
+          <h2>E-Ticketing</h2>
+        </div>
+        <nav className="menu">
+          <p className="menu-label">Main Menu</p>
+          <ul>
+            <li className="active">Dashboard</li>
+            <li>Antrean Tiket</li>
+            <li>Dokumen SOP</li>
+          </ul>
+        </nav>
+      </aside>
 
-      <div className="ticket-list">
-        {tickets.length === 0 ? <p>Membaca data dari server...</p> : null}
-        
-        {tickets.map((ticket) => (
-          <div 
-            key={ticket.id} 
-            // Dinamis memberikan class 'overdue' jika pelanggaran SLA terjadi
-            className={`ticket-card urgency-${ticket.urgency.toLowerCase()} ${ticket.isOverdue ? 'overdue-alert' : ''}`}
-          >
-            <div className="ticket-header">
-              <h3>{ticket.title}</h3>
-              {ticket.isOverdue && <span className="badge-overdue"> SLA OVERDUE</span>}
-            </div>
-            
-            <div className="ticket-body">
-              <p><strong>ID Tiket:</strong> {ticket.id}</p>
-              <p><strong>Pelapor:</strong> {ticket.reporter}</p>
-              <p><strong>Status:</strong> <span className={`status-${ticket.status.replace(/\s+/g, '-').toLowerCase()}`}>{ticket.status}</span></p>
-              <p><strong>Batas Waktu:</strong> {new Date(ticket.deadline).toLocaleString('id-ID')}</p>
-            </div>
-
-            <div className="ticket-actions">
-              <button className="btn-action">Evaluasi Tiket / Submit</button>
+      {/* MAIN WRAPPER */}
+      <div className="main-wrapper">
+        {/* TOP NAVBAR */}
+        <header className="topbar">
+          <div className="search-bar">
+             Cari Tiket, Divisi...
+          </div>
+          <div className="user-profile">
+            <div className="avatar"></div>
+            <div className="user-info">
+              <span className="user-name">Nama User</span>
+              <span className="user-role">Kepala Divisi</span>
             </div>
           </div>
-        ))}
+        </header>
+
+        {/* CONTENT AREA */}
+        <main className="main-content">
+          <div className="content-header">
+            <h1>Dasbor Manajerial (SLA Monitoring)</h1>
+            <p>Memantau antrean tiket dan pelanggaran batas waktu operasional</p>
+          </div>
+
+          <div className="ticket-list">
+            {tickets.length === 0 ? <p>Membaca data dari server...</p> : null}
+            
+            {tickets.map((ticket) => (
+              <div 
+                key={ticket.id} 
+                className={`ticket-card urgency-${ticket.urgency.toLowerCase()} ${ticket.isOverdue ? 'overdue-alert' : ''}`}
+              >
+                <div className="ticket-header">
+                  <h3>{ticket.title}</h3>
+                  {ticket.isOverdue && <span className="badge-overdue"> Terlambat </span>}
+                </div>
+                
+                <div className="ticket-body">
+                  <div className="ticket-info-grid">
+                    <div><strong>ID Tiket:</strong> {ticket.id}</div>
+                    <div><strong>Pelapor:</strong> {ticket.reporter}</div>
+                    <div><strong>Status:</strong> <span className="status-badge">{ticket.status}</span></div>
+                    <div><strong>Batas Waktu:</strong> {new Date(ticket.deadline).toLocaleString('id-ID')}</div>
+                  </div>
+                </div>
+
+                <div className="ticket-actions">
+                  <button className="btn-action">Evaluasi Tiket</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </main>
       </div>
     </div>
   );
