@@ -1,93 +1,124 @@
-.counter {
-  font-size: 16px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
-  margin-bottom: 24px;
+/* RESET & BASE */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; color: #333; }
 
-  .dashboard-container {
-  padding: 20px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f8f9fa;
+/* LAYOUT GRID */
+.app-layout {
+  display: flex;
   min-height: 100vh;
+  width: 100%;
 }
 
-.header {
-  margin-bottom: 30px;
-  border-bottom: 2px solid #e9ecef;
-  padding-bottom: 10px;
-}
-
-.ticket-list {
+/* SIDEBAR */
+.sidebar {
+  width: 260px;
+  background-color: #0b1c3c; /* Biru gelap khas Figma Anda */
+  color: white;
   display: flex;
   flex-direction: column;
-  gap: 15px;
 }
 
-/* Base Card Style */
-.ticket-card {
-  background: white;
-  padding: 20px;
+.brand {
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.brand-icon {
+  width: 32px; height: 32px;
+  background-color: #3b82f6;
   border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  border-left: 6px solid #ccc;
-  transition: all 0.3s ease;
 }
 
-/* Urgency Colors (Threshold-Based) */
+.menu { padding: 24px 12px; }
+.menu-label { font-size: 0.8rem; color: #8fa0bd; margin-bottom: 12px; padding-left: 12px; text-transform: uppercase; letter-spacing: 1px;}
+.menu ul { list-style: none; }
+.menu li {
+  padding: 12px; margin-bottom: 8px;
+  border-radius: 6px; cursor: pointer; color: #cbd5e1;
+  transition: all 0.2s;
+}
+.menu li:hover { background-color: rgba(255,255,255,0.05); color: white; }
+.menu li.active { background-color: rgba(255,255,255,0.1); color: white; font-weight: bold; border-left: 4px solid #3b82f6; }
+
+/* MAIN WRAPPER & TOPBAR */
+.main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+.topbar {
+  height: 70px; background-color: white;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 32px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.search-bar { color: #94a3b8; font-size: 0.95rem; }
+
+.user-profile { display: flex; align-items: center; gap: 12px; }
+.avatar { width: 40px; height: 40px; background-color: #2563eb; border-radius: 50%; }
+.user-info { display: flex; flex-direction: column; text-align: left; }
+.user-name { font-weight: bold; font-size: 0.9rem; }
+.user-role { font-size: 0.8rem; color: #64748b; }
+
+/* CONTENT AREA */
+.main-content { padding: 32px; background-color: #f8fafc; flex: 1; }
+.content-header { margin-bottom: 24px; text-align: left; }
+.content-header h1 { font-size: 1.5rem; color: #0f172a; margin-bottom: 4px; }
+.content-header p { color: #64748b; font-size: 0.95rem; }
+
+/* TICKET LIST & CARDS */
+.ticket-list { display: flex; flex-direction: column; gap: 16px; }
+
+.ticket-card {
+  background: white; padding: 24px; border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  border: 1px solid #e2e8f0;
+  border-left: 6px solid #ccc;
+  text-align: left; /* Memaksa teks rata kiri */
+}
+
+/* KATEGORI URGENSI */
 .urgency-urgent { border-left-color: #dc3545; }
 .urgency-high { border-left-color: #fd7e14; }
 .urgency-medium { border-left-color: #ffc107; }
 .urgency-low { border-left-color: #20c997; }
 
-/* SLA Overdue Alert (Fitur Utama Anda) */
+/* SLA OVERDUE ALERT */
 .overdue-alert {
-  background-color: #fff5f5;
-  border: 1px solid #dc3545;
+  background-color: #fffafa;
+  border: 1px solid #fca5a5;
   border-left: 6px solid #dc3545;
-  animation: pulse-red 2s infinite;
+  animation: pulse-red 2.5s infinite;
 }
 
 .badge-overdue {
-  color: #dc3545;
-  font-weight: bold;
-  font-size: 0.9em;
-  background: #ffe3e3;
-  padding: 4px 8px;
-  border-radius: 4px;
+  color: #b91c1c; font-weight: bold; font-size: 0.85rem;
+  background: #fee2e2; padding: 6px 12px; border-radius: 20px;
 }
 
-.ticket-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px dashed #eee;
-  padding-bottom: 10px;
-  margin-bottom: 10px;
+.ticket-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.ticket-header h3 { font-size: 1.1rem; color: #0f172a; }
+
+.ticket-info-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 12px; color: #475569; font-size: 0.95rem;
 }
 
-.ticket-header h3 { margin: 0; }
-
+.ticket-actions { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: right; }
 .btn-action {
-  background: #0d6efd;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 15px;
+  background: #2563eb; color: white; border: none; padding: 10px 20px;
+  border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem;
 }
+.btn-action:hover { background: #1d4ed8; }
 
-.btn-action:hover { background: #0b5ed7; }
-
-/* Animasi untuk tugas telat */
 @keyframes pulse-red {
-  0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.2); }
+  70% { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
   100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
-}
-
 }
