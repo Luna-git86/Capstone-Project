@@ -1,124 +1,258 @@
-/* RESET & BASE */
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; color: #333; }
+/* --- RESET --- */
+html, body, #root { width: 100%; height: 100%; margin: 0; padding: 0; max-width: none; }
+* { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+body { background-color: #f8fafc; }
 
-/* LAYOUT GRID */
-.app-layout {
-  display: flex;
-  min-height: 100vh;
-  width: 100%;
+.app-container { display: flex; width: 100%; min-height: 100vh; }
+
+/* --- KONFIGURASI IKON SVG --- */
+.icon-svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.icon-svg-small { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.icon-svg-top { width: 20px; height: 20px; stroke: #64748b; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.card-icon-svg { width: 22px; height: 22px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.icon-main-logo { width: 24px; height: 24px; padding: 2px; }
+
+/* --- SIDEBAR --- */
+.sidebar { width: 260px; background-color: #042139; color: white; display: flex; flex-direction: column; }
+.sidebar-header { display: flex; align-items: center; padding: 25px 20px; gap: 15px; }
+.logo-icon { width: 40px; height: 40px; background-color: #38bdf8; border-radius: 10px; display: flex; justify-content: center; align-items: center; }
+.logo-text h2 { font-size: 1.1rem; margin: 0; font-weight: 600; }
+.logo-text p { font-size: 0.75rem; margin: 2px 0 0 0; color: #94a3b8; }
+
+.sidebar-nav { padding: 0; }
+.nav-title { font-size: 0.85rem; color: #f8fafc; font-weight: bold; padding: 0 20px; margin-bottom: 8px; }
+.sidebar-nav ul { list-style: none; padding: 0; margin: 0; }
+.sidebar-nav li {
+  padding: 0px 20px; color: #94a3b8; cursor: pointer; display: flex; align-items: center; gap: 12px; font-size: 0.95rem; transition: 0.2s;
 }
+.sidebar-nav li:hover { color: white; }
+.sidebar-nav li.active { background-color: #0c4a6e; color: white; font-weight: 600; border-radius: 0 20px 20px 0; margin-right: 20px; }
+.sidebar-nav li {margin-bottom: 4px;}
+.has-dropdown { justify-content: space-between; }
+.menu-item-left { display: flex; align-items: center; gap: 12px; }
 
-/* SIDEBAR */
-.sidebar {
-  width: 260px;
-  background-color: #0b1c3c; /* Biru gelap khas Figma Anda */
-  color: white;
-  display: flex;
-  flex-direction: column;
-}
 
-.brand {
-  padding: 24px;
+.sidebar-nav a.nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  text-navigation: none;
+  text-decoration: none;
+  color: #94a3b8;
+  padding: 10px 20px; /* Menyesuaikan tinggi tombol agar lebih padat */
+  transition: 0.2s;
 }
 
-.brand-icon {
-  width: 32px; height: 32px;
-  background-color: #3b82f6;
-  border-radius: 8px;
+/* --- MAIN CONTENT & TOPBAR --- */
+.main-content { flex: 1; display: flex; flex-direction: column; overflow-x: hidden; }
+
+.topbar { background: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; }
+.topbar-left h1 { font-size: 1.6rem; color: #0f172a; margin: 0 0 5px 0; }
+.topbar-left p { color: #94a3b8; font-size: 0.9rem; margin: 0; }
+
+.topbar-right { display: flex; align-items: center; gap: 20px; }
+.filter-group { display: flex; align-items: center; gap: 10px; }
+.filter-label { font-size: 0.9rem; color: #94a3b8; font-weight: 600; }
+.filter-select { padding: 8px 15px; border: 1px solid #cbd5e1; border-radius: 20px; outline: none; background: white; font-weight: 600; cursor: pointer; }
+.btn-icon { background: none; border: none; cursor: pointer; display: flex; align-items: center; }
+
+.user-profile { display: flex; align-items: center; gap: 10px; }
+.user-avatar { width: 40px; height: 40px; background-color: #2563eb; border-radius: 50%; }
+.user-info { display: flex; flex-direction: column; }
+.user-name { font-size: 0.9rem; font-weight: 600; color: #1e293b; }
+.user-role { font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 4px; }
+.inline-caret { stroke: #64748b; }
+
+/* --- DASHBOARD AREA & KARTU INFO --- */
+.dashboard-area { padding: 30px; display: flex; flex-direction: column; gap: 25px; }
+
+.info-cards-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.info-card { padding: 20px; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+
+.card-blue { background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+.card-green { background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+.card-yellow { background-color: #fef9c3; color: #a16207; border: 1px solid #fef08a; }
+.card-red { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+
+.card-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 0.95rem; }
+.card-value { font-size: 2.8rem; font-weight: bold; margin: 10px 0; }
+.progress-text { font-size: 0.75rem; margin-bottom: 5px; font-weight: 600; }
+.progress-bar { width: 100%; height: 4px; background-color: rgba(0,0,0,0.1); border-radius: 2px; }
+.progress-fill { height: 100%; background-color: currentColor; border-radius: 2px; }
+
+/* --- PANEL BAWAH --- */
+.bottom-panels { display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; min-height: 400px; }
+
+.panel { background: white; border-radius: 12px; padding: 25px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow: hidden; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 15px; margin-bottom: 15px; }
+.title-with-icon { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; color: #0f172a; margin: 0; }
+.title-icon { stroke: #0f172a; stroke-width: 3; }
+.panel-subtitle { font-size: 0.9rem; font-weight: 600; color: #0f172a; }
+.sub-heading { color: #0f172a; font-size: 0.85rem; font-weight: 600; margin-top: 5px; }
+.column-header { justify-content: flex-start; align-items: flex-start; }
+
+/* List Capaian Terkini */
+.list-container { display: flex; flex-direction: column; gap: 15px; }
+.list-item { display: flex; align-items: center; gap: 15px; }
+.list-icon { width: 24px; height: 24px; border-radius: 50%; border: 1px solid #0f172a; display: flex; justify-content: center; align-items: center; }
+.list-text { flex: 1; }
+.list-text h4 { margin: 0 0 3px 0; font-size: 0.95rem; color: #0f172a; }
+.list-text p { margin: 0; font-size: 0.75rem; color: #64748b; }
+.badge-urgent-grey { background-color: #e2e8f0; color: #475569; padding: 4px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; }
+
+/* --- TABEL URGENT (Dapat Digeser) --- */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto; /* Mengaktifkan scroll horizontal */
+  -webkit-overflow-scrolling: touch;
 }
 
-.menu { padding: 24px 12px; }
-.menu-label { font-size: 0.8rem; color: #8fa0bd; margin-bottom: 12px; padding-left: 12px; text-transform: uppercase; letter-spacing: 1px;}
-.menu ul { list-style: none; }
-.menu li {
-  padding: 12px; margin-bottom: 8px;
-  border-radius: 6px; cursor: pointer; color: #cbd5e1;
-  transition: all 0.2s;
+.urgent-table {
+  width: 100%;
+  min-width: 600px; /* Memaksa tabel tetap lebar agar scroll aktif di layar kecil */
+  border-collapse: collapse;
 }
-.menu li:hover { background-color: rgba(255,255,255,0.05); color: white; }
-.menu li.active { background-color: rgba(255,255,255,0.1); color: white; font-weight: bold; border-left: 4px solid #3b82f6; }
 
-/* MAIN WRAPPER & TOPBAR */
-.main-wrapper {
-  flex: 1;
+.urgent-table thead tr {
+  background-color: #f3f4f6; /* Warna latar abu-abu sesuai referensi gambar */
+}
+
+.urgent-table th {
+  text-align: left;
+  padding: 12px 15px;
+  font-size: 0.85rem;
+  color: #111827;
+  font-weight: 700;
+}
+
+.urgent-table td {
+  padding: 15px 15px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0f172a;
+  border-bottom: 1px solid #f1f5f9;
+  white-space: nowrap; /* Mencegah teks terpotong ke bawah */
+}
+
+.sidebar-nav a.nav-item {
   display: flex;
-  flex-direction: column;
-  overflow-x: hidden;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: #94a3b8;
+  padding: 12px 20px;
+  transition: 0.2s;
 }
 
-.topbar {
-  height: 70px; background-color: white;
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 0 32px;
+.sidebar-nav a.nav-item:hover {
+  color: white;
+}
+
+.sidebar-nav a.nav-item.active {
+  background-color: #0c4a6e;
+  color: white;
+  font-weight: 600;
+  border-radius: 0 20px 20px 0;
+  margin-right: 20px;
+}
+
+.accordion-header {
+  padding: 20px 30px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  transition: opacity 0.2s ease;
+}
+.accordion-header:hover { opacity: 0.9; }
+
+/* Memastikan warna latar latar belakang accordion berfungsi sempurna */
+.accordion-header.bg-red { background-color: #dc2626 !important; color: white !important; }
+.accordion-header.bg-gray { background-color: #d1d5db !important; color: #111827 !important; }
+.accordion-header.bg-blue { background-color: #0284c7 !important; color: white !important; }
+.accordion-header.bg-orange { background-color: #f59e0b !important; color: white !important; }
+.accordion-header.bg-green { background-color: #16a34a !important; color: white !important; }
+
+/* Mengatur ukuran ikon panah agar tidak raksasa */
+.accordion-icon {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+/* --- STYLING AREA ACCORDION & TABEL --- */
+.accordion-body {
+  padding: 20px 25px;
+  background-color: #f8fafc;
   border-bottom: 1px solid #e2e8f0;
 }
 
-.search-bar { color: #94a3b8; font-size: 0.95rem; }
-
-.user-profile { display: flex; align-items: center; gap: 12px; }
-.avatar { width: 40px; height: 40px; background-color: #2563eb; border-radius: 50%; }
-.user-info { display: flex; flex-direction: column; text-align: left; }
-.user-name { font-weight: bold; font-size: 0.9rem; }
-.user-role { font-size: 0.8rem; color: #64748b; }
-
-/* CONTENT AREA */
-.main-content { padding: 32px; background-color: #f8fafc; flex: 1; }
-.content-header { margin-bottom: 24px; text-align: left; }
-.content-header h1 { font-size: 1.5rem; color: #0f172a; margin-bottom: 4px; }
-.content-header p { color: #64748b; font-size: 0.95rem; }
-
-/* TICKET LIST & CARDS */
-.ticket-list { display: flex; flex-direction: column; gap: 16px; }
-
-.ticket-card {
-  background: white; padding: 24px; border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+.table-wrapper {
+  background: white;
+  border-radius: 8px;
   border: 1px solid #e2e8f0;
-  border-left: 6px solid #ccc;
-  text-align: left; /* Memaksa teks rata kiri */
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* KATEGORI URGENSI */
-.urgency-urgent { border-left-color: #dc3545; }
-.urgency-high { border-left-color: #fd7e14; }
-.urgency-medium { border-left-color: #ffc107; }
-.urgency-low { border-left-color: #20c997; }
-
-/* SLA OVERDUE ALERT */
-.overdue-alert {
-  background-color: #fffafa;
-  border: 1px solid #fca5a5;
-  border-left: 6px solid #dc3545;
-  animation: pulse-red 2.5s infinite;
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.badge-overdue {
-  color: #b91c1c; font-weight: bold; font-size: 0.85rem;
-  background: #fee2e2; padding: 6px 12px; border-radius: 20px;
+.task-table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+  text-align: left;
 }
 
-.ticket-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.ticket-header h3 { font-size: 1.1rem; color: #0f172a; }
-
-.ticket-info-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr);
-  gap: 12px; color: #475569; font-size: 0.95rem;
+/* Header Tabel per Kategori */
+.task-table th {
+  padding: 14px 20px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
 }
 
-.ticket-actions { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: right; }
-.btn-action {
-  background: #2563eb; color: white; border: none; padding: 10px 20px;
-  border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem;
-}
-.btn-action:hover { background: #1d4ed8; }
+.th-red { background-color: #fee2e2; color: #991b1b; }
+.th-gray { background-color: #f3f4f6; color: #111827; }
+.th-blue { background-color: #e0f2fe; color: #0369a1; }
+.th-orange { background-color: #fef3c7; color: #92400e; }
+.th-green { background-color: #dcfce7; color: #15803d; }
 
-@keyframes pulse-red {
-  0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.2); }
-  70% { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+/* Baris Isi Tabel */
+.task-table td {
+  padding: 16px 20px;
+  font-weight: 600;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.9rem;
+}
+
+.task-table tr:last-child td {
+  border-bottom: none;
+}
+
+.task-table tr:hover {
+  background-color: #f8fafc;
+}
+
+/* Badge Prioritas */
+.badge-urgent-grey {
+  background-color: #e2e8f0;
+  color: #475569;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
