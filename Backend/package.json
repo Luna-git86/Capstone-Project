@@ -1,20 +1,22 @@
 {
-  "name": "backend",
+  "name": "rsia-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend E-Ticketing RSIA Qurrata Ayun",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "db:migrate": "prisma migrate dev --name init_rsia_tables",
+    "db:generate": "prisma generate"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "axios": "^1.20.0",
-    "cors": "^2.8.6",
-    "dotenv": "^18.0.1",
-    "express": "^5.2.1",
-    "pg": "^8.23.0"
+    "@prisma/client": "5.11.0",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "prisma": "5.11.0"
   }
 }
