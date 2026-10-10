@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- ENUM UNTUK KEAMANAN DATA ---
+enum Role {
+  ADMIN       // Sesuai entitas: Admin Sistem
+  DIREKTUR    // Sesuai entitas: Direktur
+  KADIV       // Sesuai entitas: Kepala Divisi
+  KOORDINATOR // Sesuai entitas: Koordinator
+  STAF        // Sesuai entitas: User Biasa
+}
+
+enum Urgency {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  MENUNGGU_EVALUASI
+  DALAM_PROSES
+  SELESAI
+  DITOLAK
+}
+
+// --- 1. TABEL PENGGUNA (RBAC) ---
+model User {
+  id              String       @id @default(uuid())
+  namaLengkap     String
+  email           String       @unique
+  nomorWhatsApp   String?      // Mendukung WhatsApp Gateway 
+  password        String
+  role            Role         @default(STAF)
+  divisiId        String?      
+  
+  tiketDibuat     Ticket[]     @relation("PembuatTiket")
+  tiketDitugaskan Ticket[]     @relation("PelaksanaTiket")
+  auditLogs       AuditTrail[]
+  dokumenSop      SopDocument[]
+}
+
+// --- 2. TABEL DIVISI ---
+model Division {
+  id         String @id @default(uuid())
+  namaDivisi String
+}
+
+// --- 3. TABEL TIKET (PELAPORAN & TUGAS) ---
+model Ticket {
+  id                  String       @id @default(uuid())
+  judul               String
+  deskripsi           String
+  kategori            String?      // Fasilitas, IT, dll
+  fotoUrl             String?      // Lampiran bukti kerusakan
+  urgensi             Urgency      @default(LOW)
+  status              TicketStatus @default(MENUNGGU_EVALUASI)
+  
+  // Fitur SLA dan Perpanjangan Waktu 
+  targetSelesai       DateTime?    
+  isMintaPerpanjangan Boolean      @default(false) // Sesuai UI Dasbor Kadiv
+  alasanPerpanjangan  String?      // Alasan kenapa staf minta tambahan waktu
+
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  pembuatId           String
+  pembuat             User         @relation("PembuatTiket", fields: [pembuatId], references: [id])
+  
+  pelaksanaId         String?
+  pelaksana           User?        @relation("PelaksanaTiket", fields: [pelaksanaId], references: [id])
+
+  auditTrails         AuditTrail[]
+}
+
+// --- 4. TABEL AUDIT TRAIL (LOG KEAMANAN) ---
+model AuditTrail {
+  id            String   @id @default(uuid())
+  ticketId      String
+  ticket        Ticket   @relation(fields: [ticketId], references: [id])
+  
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  
+  aksi          String
+  statusLama    String?
+  statusBaru    String?
+  timestamp     DateTime @default(now()) 
+}
+
+// --- 5. TABEL SOP EKSEKUTIF ---
+model SopDocument {
+  id            String   @id @default(uuid())
+  judulDokumen  String
+  fileUrl       String
+  
+  diunggahOleh  String
+  user          User     @relation(fields: [diunggahOleh], references: [id])
+  
+  createdAt     DateTime @default(now())
+}
