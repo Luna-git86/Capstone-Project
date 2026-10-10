@@ -4,11 +4,11 @@ import Topbar from './Topbar';
 
 export default function Layout() {
   return (
-    <div className="app-container">
+    <div className="flex w-full min-h-screen bg-slate-50 font-sans">
       <Sidebar />
-      <main className="main-content">
+      <main className="flex-1 flex flex-col overflow-x-hidden">
         <Topbar />
-        {/* <Outlet /> adalah area dinamis. Halaman Dashboard atau Semua Tugas akan dibongkar-pasang di sini */}
+        {/* Outlet adalah tempat di mana halaman Dashboard atau Semua Tugas akan dirender */}
         <Outlet />
       </main>
     </div>
