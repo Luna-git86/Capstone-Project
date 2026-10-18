@@ -1,20 +1,25 @@
+// Backend/index.js
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
+require('dotenv').config(); // Untuk membaca JWT_SECRET dari file .env (jika ada)
 
 const app = express();
+const port = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
-app.use(express.json()); // Agar bisa menerima data berformat JSON dari frontend
+// Middleware bawaan Express
+app.use(cors()); // Mengizinkan akses dari Frontend (React)
+app.use(express.json()); // Agar bisa membaca format JSON dari request body
 
-// Rute Tes (Untuk memastikan server menyala)
+// Menghubungkan Rute
+const authRoutes = require('./routes/authRoutes');
+app.use('/api/auth', authRoutes);
+
+// Endpoint dasar untuk cek status server
 app.get('/', (req, res) => {
-  res.json({ message: "Server API E-Ticketing RSIA Qurrata A'yun Berjalan Lancar!" });
+  res.send('Server E-Ticketing RSIA berjalan dengan baik!');
 });
 
-// Menyalakan Server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server Backend menyala di port ${PORT}`);
+// Menyalakan server
+app.listen(port, () => {
+  console.log(`Server Backend berjalan di http://localhost:${port}`);
 });
