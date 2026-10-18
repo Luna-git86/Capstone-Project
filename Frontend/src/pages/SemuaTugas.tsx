@@ -141,7 +141,7 @@ export default function SemuaTugas() {
   };
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-8 max-w-6xl w-full">
       
       {/* Header Halaman */}
       <div className="mb-8 border-b border-slate-200 pb-6">
