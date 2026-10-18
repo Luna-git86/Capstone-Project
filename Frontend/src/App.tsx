@@ -9,6 +9,7 @@ import PersetujuanSop from './pages/PersetujuanSop';
 import PeformaAnalisis from './pages/PeformaAnalisis';
 import Login from './pages/Login';
 import RiwayatTugas from './pages/RiwayatTugas';
+import LaporkanMasalah from './pages/LaporkanMasalah';
 
 // Komponen Cerdas untuk menentukan Dashboard mana yang dirender
 const RoleBasedDashboard = () => {
@@ -35,7 +36,7 @@ export default function App() {
           <Route path="dokumen-sop/persetujuan" element={<PersetujuanSop />} />
           <Route path="peforma-analisis" element={<PeformaAnalisis />} />
           <Route path="riwayat-tugas" element={<RiwayatTugas />} />
-          <Route path="laporkan-masalah" element={<div className="p-8">Halaman Laporkan Masalah</div>} />
+          <Route path="laporkan-masalah" element={<LaporkanMasalah />} />
         </Route>
       </Routes>
     </BrowserRouter>
