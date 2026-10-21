@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+// Frontend/src/pages/Login.tsx
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import api from '../services/api'; // Pastikan path ini benar mengarah ke file api.ts Anda
 
-export default function Login() {
+const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -14,92 +16,96 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // Mengirim request ke Backend API yang Anda buat di index.js
-      const response = await fetch('http://localhost:5000/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+      // Memanggil endpoint API login Backend Node.js
+      const response = await api.post('/auth/login', { email, password });
+      const { token, user } = response.data;
 
-      const data = await response.json();
+      // Menyimpan otorisasi ke browser
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
 
-      if (response.ok) {
-        // Jika sukses, simpan token dan data user ke localStorage
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        
-        // Arahkan ke halaman utama Dashboard
-        navigate('/');
-      } else {
-        // Jika gagal (email/password salah), tampilkan pesan error dari backend
-        setErrorMsg(data.message || 'Gagal login, periksa kembali data Anda.');
+      // Redirect otomatis sesuai Role dari Backend
+      switch (user.role) {
+        case 'DIREKTUR':
+        case 'KADIV':
+          navigate('/dashboard'); // Eksekutif masuk ke dasbor analitik
+          break;
+        case 'STAF':
+          navigate('/dashboard-staff'); // Staf operasional masuk ke dasbor tugas harian
+          break;
+        default:
+          navigate('/dashboard'); // Default untuk Admin / Koordinator
       }
-    } catch (error) {
-      setErrorMsg('Tidak dapat terhubung ke server. Pastikan backend sudah menyala.');
+    } catch (err: any) {
+       setErrorMsg(err.response?.data?.message || 'Login gagal. Periksa kembali email dan password Anda.');
     } finally {
-      setIsLoading(false);
+       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+    <div className="flex h-screen w-full items-center justify-center bg-gray-50">
+      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-md">
+        <h2 className="mb-6 text-center text-3xl font-bold text-gray-800">
+          E-Ticketing RSIA
+        </h2>
         
-        {/* Header Logo & Title */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-sky-500 rounded-xl flex justify-center items-center mb-4 shadow-sm">
-            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" className="w-7 h-7">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <path d="M3 9h18M9 21V9"></path>
-            </svg>
+        {/* Menampilkan pesan error jika login gagal */}
+        {errorMsg && (
+          <div className="mb-4 rounded-md bg-red-100 p-3 text-sm text-red-700">
+            {errorMsg}
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Selamat Datang</h1>
-          <p className="text-sm text-slate-500 mt-1">Silakan masuk ke akun Anda</p>
-        </div>
+        )}
 
-        {/* Form Login */}
-        <form onSubmit={handleLogin} className="flex flex-col gap-5">
-          
-          {errorMsg && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-semibold text-center border border-red-100">
-              {errorMsg}
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700">Email</label>
-            <input 
-              type="email" 
+        <form onSubmit={handleLogin} className="space-y-5">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Alamat Email
+            </label>
+            <input
+              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Masukkan email Anda" 
-              className="w-full border border-slate-300 rounded-lg px-4 py-3 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all placeholder-slate-400"
               required
+              className="w-full rounded-md border border-gray-300 p-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Masukkan email Anda"
             />
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700">Password</label>
-            <input 
-              type="password" 
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Password
+            </label>
+            <input
+              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••" 
-              className="w-full border border-slate-300 rounded-lg px-4 py-3 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all placeholder-slate-400"
               required
+              className="w-full rounded-md border border-gray-300 p-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="••••••••"
             />
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={isLoading}
-            className="w-full bg-[#005bb5] hover:bg-blue-700 text-white font-bold py-3.5 rounded-lg transition-colors mt-2 disabled:opacity-70"
+            className={`w-full rounded-md p-2.5 font-semibold text-white transition ${
+              isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             {isLoading ? 'Memproses...' : 'Masuk'}
           </button>
         </form>
 
+        <div className="mt-4 text-center text-sm text-gray-600">
+          Belum punya akun?{' '}
+          <Link to="/register" className="text-blue-600 hover:underline">
+            Daftar di sini
+          </Link>
+        </div>
       </div>
     </div>
   );
-}
+};
+
+export default Login;

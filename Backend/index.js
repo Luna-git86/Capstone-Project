@@ -1,25 +1,27 @@
 // Backend/index.js
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config(); // Untuk membaca JWT_SECRET dari file .env (jika ada)
+require('dotenv').config(); 
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 3000;
 
-// Middleware bawaan Express
-app.use(cors()); // Mengizinkan akses dari Frontend (React)
-app.use(express.json()); // Agar bisa membaca format JSON dari request body
+app.use(cors()); 
+app.use(express.json()); 
 
-// Menghubungkan Rute
-const authRoutes = require('./routes/authRoutes');
+// Menghubungkan Rute Autentikasi
+const authRoutes = require('./routes/authRoute');
 app.use('/api/auth', authRoutes);
+
+// Menghubungkan Rute Tiket
+const ticketRoutes = require('./routes/ticketRoute');
+app.use('/api/tickets', ticketRoutes);
 
 // Endpoint dasar untuk cek status server
 app.get('/', (req, res) => {
   res.send('Server E-Ticketing RSIA berjalan dengan baik!');
 });
 
-// Menyalakan server
 app.listen(port, () => {
   console.log(`Server Backend berjalan di http://localhost:${port}`);
 });

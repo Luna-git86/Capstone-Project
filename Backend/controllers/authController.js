@@ -5,6 +5,7 @@ const prisma = require('../db'); // Memanggil instance database yang sudah kita 
 // 1. Fungsi Pendaftaran Akun Baru (Register)
 const register = async (req, res) => {
     try {
+        // Tangkap idDivisi dari frontend
         const { namaLengkap, email, password, role, idDivisi } = req.body;
 
         // Validasi input dasar
@@ -28,7 +29,9 @@ const register = async (req, res) => {
                 email,
                 password: hashedPassword,
                 role,
-                idDivisi: idDivisi || null // Bisa null untuk Admin atau Direktur yang tidak terikat 1 divisi operasional spesifik
+                // KIRI: divisiId (Sesuai schema Prisma)
+                // KANAN: idDivisi (Sesuai nama variabel dari req.body)
+                divisiId: idDivisi || null 
             }
         });
 
@@ -61,9 +64,9 @@ const login = async (req, res) => {
         }
 
         // Buat token JWT yang menyimpan identitas user
-        // Token ini yang akan diperiksa oleh authMiddleware kita sebelumnya
         const token = jwt.sign(
-            { id: user.id, role: user.role, idDivisi: user.idDivisi },
+            // Gunakan user.divisiId sesuai dengan kembalian dari Prisma
+            { id: user.id, role: user.role, divisiId: user.divisiId }, 
             process.env.JWT_SECRET || "kunci_rahasia_rsia_2026",
             { expiresIn: '1d' } // Token berlaku 1 hari
         );
@@ -76,7 +79,7 @@ const login = async (req, res) => {
                 namaLengkap: user.namaLengkap,
                 email: user.email,
                 role: user.role,
-                idDivisi: user.idDivisi
+                idDivisi: user.divisiId // Kirimkan kembali ke frontend sebagai idDivisi
             }
         });
 
