@@ -5,19 +5,25 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  const token = localStorage.getItem('token');
-  const userRole = localStorage.getItem('userRole'); 
+  // CATATAN: Ini adalah data dummy untuk keperluan desain UI Frontend.
+  // Nantinya, hapus object ini dan ganti dengan pemanggilan Context/Zustand 
+  // yang mengambil data user dari token backend teman Anda.
+  const currentUser = {
+    name: "Muhammad Hafidz",
+    role: "KOORDINATOR", // Ubah string ini ke "STAF", "KADIV", atau "DIREKTUR" untuk melihat halaman lain
+    isAuthenticated: true // Ubah ke false untuk mengetes lemparan ke halaman login
+  };
 
-  // Jika tidak ada token, kembalikan ke login
-  if (!token) {
+  // 1. Cek Autentikasi: Jika belum login, tendang kembali ke halaman Login
+  if (!currentUser.isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  // Jika role tidak sesuai dengan rute yang dituju, lemparkan ke halaman unauthorized
-  if (userRole && !allowedRoles.includes(userRole)) {
+  // 2. Cek Otorisasi Role: Jika role user tidak ada di daftar yang diizinkan, tendang ke halaman 403
+  if (!allowedRoles.includes(currentUser.role)) {
     return <Navigate to="/unauthorized" replace />;
   }
 
-  // Jika aman, render halaman
+  // 3. Jika semua aman, render komponen halaman utama (children/Outlet)
   return <Outlet />;
 }
