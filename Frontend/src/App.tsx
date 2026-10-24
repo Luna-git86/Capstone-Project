@@ -66,6 +66,7 @@ export default function App() {
             <Route path="/ruang-triase" element={<RuangTriase />} />
             <Route path="/menu-laporan" element={<AntreanLaporan />} />
             <Route path="/tugas/tambah" element={<TambahTugas />} />
+            <Route path="/pantau-validasi" element={<PantauValidasi />} />
           </Route>
 
           {/* --- AREA MANAJERIAL & EKSEKUTIF --- */}
