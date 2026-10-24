@@ -20,21 +20,31 @@ const Login = () => {
       const response = await api.post('/auth/login', { email, password });
       const { token, user } = response.data;
 
-      // Menyimpan otorisasi ke browser
+      // 1. Menyimpan otorisasi ke browser
       localStorage.setItem('token', token);
+      
+      // TAMBAHAN WAJIB: Simpan userRole agar bisa dibaca oleh ProtectedRoute
+      localStorage.setItem('userRole', user.role); 
+      
+      // (Opsional) Tetap simpan data user penuh jika Anda butuh nama/divisinya nanti
       localStorage.setItem('user', JSON.stringify(user));
 
-      // Redirect otomatis sesuai Role dari Backend
-      switch (user.role) {
-        case 'DIREKTUR':
-        case 'KADIV':
-          navigate('/dashboard'); // Eksekutif masuk ke dasbor analitik
-          break;
+      // 2. Redirect otomatis sesuai Role dan menyesuaikan dengan rute di App.tsx
+      const role = String(user.role).toUpperCase();
+      
+      switch (role) {
         case 'STAF':
-          navigate('/dashboard-staff'); // Staf operasional masuk ke dasbor tugas harian
+          navigate('/staf/dashboard'); 
+          break;
+        case 'KOORDINATOR':
+          navigate('/koordinator/dashboard');
+          break;
+        case 'KADIV':
+        case 'DIREKTUR':
+          navigate('/manajerial/dashboard');
           break;
         default:
-          navigate('/dashboard'); // Default untuk Admin / Koordinator
+          navigate('/staf/dashboard'); // Fallback
       }
     } catch (err: any) {
        setErrorMsg(err.response?.data?.message || 'Login gagal. Periksa kembali email dan password Anda.');

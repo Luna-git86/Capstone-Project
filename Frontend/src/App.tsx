@@ -1,60 +1,71 @@
-// Frontend/src/App.tsx
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import DashboardStaff from './pages/DashboardStaff';
-import SemuaTugas from './pages/SemuaTugas';
-import TambahTugas from './pages/TambahTugas';
-import PersetujuanSop from './pages/PersetujuanSop';
-import RiwayatTugas from './pages/RiwayatTugas';
-import PeformaAnalisis from './pages/PeformaAnalisis';
-import LaporkanMasalah from './pages/LaporkanMasalah';
+import ProtectedRoute from './components/ProtectedRoute';
+
+// Import Halaman (Pages)
 import Login from './pages/Login';
-import Register from './pages/Register';
+import Register from './pages/Register'; // TAMBAHKAN IMPORT INI
+import DashboardStaff from './pages/DashboardStaff';
+import LaporkanMasalah from './pages/LaporkanMasalah';
+import SemuaTugas from './pages/SemuaTugas'; 
+import RiwayatTugas from './pages/RiwayatTugas'; 
+import TambahTugas from './pages/TambahTugas'; 
 
-// 1. Komponen Penjaga (Protected Route)
-// Memeriksa apakah user memiliki Token JWT. Jika tidak, arahkan ke Login.
-const ProtectedRoute = () => {
-  const token = localStorage.getItem('token');
-  
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  // Jika ada token, izinkan masuk ke halaman yang direquest (Outlet merender Layout)
-  return <Outlet />;
-};
-
-function App() {
+export default function App() {
   return (
-    <BrowserRouter>
+    <Router>
       <Routes>
-        {/* Rute Publik (Bebas diakses tanpa token) */}
+        {/* Rute Autentikasi (Tanpa Sidebar/Topbar) */}
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-
-        {/* Rute yang Dilindungi (Wajib Login) */}
-        <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<Layout />}>
-            {/* Jika user mengakses root '/', otomatis arahkan ke dashboard */}
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="dashboard-staff" element={<DashboardStaff />} />
-            <Route path="tugas" element={<SemuaTugas />} />
-            <Route path="tugas/tambah" element={<TambahTugas />} />
-            <Route path="persetujuan-sop" element={<PersetujuanSop />} />
-            <Route path="riwayat" element={<RiwayatTugas />} />
-            <Route path="performa" element={<PeformaAnalisis />} />
-            <Route path="laporkan-masalah" element={<LaporkanMasalah />} />
-          </Route>
-        </Route>
+        <Route path="/register" element={<Register />} /> {/* TAMBAHKAN RUTE INI */}
         
-        {/* Tangkap rute yang tidak dikenal (404) dan lempar ke Login */}
+        {/* Semua rute di dalam Layout akan memiliki Sidebar & Topbar */}
+        <Route element={<Layout />}>
+          
+          {/* Rute Publik / Global (Bisa diakses siapapun yang login) */}
+          <Route path="/lapor" element={<LaporkanMasalah />} />
+          <Route path="/unauthorized" element={
+            <div className="p-8 text-red-500 font-bold text-2xl">
+              Akses Ditolak. Anda tidak memiliki izin untuk halaman ini.
+            </div>
+          } />
+
+          {/* ==========================================
+              AREA STAF
+              ========================================== */}
+          <Route element={<ProtectedRoute allowedRoles={['STAF']} />}>
+            <Route path="/staf/dashboard" element={<DashboardStaff />} />
+            <Route path="/staf/semua-tugas" element={<SemuaTugas />} />
+            <Route path="/staf/riwayat-tugas" element={<RiwayatTugas />} />
+
+            
+            {/* Jika staf mengakses root (/), lempar ke dashboard */}
+            <Route path="/" element={<Navigate to="/staf/dashboard" replace />} />
+          </Route>
+
+          {/* ==========================================
+              AREA KOORDINATOR
+              ========================================== */}
+          <Route element={<ProtectedRoute allowedRoles={['KOORDINATOR']} />}>
+            <Route path="/koordinator/dashboard" element={<div className="p-8">Dashboard Koordinator (Triase)</div>} />
+            <Route path="/koordinator/tambah-tugas" element={<TambahTugas />} />
+            <Route path="/koordinator/riwayat-tugas" element={<RiwayatTugas />} />
+            {/* Tambahkan rute validasi & tugas koordinator di sini */}
+          </Route>
+
+          {/* ==========================================
+              AREA MANAJERIAL & EKSEKUTIF (KADIV / DIREKTUR)
+              ========================================== */}
+          <Route element={<ProtectedRoute allowedRoles={['KADIV', 'DIREKTUR']} />}>
+            <Route path="/manajerial/dashboard" element={<div className="p-8">Portal Manajerial</div>} />
+            <Route path="/manajerial/peforma" element={<div className="p-8">Analisis Peforma</div>} />
+          </Route>
+
+        </Route>
+
+        {/* Fallback route: Jika URL tidak ditemukan (404), kembalikan ke login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-    </BrowserRouter>
+    </Router>
   );
 }
-
-export default App;
