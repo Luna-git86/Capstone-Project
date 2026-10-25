@@ -1,7 +1,7 @@
 // Frontend/src/pages/Login.tsx
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../services/api'; // Pastikan path ini benar mengarah ke file api.ts Anda
+import api from '../services/api';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -16,102 +16,60 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // Memanggil endpoint API login Backend Node.js
       const response = await api.post('/auth/login', { email, password });
       const { token, user } = response.data;
+      const role = String(user?.role || '').toUpperCase();
 
-      // 1. Menyimpan otorisasi ke browser
       localStorage.setItem('token', token);
-      
-      // TAMBAHAN WAJIB: Simpan userRole agar bisa dibaca oleh ProtectedRoute
-      localStorage.setItem('userRole', user.role); 
-      
-      // (Opsional) Tetap simpan data user penuh jika Anda butuh nama/divisinya nanti
+      localStorage.setItem('userRole', role);
       localStorage.setItem('user', JSON.stringify(user));
 
-      // 2. Redirect otomatis sesuai Role dan menyesuaikan dengan rute di App.tsx
-      const role = String(user.role).toUpperCase();
-      
       switch (role) {
         case 'STAF':
-          navigate('/staf/dashboard'); 
+          navigate('/dashboard-staff', { replace: true });
           break;
         case 'KOORDINATOR':
-          navigate('/koordinator/dashboard');
+          navigate('/dashboard-koordinator', { replace: true });
           break;
         case 'KADIV':
+          navigate('/performa', { replace: true });
+          break;
         case 'DIREKTUR':
-          navigate('/manajerial/dashboard');
+          navigate('/dashboard-direktur', { replace: true });
           break;
         default:
-          navigate('/staf/dashboard'); // Fallback
+          localStorage.removeItem('token');
+          localStorage.removeItem('userRole');
+          localStorage.removeItem('user');
+          setErrorMsg('Role akun tidak dikenali. Hubungi administrator.');
       }
     } catch (err: any) {
-       setErrorMsg(err.response?.data?.message || 'Login gagal. Periksa kembali email dan password Anda.');
+      setErrorMsg(err.response?.data?.message || 'Login gagal. Periksa kembali email dan password Anda.');
     } finally {
-       setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-gray-50">
       <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-md">
-        <h2 className="mb-6 text-center text-3xl font-bold text-gray-800">
-          E-Ticketing RSIA
-        </h2>
-        
-        {/* Menampilkan pesan error jika login gagal */}
-        {errorMsg && (
-          <div className="mb-4 rounded-md bg-red-100 p-3 text-sm text-red-700">
-            {errorMsg}
-          </div>
-        )}
-
+        <h2 className="mb-6 text-center text-3xl font-bold text-gray-800">E-Ticketing RSIA</h2>
+        {errorMsg && <div className="mb-4 rounded-md bg-red-100 p-3 text-sm text-red-700">{errorMsg}</div>}
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Alamat Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full rounded-md border border-gray-300 p-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="Masukkan email Anda"
-            />
+            <label className="mb-1 block text-sm font-medium text-gray-700">Alamat Email</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full rounded-md border border-gray-300 p-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Masukkan email Anda" />
           </div>
-
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full rounded-md border border-gray-300 p-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="••••••••"
-            />
+            <label className="mb-1 block text-sm font-medium text-gray-700">Password</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full rounded-md border border-gray-300 p-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="••••••••" />
           </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className={`w-full rounded-md p-2.5 font-semibold text-white transition ${
-              isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
+          <button type="submit" disabled={isLoading} className={`w-full rounded-md p-2.5 font-semibold text-white transition ${isLoading ? 'cursor-not-allowed bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}>
             {isLoading ? 'Memproses...' : 'Masuk'}
           </button>
         </form>
-
         <div className="mt-4 text-center text-sm text-gray-600">
-          Belum punya akun?{' '}
-          <Link to="/register" className="text-blue-600 hover:underline">
-            Daftar di sini
-          </Link>
+          Belum punya akun? <Link to="/register" className="text-blue-600 hover:underline">Daftar di sini</Link>
         </div>
       </div>
     </div>
