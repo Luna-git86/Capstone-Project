@@ -3,7 +3,6 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
 import DashboardStaff from './pages/DashboardStaff';
 import DashboardDirektur from './pages/DashboardDirektur';
 import SemuaTugas from './pages/SemuaTugas';
