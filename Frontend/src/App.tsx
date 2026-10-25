@@ -23,6 +23,7 @@ import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
 import RuangTriase from './pages/Koordinator/RuangTriase';
 import AntreanLaporan from './pages/Koordinator/MenuLaporan';
 import PantauValidasi from './pages/Koordinator/PantauValidasi';
+import DetailValidasi from './pages/Koordinator/DetailValidasi';
 
 export default function App() {
   return (
@@ -65,8 +66,8 @@ export default function App() {
             <Route path="/dashboard-koordinator" element={<DashboardKoordinator />} /> 
             <Route path="/ruang-triase" element={<RuangTriase />} />
             <Route path="/menu-laporan" element={<AntreanLaporan />} />
-            <Route path="/tugas/tambah" element={<TambahTugas />} />
             <Route path="/pantau-validasi" element={<PantauValidasi />} />
+            <Route path="/detail-validasi" element={<DetailValidasi />} />
           </Route>
 
           {/* --- AREA MANAJERIAL & EKSEKUTIF --- */}
