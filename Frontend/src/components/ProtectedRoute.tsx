@@ -5,25 +5,28 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  // CATATAN: Ini adalah data dummy untuk keperluan desain UI Frontend.
-  // Nantinya, hapus object ini dan ganti dengan pemanggilan Context/Zustand 
-  // yang mengambil data user dari token backend teman Anda.
-  const currentUser = {
-    name: "Muhammad Hafidz",
-    role: "KOORDINATOR", // Ubah string ini ke "STAF", "KADIV", atau "DIREKTUR" untuk melihat halaman lain
-    isAuthenticated: true // Ubah ke false untuk mengetes lemparan ke halaman login
-  };
+  const token = localStorage.getItem('token');
+  const storedUser = localStorage.getItem('user');
+  let userRole = localStorage.getItem('userRole') || '';
 
-  // 1. Cek Autentikasi: Jika belum login, tendang kembali ke halaman Login
-  if (!currentUser.isAuthenticated) {
+  if (storedUser) {
+    try {
+      const user = JSON.parse(storedUser);
+      userRole = user?.role || userRole;
+    } catch {
+      // Data user yang rusak tidak digunakan; pemeriksaan token/role di bawah tetap berlaku.
+    }
+  }
+
+  const normalizedRole = String(userRole).toUpperCase();
+
+  if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  // 2. Cek Otorisasi Role: Jika role user tidak ada di daftar yang diizinkan, tendang ke halaman 403
-  if (!allowedRoles.includes(currentUser.role)) {
+  if (!normalizedRole || !allowedRoles.includes(normalizedRole)) {
     return <Navigate to="/unauthorized" replace />;
   }
 
-  // 3. Jika semua aman, render komponen halaman utama (children/Outlet)
   return <Outlet />;
 }
