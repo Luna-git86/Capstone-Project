@@ -10,7 +10,7 @@ export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   // yang mengambil data user dari token backend teman Anda.
   const currentUser = {
     name: "Muhammad Hafidz",
-    role: "KOORDINATOR", // Ubah string ini ke "STAF", "KADIV", atau "DIREKTUR" untuk melihat halaman lain
+    role: "KADIV", // Ubah string ini ke "STAF", "KADIV", atau "DIREKTUR" untuk melihat halaman lain
     isAuthenticated: true // Ubah ke false untuk mengetes lemparan ke halaman login
   };
 
