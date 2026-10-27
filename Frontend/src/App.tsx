@@ -59,6 +59,7 @@ function App() {
             <Route path="riwayat" element={<RiwayatTugas />} />
             <Route path="performa" element={<PeformaAnalisis />} />
             <Route path="laporkan-masalah" element={<LaporkanMasalah />} />
+            <Route path="" element={<RootRedirect />} />
           </Route>
         </Route>
         
