@@ -1,4 +1,3 @@
-// Backend/index.js
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config(); 
@@ -9,11 +8,10 @@ const port = process.env.PORT || 3000;
 app.use(cors()); 
 app.use(express.json()); 
 
-// Menghubungkan Rute Autentikasi
+
 const authRoutes = require('./routes/authRoute');
 app.use('/api/auth', authRoutes);
 
-// Menghubungkan Rute Tiket
 const ticketRoutes = require('./routes/ticketRoute');
 app.use('/api/tickets', ticketRoutes);
 

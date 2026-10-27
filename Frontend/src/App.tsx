@@ -18,19 +18,32 @@ import RiwayatTugas from './pages/RiwayatTugas';
 import PeformaAnalisis from './pages/PeformaAnalisis';
 import LaporkanMasalah from './pages/LaporkanMasalah';
 
-// Import Halaman Khusus untuk Kadiv
-import DashboardKadiv from './pages/Kadiv/DashboardKadiv';
-import SemuaTugasKadiv from './pages/Kadiv/SemuaTugasKadiv';
+// 1. Komponen Penjaga (Protected Route)
+// Memeriksa apakah user memiliki Token JWT. Jika tidak, arahkan ke Login.
+const ProtectedRoute = () => {
+  const token = localStorage.getItem('token');
+  
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return <Outlet />;
+};
 
-// Import Halaman Khusus untuk Koordinator
-import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
-import DetailLaporan from './pages/Koordinator/DetailLaporan';
-import MenuLaporan from './pages/Koordinator/MenuLaporan';
-import SemuaTugasKoor from './pages/Koordinator/SemuaTugas';
-import DetailValidasi from './pages/Koordinator/DetailValidasi';
-import DetailTugasKoor from './pages/Koordinator/DetailTugasKoor';
+// 2. Pengatur Lalu Lintas Awal (Root Redirect)
+// Memeriksa role user dan mengarahkan ke dasbor yang sesuai saat mengakses '/'
+const RootRedirect = () => {
+  const role = localStorage.getItem('userRole');
+  
+  if (role === 'ADMIN' || role === 'DIREKTUR') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  // Default untuk staf, koordinator, dan kadiv
+  return <Navigate to="/dashboard-staff" replace />;
+};
 
-export default function App() {
+function App() {
   return (
     <BrowserRouter>
       <Routes>
@@ -38,23 +51,20 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Semua rute di bawah ini dibungkus Layout (punya Sidebar & Topbar) */}
-        <Route element={<Layout />}>
-          
-          {/* Rute Default saat pertama kali buka aplikasi */}
-          <Route index element={<Navigate to="/dashboard-staff" replace />} />
-
-          {/* Halaman 403: Ditampilkan jika role tidak sesuai */}
-          <Route path="/unauthorized" element={
-            <div className="p-8 flex flex-col items-center justify-center h-full">
-              <h1 className="text-red-500 font-bold text-4xl mb-4">403</h1>
-              <p className="text-slate-600 text-xl">Akses Ditolak. Anda tidak memiliki izin ke halaman ini.</p>
-            </div>
-          } />
-
-          {/* --- AKSES UMUM (Semua Role Bisa Lapor Masalah) --- */}
-          <Route element={<ProtectedRoute allowedRoles={['STAF', 'KOORDINATOR', 'KADIV', 'DIREKTUR']} />}>
-            <Route path="/laporkan-masalah" element={<LaporkanMasalah />} />
+        {/* Rute yang Dilindungi (Wajib Login) */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/" element={<Layout />}>
+            {/* Gunakan RootRedirect di sini agar pintar memilih dasbor */}
+            <Route index element={<RootRedirect />} />
+            
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="dashboard-staff" element={<DashboardStaff />} />
+            <Route path="semua-tugas" element={<SemuaTugas />} />
+            <Route path="tambah-tugas" element={<TambahTugas />} />
+            <Route path="persetujuan-sop" element={<PersetujuanSop />} />
+            <Route path="riwayat" element={<RiwayatTugas />} />
+            <Route path="performa" element={<PeformaAnalisis />} />
+            <Route path="laporkan-masalah" element={<LaporkanMasalah />} />
           </Route>
 
           {/* --- AREA STAF & EKSEKUTOR LAPANGAN --- */}
@@ -89,8 +99,8 @@ export default function App() {
 
         </Route>
         
-        {/* Tangkap rute yang tidak dikenal (404) dan lempar ke Login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Tangkap rute yang tidak dikenal (404) dan lempar ke halaman awal */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

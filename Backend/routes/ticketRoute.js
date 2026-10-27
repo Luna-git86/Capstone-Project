@@ -4,7 +4,6 @@ const router = express.Router();
 const { createTicket, getTickets, updateTicketStatus } = require('../controllers/ticketController');
 const { verifyToken, checkRole } = require('../middlewares/authMiddleware');
 
-// Kunci semua rute tiket dengan verifikasi token
 router.use(verifyToken);
 
 // Hanya Admin, Koordinator, dan Staf yang bisa membuat tiket
