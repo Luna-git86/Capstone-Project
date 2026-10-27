@@ -18,12 +18,17 @@ import RiwayatTugas from './pages/RiwayatTugas';
 import PeformaAnalisis from './pages/PeformaAnalisis';
 import LaporkanMasalah from './pages/LaporkanMasalah';
 
+// Import Halaman Khusus untuk Kadiv
+import DashboardKadiv from './pages/Kadiv/DashboardKadiv';
+import SemuaTugasKadiv from './pages/Kadiv/SemuaTugasKadiv';
+
 // Import Halaman Khusus untuk Koordinator
 import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
-import RuangTriase from './pages/Koordinator/RuangTriase';
-import AntreanLaporan from './pages/Koordinator/MenuLaporan';
-import PantauValidasi from './pages/Koordinator/PantauValidasi';
+import DetailLaporan from './pages/Koordinator/DetailLaporan';
+import MenuLaporan from './pages/Koordinator/MenuLaporan';
+import SemuaTugasKoor from './pages/Koordinator/SemuaTugas';
 import DetailValidasi from './pages/Koordinator/DetailValidasi';
+import DetailTugasKoor from './pages/Koordinator/DetailTugasKoor';
 
 export default function App() {
   return (
@@ -61,15 +66,21 @@ export default function App() {
           </Route>
 
           {/* --- AREA KOORDINATOR */}
-          {/* Staf biasa tidak boleh membuat tugas proaktif atau menyetujui SOP */}
           <Route element={<ProtectedRoute allowedRoles={['KOORDINATOR']} />}>
             <Route path="/dashboard-koordinator" element={<DashboardKoordinator />} /> 
-            <Route path="/ruang-triase" element={<RuangTriase />} />
-            <Route path="/menu-laporan" element={<AntreanLaporan />} />
-            <Route path="/pantau-validasi" element={<PantauValidasi />} />
+            <Route path="/ruang-triase" element={<DetailLaporan />} />
+            <Route path="/menu-laporan" element={<MenuLaporan />} />
+            <Route path="/semua-tugas-koor" element={<SemuaTugasKoor />} />
             <Route path="/detail-validasi" element={<DetailValidasi />} />
+            <Route path="/detail-tugas-koor" element={<DetailTugasKoor />} />
           </Route>
 
+          {/* --- AREA KADIV --- */}
+          <Route element={<ProtectedRoute allowedRoles={['KADIV']} />}>
+            <Route path="/dashboard-kadiv" element={<DashboardKadiv />} />
+            <Route path="/semua-tugas-kadiv" element={<SemuaTugasKadiv />} />
+
+          </Route>
           {/* --- AREA MANAJERIAL & EKSEKUTIF --- */}
           {/* Analisis performa hanya untuk pejabat eksekutif */}
           <Route element={<ProtectedRoute allowedRoles={['KADIV', 'DIREKTUR']} />}>
