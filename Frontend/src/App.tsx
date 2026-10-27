@@ -21,8 +21,20 @@ const ProtectedRoute = () => {
     return <Navigate to="/login" replace />;
   }
   
-  // Jika ada token, izinkan masuk ke halaman yang direquest (Outlet merender Layout)
   return <Outlet />;
+};
+
+// 2. Pengatur Lalu Lintas Awal (Root Redirect)
+// Memeriksa role user dan mengarahkan ke dasbor yang sesuai saat mengakses '/'
+const RootRedirect = () => {
+  const role = localStorage.getItem('userRole');
+  
+  if (role === 'ADMIN' || role === 'DIREKTUR') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  // Default untuk staf, koordinator, dan kadiv
+  return <Navigate to="/dashboard-staff" replace />;
 };
 
 function App() {
@@ -36,13 +48,13 @@ function App() {
         {/* Rute yang Dilindungi (Wajib Login) */}
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<Layout />}>
-            {/* Jika user mengakses root '/', otomatis arahkan ke dashboard */}
-            <Route index element={<Navigate to="/dashboard" replace />} />
+            {/* Gunakan RootRedirect di sini agar pintar memilih dasbor */}
+            <Route index element={<RootRedirect />} />
             
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="dashboard-staff" element={<DashboardStaff />} />
-            <Route path="tugas" element={<SemuaTugas />} />
-            <Route path="tugas/tambah" element={<TambahTugas />} />
+            <Route path="semua-tugas" element={<SemuaTugas />} />
+            <Route path="tambah-tugas" element={<TambahTugas />} />
             <Route path="persetujuan-sop" element={<PersetujuanSop />} />
             <Route path="riwayat" element={<RiwayatTugas />} />
             <Route path="performa" element={<PeformaAnalisis />} />
@@ -50,8 +62,8 @@ function App() {
           </Route>
         </Route>
         
-        {/* Tangkap rute yang tidak dikenal (404) dan lempar ke Login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Tangkap rute yang tidak dikenal (404) dan lempar ke halaman awal */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

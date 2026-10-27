@@ -27,7 +27,7 @@ enum TicketStatus {
   MENUNGGU_EVALUASI
   DALAM_PROSES
   SELESAI
-  DITOLAK
+  REVISI
 }
 
 // --- 1. TABEL PENGGUNA (RBAC) ---
