@@ -28,7 +28,7 @@ const RootRedirect = () => {
   return <Navigate to="/dashboard-staff" replace />;
 };
 
-function App() {
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
