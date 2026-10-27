@@ -49,7 +49,7 @@ const RootRedirect = () => {
   }
 };
 
-function App() {
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
