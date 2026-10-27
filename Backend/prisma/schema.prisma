@@ -20,7 +20,6 @@ enum Urgency {
   LOW
   MEDIUM
   HIGH
-  URGENT
 }
 
 enum TicketStatus {

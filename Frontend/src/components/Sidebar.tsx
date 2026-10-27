@@ -40,7 +40,7 @@ export default function Sidebar() {
             </NavLink>
           </li>
 
-          {/* MENU KHUSUS KOORDINATOR / STAF */}
+          {/* MENU KHUSUS KOORDINATOR  */}
           {role === 'KOORDINATOR' && (
             <li>
               <NavLink to="/riwayat-tugas" className={({ isActive }) => `flex items-center gap-3 text-sm px-6 py-3 transition-colors ${isActive ? 'bg-[#005bb5] text-white font-semibold rounded-r-xl mr-5' : 'text-slate-400 hover:text-white'}`}>
@@ -49,9 +49,8 @@ export default function Sidebar() {
               </NavLink>
             </li>
           )}
-
           <li>
-            <NavLink to="/tambah-tugas" className={({ isActive }) => `flex items-center gap-3 text-sm px-6 py-3 transition-colors ${isActive ? 'bg-[#005bb5] text-white font-semibold rounded-r-xl mr-5' : 'text-slate-400 hover:text-white'}`}>
+            <NavLink to="/koordinator/tambah-tugas" className={({ isActive }) => `flex items-center gap-3 text-sm px-6 py-3 transition-colors ${isActive ? 'bg-[#005bb5] text-white font-semibold rounded-r-xl mr-5' : 'text-slate-400 hover:text-white'}`}>
               <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-current stroke-2 fill-none"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
               Tambah Tugas
             </NavLink>
@@ -86,10 +85,10 @@ export default function Sidebar() {
             </>
           )}
 
-          {/* MENU KHUSUS KOORDINATOR / STAF */}
-          {role === 'KOORDINATOR' && (
+          {/* MENU STAF */}
+          {role === 'STAF' && (
             <li className="mt-4">
-              <NavLink to="/laporkan-masalah" className={({ isActive }) => `flex items-center gap-3 text-sm px-6 py-3 transition-colors ${isActive ? 'bg-red-500/20 text-red-400 font-semibold rounded-r-xl mr-5' : 'text-slate-400 hover:text-red-400'}`}>
+              <NavLink to="/staf/laporkan-masalah" className={({ isActive }) => `flex items-center gap-3 text-sm px-6 py-3 transition-colors ${isActive ? 'bg-red-500/20 text-red-400 font-semibold rounded-r-xl mr-5' : 'text-slate-400 hover:text-red-400'}`}>
                 <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-current stroke-2 fill-none"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                 Laporkan Masalah
               </NavLink>
