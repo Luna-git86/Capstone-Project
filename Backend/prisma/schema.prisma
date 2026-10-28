@@ -37,19 +37,20 @@ enum StatusSop {
 
 // 1. TABEL DIVISI
 model Divisi {
-  id        Int      @id @default(autoincrement())
-  nama      String   @unique
+  id        Int          @id @default(autoincrement())
+  nama      String       @unique
   users     User[]
   tickets   Ticket[]
   sops      DokumenSop[]
-  createdAt DateTime @default(now())
+  createdAt DateTime     @default(now())
 }
 
-// 2. TABEL USER (5 Entitas RBAC)
+// 2. TABEL USER (Mendukung Login No HP & Integrasi WhatsApp Gateway)
 model User {
   id              Int          @id @default(autoincrement())
   nama            String
-  email           String       @unique
+  noHp            String       @unique
+  email           String?      @unique
   password        String
   role            Role         @default(STAF)
   divisiId        Int?
@@ -64,57 +65,57 @@ model User {
   updatedAt       DateTime     @updatedAt
 }
 
-// 3. TABEL TICKET (Alur Triase & Pendelegasian)
+// 3. TABEL TICKET
 model Ticket {
-  id          Int         @id @default(autoincrement())
-  judul       String
-  deskripsi   String
-  prioritas   Prioritas   @default(LOW)
-  status      StatusTiket @default(MENUNGGU_TRIASE)
-  deadline    DateTime?
-  catatanRevisi String?   // Jika dikembalikan oleh Kadiv/Direktur
+  id            Int         @id @default(autoincrement())
+  judul         String
+  deskripsi     String
+  prioritas     Prioritas   @default(LOW)
+  status        StatusTiket @default(MENUNGGU_TRIASE)
+  deadline      DateTime?
+  catatanRevisi String?
   
-  pembuatId   Int
-  pembuat     User        @relation("TiketDibuat", fields: [pembuatId], references: [id])
+  pembuatId     Int
+  pembuat       User        @relation("TiketDibuat", fields: [pembuatId], references: [id])
   
-  pelaksanaId Int?
-  pelaksana   User?       @relation("TiketDitugaskan", fields: [pelaksanaId], references: [id])
+  pelaksanaId   Int?
+  pelaksana     User?       @relation("TiketDitugaskan", fields: [pelaksanaId], references: [id])
   
-  divisiId    Int?
-  divisi      Divisi?     @relation(fields: [divisiId], references: [id])
+  divisiId      Int?
+  divisi        Divisi?     @relation(fields: [divisiId], references: [id])
 
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
-// 4. TABEL DOKUMEN SOP (Kebutuhan UAT-5.2)
+// 4. TABEL DOKUMEN SOP
 model DokumenSop {
-  id          Int       @id @default(autoincrement())
-  nomorSop    String    @unique
-  judul       String
-  deskripsi   String?
-  fileUrl     String?   // Path atau tautan dokumen draf SOP
-  status      StatusSop @default(MENUNGGU_VALIDASI)
+  id           Int       @id @default(autoincrement())
+  nomorSop     String    @unique
+  judul        String
+  deskripsi    String?
+  fileUrl      String?
+  status       StatusSop @default(MENUNGGU_VALIDASI)
   
-  divisiId    Int?
-  divisi      Divisi?   @relation(fields: [divisiId], references: [id])
+  divisiId     Int?
+  divisi       Divisi?   @relation(fields: [divisiId], references: [id])
   
-  pengajuId   Int
-  pengaju     User      @relation("SopDiajukan", fields: [pengajuId], references: [id])
+  pengajuId    Int
+  pengaju      User      @relation("SopDiajukan", fields: [pengajuId], references: [id])
 
   disahkanPada DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
 
-// 5. TABEL AUDIT LOG (Kebutuhan UAT-6.1: Immutable Audit Trail)
+// 5. TABEL AUDIT LOG
 model AuditLog {
   id         Int      @id @default(autoincrement())
-  action     String   // Contoh: "CREATE_TICKET", "TRIAGE_TICKET", "APPROVE_SOP"
-  entityType String   // Contoh: "Ticket", "DokumenSop", "User"
+  action     String
+  entityType String
   entityId   Int
   userId     Int
   user       User     @relation(fields: [userId], references: [id])
-  details    String   // Deskripsi lengkap aksi yang tidak dapat diubah
+  details    String
   createdAt  DateTime @default(now())
 }

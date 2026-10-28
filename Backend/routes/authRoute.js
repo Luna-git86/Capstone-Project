@@ -1,13 +1,16 @@
-// Backend/routes/authRoutes.js
+// Backend/routes/authRoute.js
 const express = require('express');
 const router = express.Router();
-const { register, login } = require('../controllers/authController');
+const authController = require('../controllers/authController');
+const { verifyToken, checkRole } = require('../middlewares/authMiddleware');
 
-// Endpoint untuk login: POST /api/auth/login
-router.post('/login', login);
+// Rute Publik: Login & Daftar Divisi
+router.post('/login', authController.login);
+router.get('/divisi', authController.getDivisi);
 
-// Endpoint untuk register: POST /api/auth/register 
-// (Bisa kita uji nanti, siapkan saja dulu rutenya)
-router.post('/register', register);
+// Rute Eksklusif Admin Sistem (UAT-1.1): Manajemen Akun, Register & Reset Password
+router.get('/users', verifyToken, checkRole(['ADMIN']), authController.getUsers);
+router.post('/register', verifyToken, checkRole(['ADMIN']), authController.register);
+router.put('/users/:id/reset-password', verifyToken, checkRole(['ADMIN']), authController.resetPassword);
 
 module.exports = router;
