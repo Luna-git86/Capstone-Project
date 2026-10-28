@@ -14,10 +14,11 @@ const Sidebar: React.FC = () => {
   const userRole = localStorage.getItem('userRole') || 'STAF';
   const userName = localStorage.getItem('userName') || 'Pengguna RSIA';
 
-  // Tentukan path dashboard utama sesuai role masing-masing
+  // Tentukan path dashboard utama sesuai role masing-masing (5 Dashboard Terpisah)
   const getDashboardPath = (role: string) => {
     switch (role) {
       case 'ADMIN':
+        return '/dashboard-admin';
       case 'DIREKTUR':
         return '/dashboard';
       case 'KADIV':
@@ -32,7 +33,7 @@ const Sidebar: React.FC = () => {
   // Konfigurasi Menu Dinamis Sesuai Matriks RBAC Proposal & UAT
   const menuItems: MenuItem[] = [
     {
-      title: 'Dashboard',
+      title: userRole === 'ADMIN' ? 'Dashboard Admin (Akun)' : 'Dashboard',
       path: getDashboardPath(userRole),
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
@@ -61,13 +62,7 @@ const Sidebar: React.FC = () => {
     {
       title: 'Performa & Analisis',
       path: '/performa',
-      allowedRoles: ['ADMIN', 'DIREKTUR'],
-    },
-    {
-      title: 'Manajemen Akun (RBAC)',
-      path: '/register',
-      // Khusus Admin Sistem sesuai UAT-1.1
-      allowedRoles: ['ADMIN'],
+      allowedRoles: ['DIREKTUR'],
     },
   ];
 
@@ -93,7 +88,7 @@ const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* Info Pengguna Dinamis (Menggantikan Placeholder) */}
+      {/* Info Pengguna Dinamis */}
       <div className="px-6 py-4 bg-blue-950/50 border-b border-blue-900/60">
         <p className="text-sm font-semibold text-white truncate">{userName}</p>
         <span className="inline-block mt-1 px-2.5 py-0.5 text-[11px] font-bold bg-blue-600/40 text-blue-200 rounded border border-blue-400/30 uppercase tracking-wider">
