@@ -8,6 +8,13 @@ const { verifyToken, checkRole } = require('../middlewares/authMiddleware');
 router.post('/login', authController.login);
 router.get('/divisi', authController.getDivisi);
 
+// Membuat tautan penghubung akun Telegram
+router.post(
+  '/telegram/link-token',
+  verifyToken,
+  authController.createTelegramLink
+);
+
 // Rute Eksklusif Admin Sistem (UAT-1.1): Manajemen Akun, Register & Reset Password
 router.get('/users', verifyToken, checkRole(['ADMIN']), authController.getUsers);
 router.post('/register', verifyToken, checkRole(['ADMIN']), authController.register);
