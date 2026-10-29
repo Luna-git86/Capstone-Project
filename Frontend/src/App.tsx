@@ -20,6 +20,7 @@ import PeformaAnalisis from './pages/PeformaAnalisis';
 import LaporkanMasalah from './pages/LaporkanMasalah';
 import LaporanSLA from './pages/LaporanSLA';
 import Login from './pages/Login';
+import NotificationLogs from './pages/NotificationLogs';
 
 // Halaman Koordinator
 import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
@@ -90,6 +91,7 @@ function App() {
 
             {/* ADMIN */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN']} />}>
+              <Route path="/notification-logs" element={<NotificationLogs />} />
               <Route
                 path="/dashboard-admin"
                 element={<DashboardAdmin />}
