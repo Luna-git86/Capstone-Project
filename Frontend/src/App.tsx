@@ -150,7 +150,7 @@ function App() {
             {/* Tambah tugas */}
             <Route
               element={
-                <RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV']} />
+                <RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR']} />
               }
             >
               <Route path="/tambah-tugas" element={<TambahTugas />} />
