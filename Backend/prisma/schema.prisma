@@ -1,3 +1,4 @@
+// Backend/prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,100 +8,114 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- ENUM UNTUK KEAMANAN DATA ---
 enum Role {
-  ADMIN       // Sesuai entitas: Admin Sistem
-  DIREKTUR    // Sesuai entitas: Direktur
-  KADIV       // Sesuai entitas: Kepala Divisi
-  KOORDINATOR // Sesuai entitas: Koordinator
-  STAF        // Sesuai entitas: User Biasa
+  ADMIN
+  DIREKTUR
+  KADIV
+  KOORDINATOR
+  STAF
 }
 
-enum Urgency {
+enum Prioritas {
   LOW
   MEDIUM
   HIGH
 }
 
-enum TicketStatus {
-  MENUNGGU_EVALUASI
-  DALAM_PROSES
+enum StatusTiket {
+  MENUNGGU_TRIASE
+  DIPROSES
   SELESAI
-  REVISI
+  DITOLAK
 }
 
-// --- 1. TABEL PENGGUNA (RBAC) ---
+enum StatusSop {
+  MENUNGGU_VALIDASI
+  DISAHKAN
+  DIREVISI
+}
+
+// 1. TABEL DIVISI
+model Divisi {
+  id        Int          @id @default(autoincrement())
+  nama      String       @unique
+  users     User[]
+  tickets   Ticket[]
+  sops      DokumenSop[]
+  createdAt DateTime     @default(now())
+}
+
+// 2. TABEL USER (Mendukung Login No HP & Integrasi WhatsApp Gateway)
 model User {
-  id              String       @id @default(uuid())
-  namaLengkap     String
-  email           String       @unique
-  nomorWhatsApp   String?      // Mendukung WhatsApp Gateway 
+  id              Int          @id @default(autoincrement())
+  nama            String
+  noHp            String       @unique
+  email           String?      @unique
   password        String
   role            Role         @default(STAF)
-  divisiId        String?      
+  divisiId        Int?
+  divisi          Divisi?      @relation(fields: [divisiId], references: [id])
   
-  tiketDibuat     Ticket[]     @relation("PembuatTiket")
-  tiketDitugaskan Ticket[]     @relation("PelaksanaTiket")
-  auditLogs       AuditTrail[]
-  dokumenSop      SopDocument[]
+  ticketsCreated  Ticket[]     @relation("TiketDibuat")
+  ticketsAssigned Ticket[]     @relation("TiketDitugaskan")
+  sopsCreated     DokumenSop[] @relation("SopDiajukan")
+  auditLogs       AuditLog[]
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 }
 
-// --- 2. TABEL DIVISI ---
-model Division {
-  id         String @id @default(uuid())
-  namaDivisi String
-}
-
-// --- 3. TABEL TIKET (PELAPORAN & TUGAS) ---
+// 3. TABEL TICKET
 model Ticket {
-  id                  String       @id @default(uuid())
-  judul               String
-  deskripsi           String
-  kategori            String?      // Fasilitas, IT, dll
-  fotoUrl             String?      // Lampiran bukti kerusakan
-  urgensi             Urgency      @default(LOW)
-  status              TicketStatus @default(MENUNGGU_EVALUASI)
+  id            Int         @id @default(autoincrement())
+  judul         String
+  deskripsi     String
+  prioritas     Prioritas   @default(LOW)
+  status        StatusTiket @default(MENUNGGU_TRIASE)
+  deadline      DateTime?
+  catatanRevisi String?
   
-  // Fitur SLA dan Perpanjangan Waktu 
-  targetSelesai       DateTime?    
-  isMintaPerpanjangan Boolean      @default(false) // Sesuai UI Dasbor Kadiv
-  alasanPerpanjangan  String?      // Alasan kenapa staf minta tambahan waktu
-
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-
-  pembuatId           String
-  pembuat             User         @relation("PembuatTiket", fields: [pembuatId], references: [id])
+  pembuatId     Int
+  pembuat       User        @relation("TiketDibuat", fields: [pembuatId], references: [id])
   
-  pelaksanaId         String?
-  pelaksana           User?        @relation("PelaksanaTiket", fields: [pelaksanaId], references: [id])
+  pelaksanaId   Int?
+  pelaksana     User?       @relation("TiketDitugaskan", fields: [pelaksanaId], references: [id])
+  
+  divisiId      Int?
+  divisi        Divisi?     @relation(fields: [divisiId], references: [id])
 
-  auditTrails         AuditTrail[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
-// --- 4. TABEL AUDIT TRAIL (LOG KEAMANAN) ---
-model AuditTrail {
-  id            String   @id @default(uuid())
-  ticketId      String
-  ticket        Ticket   @relation(fields: [ticketId], references: [id])
+// 4. TABEL DOKUMEN SOP
+model DokumenSop {
+  id           Int       @id @default(autoincrement())
+  nomorSop     String    @unique
+  judul        String
+  deskripsi    String?
+  fileUrl      String?
+  status       StatusSop @default(MENUNGGU_VALIDASI)
   
-  userId        String
-  user          User     @relation(fields: [userId], references: [id])
+  divisiId     Int?
+  divisi       Divisi?   @relation(fields: [divisiId], references: [id])
   
-  aksi          String
-  statusLama    String?
-  statusBaru    String?
-  timestamp     DateTime @default(now()) 
+  pengajuId    Int
+  pengaju      User      @relation("SopDiajukan", fields: [pengajuId], references: [id])
+
+  disahkanPada DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
-// --- 5. TABEL SOP EKSEKUTIF ---
-model SopDocument {
-  id            String   @id @default(uuid())
-  judulDokumen  String
-  fileUrl       String
-  
-  diunggahOleh  String
-  user          User     @relation(fields: [diunggahOleh], references: [id])
-  
-  createdAt     DateTime @default(now())
+// 5. TABEL AUDIT LOG
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  action     String
+  entityType String
+  entityId   Int
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  details    String
+  createdAt  DateTime @default(now())
 }
