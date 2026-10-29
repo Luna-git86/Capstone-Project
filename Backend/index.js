@@ -19,6 +19,9 @@ app.use('/api/tickets', ticketRoutes);
 const slaRoutes = require('./routes/slaRoute');
 app.use('/api/laporan-sla', slaRoutes);
 
+const notificationLogRoutes = require('./routes/notificationLogRoute');
+app.use('/api/notification-logs', notificationLogRoutes);
+
 app.get('/', (req, res) => {
   res.send('Server Backend E-Ticketing RSIA berjalan dengan baik!');
 });
