@@ -11,7 +11,7 @@ const getTicketOptions = async (req, res) => {
     // KADIV hanya boleh melihat divisinya sendiri.
     const divisi = await prisma.divisi.findMany({
       where:
-        role === 'KADIV'
+        ['KADIV', 'KOORDINATOR'].includes(role)
           ? { id: userDivisiId || -1 }
           : {},
       orderBy: { nama: 'asc' },
@@ -36,7 +36,7 @@ const getTicketOptions = async (req, res) => {
 
       // Batasi KADIV pada divisinya sendiri.
       if (
-        role === 'KADIV' &&
+        ['KADIV', 'KOORDINATOR'].includes(role) &&
         divisiId !== userDivisiId
       ) {
         return res.status(403).json({
