@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // --- DUMMY DATA PROYEK MAKRO ---
 const daftarProyek = [
@@ -11,6 +12,8 @@ const daftarProyek = [
 export default function SemuaTugasKadiv() {
   const [activeTab, setActiveTab] = useState('AKTIF'); // AKTIF | PENGESAHAN | RIWAYAT
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const navigate = useNavigate(); // Inisialisasi hook navigasi
 
   // Helper Warna Badge Status
   const getStatusBadge = (status: string) => {
@@ -132,11 +135,17 @@ export default function SemuaTugasKadiv() {
                     </td>
                     <td className="py-4 px-6 text-center">
                       {proyek.status === 'Menunggu Pengesahan' ? (
-                        <button className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm w-full">
+                        <button 
+                          onClick={() => navigate(`/detail-tugas-kadiv/${proyek.id}`)}
+                          className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm w-full"
+                        >
                           Tinjau
                         </button>
                       ) : (
-                        <button className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm w-full">
+                        <button 
+                          onClick={() => navigate(`/detail-tugas-kadiv/${proyek.id}`)}
+                          className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm w-full"
+                        >
                           Detail
                         </button>
                       )}
