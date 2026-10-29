@@ -36,6 +36,11 @@ const Sidebar: React.FC = () => {
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
     {
+      title: 'Log Notifikasi',
+      path: '/notification-logs',
+      allowedRoles: ['ADMIN'],
+    },
+    {
       title: 'Semua Tugas',
       path: '/semua-tugas',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
