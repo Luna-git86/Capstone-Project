@@ -35,7 +35,6 @@ enum StatusSop {
   DIREVISI
 }
 
-// 1. TABEL DIVISI
 model Divisi {
   id        Int          @id @default(autoincrement())
   nama      String       @unique
@@ -45,30 +44,26 @@ model Divisi {
   createdAt DateTime     @default(now())
 }
 
-// 2. TABEL USER (Mendukung Login No HP & Integrasi WhatsApp Gateway)
 model User {
-  id       Int     @id @default(autoincrement())
-  nama     String
-  noHp     String  @unique
-  email    String? @unique
-  password String
-  role     Role    @default(STAF)
-  divisiId Int?
-  divisi   Divisi? @relation(fields: [divisiId], references: [id])
-
-  ticketsCreated   Ticket[]          @relation("TiketDibuat")
-  ticketsAssigned  Ticket[]          @relation("TiketDitugaskan")
-  sopsCreated      DokumenSop[]      @relation("SopDiajukan")
-  auditLogs        AuditLog[]
-  notificationLogs NotificationLog[]
+  id                 Int     @id @default(autoincrement())
+  nama               String
+  noHp               String  @unique
+  email              String? @unique
+  password           String
+  role               Role    @default(STAF)
+  divisiId           Int?
+  divisi             Divisi? @relation(fields: [divisiId], references: [id])
+  ticketsCreated     Ticket[]          @relation("TiketDibuat")
+  ticketsAssigned    Ticket[]          @relation("TiketDitugaskan")
+  sopsCreated        DokumenSop[]      @relation("SopDiajukan")
+  auditLogs          AuditLog[]
+  notificationLogs   NotificationLog[]
   telegramLinkTokens TelegramLinkToken[]
-
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  telegramChatId String?  @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  telegramChatId     String?  @unique
 }
 
-// 3. TABEL TICKET
 model Ticket {
   id            Int         @id @default(autoincrement())
   judul         String
@@ -76,44 +71,35 @@ model Ticket {
   prioritas     Prioritas   @default(LOW)
   status        StatusTiket @default(MENUNGGU_TRIASE)
   deadline      DateTime?
+  completedAt   DateTime?
   catatanRevisi String?
-
-  pembuatId Int
-  pembuat   User @relation("TiketDibuat", fields: [pembuatId], references: [id])
-
-  pelaksanaId Int?
-  pelaksana   User? @relation("TiketDitugaskan", fields: [pelaksanaId], references: [id])
-
-  divisiId Int?
-  divisi   Divisi? @relation(fields: [divisiId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  pembuatId     Int
+  pembuat       User @relation("TiketDibuat", fields: [pembuatId], references: [id])
+  pelaksanaId   Int?
+  pelaksana     User? @relation("TiketDitugaskan", fields: [pelaksanaId], references: [id])
+  divisiId      Int?
+  divisi        Divisi? @relation(fields: [divisiId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   notificationLogs NotificationLog[]
 }
 
-// 4. TABEL DOKUMEN SOP
 model DokumenSop {
-  id        Int       @id @default(autoincrement())
-  nomorSop  String    @unique
-  judul     String
-  deskripsi String?
-  fileUrl   String?
-  status    StatusSop @default(MENUNGGU_VALIDASI)
-
-  divisiId Int?
-  divisi   Divisi? @relation(fields: [divisiId], references: [id])
-
-  pengajuId Int
-  pengaju   User @relation("SopDiajukan", fields: [pengajuId], references: [id])
-
+  id          Int       @id @default(autoincrement())
+  nomorSop    String    @unique
+  judul       String
+  deskripsi   String?
+  fileUrl     String?
+  status      StatusSop @default(MENUNGGU_VALIDASI)
+  divisiId    Int?
+  divisi      Divisi? @relation(fields: [divisiId], references: [id])
+  pengajuId   Int
+  pengaju     User @relation("SopDiajukan", fields: [pengajuId], references: [id])
   disahkanPada DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
 
-// 5. TABEL AUDIT LOG
 model AuditLog {
   id         Int      @id @default(autoincrement())
   action     String
@@ -125,7 +111,6 @@ model AuditLog {
   createdAt  DateTime @default(now())
 }
 
-// 7. TABEL TOKEN PENGHUBUNG TELEGRAM
 model TelegramLinkToken {
   id        Int      @id @default(autoincrement())
   tokenHash String   @unique
@@ -133,9 +118,7 @@ model TelegramLinkToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime @default(now())
-
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@index([userId, expiresAt])
 }
 
@@ -153,10 +136,8 @@ model NotificationLog {
   sentAt         DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
-
   ticket    Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   recipient User   @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-
   @@index([status, createdAt])
   @@index([ticketId, type])
 }
