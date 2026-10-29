@@ -1,18 +1,50 @@
-// Backend/routes/ticketRoutes.js
+
 const express = require('express');
 const router = express.Router();
-const { createTicket, getTickets, updateTicketStatus } = require('../controllers/ticketController');
-const { verifyToken, checkRole } = require('../middlewares/authMiddleware');
+
+const {
+  createTicket,
+  getTickets,
+  updateTicketStatus,
+} = require('../controllers/ticketController');
+
+const {
+  getTicketOptions,
+} = require('../controllers/ticketOptionsController');
+
+const {
+  verifyToken,
+  checkRole,
+} = require('../middlewares/authMiddleware');
 
 router.use(verifyToken);
 
-// Hanya Admin, Koordinator, dan Staf yang bisa membuat tiket
-router.post('/', checkRole(['ADMIN', 'KOORDINATOR', 'STAF']), createTicket);
+// Data pilihan dropdown dari database
+router.get(
+  '/options',
+  checkRole(['ADMIN', 'DIREKTUR', 'KADIV']),
+  getTicketOptions
+);
 
-// Semua 5 role bisa melihat tiket (nanti difilter per divisi di controller)
-router.get('/', checkRole(['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']), getTickets);
+// Hanya Direktur dan KADIV yang dapat membuat tugas
+router.post(
+  '/',
+  checkRole(['DIREKTUR', 'KADIV']),
+  createTicket
+);
 
-// Hanya Admin, Kadiv, Koordinator, dan Staf yang bisa mengubah status tiket
-router.patch('/:id/status', checkRole(['ADMIN', 'KADIV', 'KOORDINATOR', 'STAF']), updateTicketStatus);
+// Semua role yang ditentukan dapat melihat tiket
+router.get(
+  '/',
+  checkRole(['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']),
+  getTickets
+);
+
+// Pengubahan status tiket
+router.patch(
+  '/:id/status',
+  checkRole(['ADMIN', 'KADIV', 'KOORDINATOR', 'STAF']),
+  updateTicketStatus
+);
 
 module.exports = router;
