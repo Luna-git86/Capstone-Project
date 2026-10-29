@@ -4,6 +4,7 @@ const router = express.Router();
 
 const {
   createTicket,
+  assignTicket,
   getTickets,
   updateTicketStatus,
 } = require('../controllers/ticketController');
@@ -22,15 +23,22 @@ router.use(verifyToken);
 // Data pilihan dropdown dari database
 router.get(
   '/options',
-  checkRole(['ADMIN', 'DIREKTUR', 'KADIV']),
+  checkRole(['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR']),
   getTicketOptions
 );
 
-// Hanya Direktur dan KADIV yang dapat membuat tugas
+// Direktur, KADIV, dan Koordinator dapat membuat/mengajukan tugas.
 router.post(
   '/',
-  checkRole(['DIREKTUR', 'KADIV']),
+  checkRole(['DIREKTUR', 'KADIV', 'KOORDINATOR']),
   createTicket
+);
+
+// Persetujuan dan delegasi pelaksana hanya oleh KADIV/Direktur.
+router.patch(
+  '/:id/assign',
+  checkRole(['DIREKTUR', 'KADIV']),
+  assignTicket
 );
 
 // Semua role yang ditentukan dapat melihat tiket
