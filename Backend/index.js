@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { startTelegramBot } = require('./services/telegramBot');
+const { startSlaCronJob } = require('./jobs/slaCronJob');
 require('dotenv').config();
 
 const app = express();
@@ -24,5 +25,7 @@ app.get('/', (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server Backend berjalan di http://localhost:${port}`);
+
   startTelegramBot();
+  startSlaCronJob();
 });
