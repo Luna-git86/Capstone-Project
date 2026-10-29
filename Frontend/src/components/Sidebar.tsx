@@ -48,10 +48,10 @@ const Sidebar: React.FC = () => {
       title: 'Tambah Tugas',
       path: '/tambah-tugas',
       // Admin & Staf diblokir sesuai UAT-1.2 & Gambar 1.3-6 Proposal
-      allowedRoles: ['KADIV', 'KOORDINATOR'],
+      allowedRoles: ['KADIV'],
     },
     {
-      title: 'Laporan Masalah',
+      title: 'Laporan masuk',
       path: '/menu-laporan',
       allowedRoles: ['KOORDINATOR'],
     },
