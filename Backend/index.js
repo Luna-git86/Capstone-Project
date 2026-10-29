@@ -1,13 +1,13 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config(); 
+const { startTelegramBot } = require('./services/telegramBot');
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(cors()); 
-app.use(express.json()); 
-
+app.use(cors());
+app.use(express.json());
 
 const authRoutes = require('./routes/authRoute');
 app.use('/api/auth', authRoutes);
@@ -15,11 +15,14 @@ app.use('/api/auth', authRoutes);
 const ticketRoutes = require('./routes/ticketRoute');
 app.use('/api/tickets', ticketRoutes);
 
-// Endpoint dasar untuk cek status server
+const slaRoutes = require('./routes/slaRoute');
+app.use('/api/laporan-sla', slaRoutes);
+
 app.get('/', (req, res) => {
-  res.send('Server E-Ticketing RSIA berjalan dengan baik!');
+  res.send('Server Backend E-Ticketing RSIA berjalan dengan baik!');
 });
 
 app.listen(port, () => {
   console.log(`Server Backend berjalan di http://localhost:${port}`);
+  startTelegramBot();
 });

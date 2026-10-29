@@ -2,6 +2,7 @@
 const prisma = require('../db');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const DAFTAR_DIVISI_RSIA = [
   'Pelayanan Medis',
@@ -259,10 +260,94 @@ const getDivisi = async (req, res) => {
   }
 };
 
+const createTelegramLink = async (req, res) => {
+  try {
+    const botUsername = process.env.TELEGRAM_BOT_USERNAME;
+
+    if (!botUsername) {
+      return res.status(500).json({
+        message: 'TELEGRAM_BOT_USERNAME belum dikonfigurasi.',
+      });
+    }
+
+    const userId = Number(req.user?.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({
+        message: 'Identitas pengguna tidak valid.',
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        telegramChatId: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: 'Pengguna tidak ditemukan.',
+      });
+    }
+
+    if (user.telegramChatId) {
+      return res.status(409).json({
+        message: 'Akun Telegram pengguna sudah terhubung.',
+      });
+    }
+
+    // Token acak 64 karakter, sesuai batas payload Telegram
+    const rawToken = crypto.randomBytes(32).toString('hex');
+
+    // Simpan hash token, bukan token aslinya
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Hapus token lama yang belum digunakan, lalu buat token baru
+    await prisma.$transaction([
+      prisma.telegramLinkToken.deleteMany({
+        where: {
+          userId,
+          usedAt: null,
+        },
+      }),
+
+      prisma.telegramLinkToken.create({
+        data: {
+          tokenHash,
+          userId,
+          expiresAt,
+        },
+      }),
+    ]);
+
+    const cleanUsername = botUsername.replace(/^@/, '');
+
+    return res.status(200).json({
+      message: 'Tautan penghubung Telegram berhasil dibuat.',
+      link: `https://t.me/${cleanUsername}?start=${rawToken}`,
+      expiresIn: 600,
+    });
+  } catch (error) {
+    console.error('Gagal membuat tautan Telegram:', error);
+
+    return res.status(500).json({
+      message: 'Gagal membuat tautan penghubung Telegram.',
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
   resetPassword,
   getUsers,
   getDivisi,
+  createTelegramLink,
 };
