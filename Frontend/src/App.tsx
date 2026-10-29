@@ -4,7 +4,6 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import DashboardAdmin from './pages/DashboardAdmin';
 import DashboardKadiv from './pages/Kadiv/DashboardKadiv';
-import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
 import DashboardStaff from './pages/DashboardStaff';
 import SemuaTugas from './pages/SemuaTugas';
 import TambahTugas from './pages/TambahTugas';
@@ -13,6 +12,15 @@ import RiwayatTugas from './pages/RiwayatTugas';
 import PeformaAnalisis from './pages/PeformaAnalisis';
 import LaporkanMasalah from './pages/LaporkanMasalah';
 import Login from './pages/Login';
+
+// rute import Koordinator
+import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
+import DetailTugasKoor from './pages/Koordinator/DetailTugasKoor';
+import DetailValidasi from './pages/Koordinator/DetailValidasi';
+import MenuLaporan from './pages/Koordinator/MenuLaporan';
+import SemuaTugasKoordinator from './pages/Koordinator/SemuaTugas';
+
+
 
 // Fungsi penentu beranda sesuai Role masing-masing
 export const getDashboardByRole = (role: string | null) => {
@@ -90,6 +98,10 @@ function App() {
             {/* Dashboard Koordinator (Khusus Koordinator) - UAT-2.1 */}
             <Route element={<RoleProtectedRoute allowedRoles={['KOORDINATOR']} />}>
               <Route path="/dashboard-koordinator" element={<DashboardKoordinator />} />
+              <Route path="/detail-tugas-koordinator/:id" element={<DetailTugasKoor />} />
+              <Route path="/detail-validasi/:id" element={<DetailValidasi />} />
+              <Route path="/menu-laporan" element={<MenuLaporan />} />
+              <Route path="/semua-tugas-koor" element={<SemuaTugasKoordinator />} />
             </Route>
 
             {/* Dashboard Operasional (Khusus Staf) - UAT-4.1 */}
