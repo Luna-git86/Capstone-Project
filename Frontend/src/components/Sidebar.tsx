@@ -53,7 +53,7 @@ const Sidebar: React.FC = () => {
     {
       title: 'Tambah Tugas',
       path: '/tambah-tugas',
-      allowedRoles: ['DIREKTUR', 'KADIV'],
+      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
     },
     {
       title: 'Riwayat Tugas',
