@@ -20,14 +20,13 @@ async function sendTelegramMessage(chatId, message) {
   return result.result;
 }
 
-// Kirim notifikasi perubahan status kepada pembuat tiket.
-// Kegagalan notifikasi dicatat, tetapi tidak membatalkan perubahan status tiket.
 async function notifyTicketStatus({ ticketId, recipient, ticketTitle, status, deadline }) {
-  if (!recipient?.id || !recipient.telegramChatId) {
-    console.warn(`[Telegram] Notifikasi tiket #${ticketId} dilewati: akun pembuat belum menghubungkan Telegram.`);
+  if (!recipient?.id) {
+    console.warn(`[Telegram] Notifikasi tiket #${ticketId} dilewati: pembuat tiket tidak ditemukan.`);
     return { skipped: true };
   }
 
+  const chatId = recipient.telegramChatId ? String(recipient.telegramChatId) : '';
   const dedupeKey = `ticket:${ticketId}:status:${status}:${Date.now()}`;
   const deadlineText = deadline ? new Date(deadline).toLocaleString('id-ID') : 'Belum ditentukan';
   const message = [
@@ -47,7 +46,7 @@ async function notifyTicketStatus({ ticketId, recipient, ticketTitle, status, de
         type: `STATUS_${status}`,
         status: 'PENDING',
         message,
-        telegramChatId: String(recipient.telegramChatId),
+        telegramChatId: chatId || 'UNLINKED',
         dedupeKey,
         attempts: 1,
       },
@@ -58,7 +57,8 @@ async function notifyTicketStatus({ ticketId, recipient, ticketTitle, status, de
   }
 
   try {
-    await sendTelegramMessage(log.telegramChatId, message);
+    if (!chatId) throw new Error('Akun pembuat tiket belum menghubungkan Telegram.');
+    await sendTelegramMessage(chatId, message);
     await prisma.notificationLog.update({
       where: { id: log.id },
       data: { status: 'SENT', sentAt: new Date(), errorMessage: null },
