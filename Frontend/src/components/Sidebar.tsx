@@ -80,7 +80,11 @@ const Sidebar: React.FC = () => {
     },
 
     // Rute umum untuk semua role
-
+    {
+      title: 'Dokumen SOP',
+      path: '/dokumen-sop',
+      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+    },
     {
       title: 'Laporkan Masalah',
       path: '/laporkan-masalah',

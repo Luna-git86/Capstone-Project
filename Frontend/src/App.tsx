@@ -6,6 +6,7 @@ import DashboardAdmin from './pages/DashboardAdmin';
 import DashboardStaff from './pages/DashboardStaff';
 import SemuaTugas from './pages/SemuaTugas';
 import TambahTugas from './pages/TambahTugas';
+import DokumenSOP from './pages/DokumenSop';
 import PersetujuanSop from './pages/PersetujuanSop';
 import RiwayatTugas from './pages/RiwayatTugas';
 import PeformaAnalisis from './pages/PeformaAnalisis';
@@ -132,6 +133,7 @@ function App() {
 
             {/* Rute Umum Lintas Role */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
+              <Route path="/dokumen-sop" element={<DokumenSOP />} />
               <Route path="/semua-tugas" element={<SemuaTugas />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
               <Route path="/laporkan-masalah" element={<LaporkanMasalah />} />
