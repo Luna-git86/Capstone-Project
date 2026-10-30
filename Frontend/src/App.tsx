@@ -11,6 +11,7 @@ import RiwayatTugas from './pages/RiwayatTugas';
 import PeformaAnalisis from './pages/PeformaAnalisis';
 import LaporkanMasalah from './pages/LaporkanMasalah';
 import Login from './pages/Login';
+import LaporanSLA from './pages/LaporanSLA';
 
 // rute import Koordinator
 import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
@@ -122,6 +123,11 @@ function App() {
             {/* Pengesahan Dokumen SOP (Eksklusif Direktur sesuai UAT-1.2 & UAT-5.2) */}
             <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR']} />}>
               <Route path="/persetujuan-sop" element={<PersetujuanSop />} />
+            </Route>
+
+            {/* Laporan SLA */}
+            <Route element={<RoleProtectedRoute allowedRoles={['ADMIN','DIREKTUR','KADIV','KOORDINATOR',]}/>}>
+              <Route path="/laporan-sla" element={<LaporanSLA />} />
             </Route>
 
             {/* Rute Umum Lintas Role */}

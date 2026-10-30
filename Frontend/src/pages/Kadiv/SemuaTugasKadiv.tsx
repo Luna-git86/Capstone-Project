@@ -51,15 +51,17 @@ export default function SemuaTugasKadiv() {
   return (
     <div className="p-8 w-full min-h-screen bg-slate-50 flex flex-col gap-6">
       
-      {/* Header & Tombol Buat Instruksi */}
+      {/* Header & Tombol Buat Tugas */}
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Manajemen Instruksi & Proyek Divisi</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Manajemen Tugas & Proyek Divisi</h1>
           <p className="text-slate-500 text-sm mt-1">Pantau progres Koordinator dan lakukan pengesahan akhir tugas</p>
         </div>
-        <button className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-6 py-2.5 rounded-xl shadow-sm transition-colors flex items-center gap-2">
+        <button 
+         onClick={() => navigate('/tambah-tugas')}
+         className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-6 py-2.5 rounded-xl shadow-sm transition-colors flex items-center gap-2">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-          Buat Instruksi Manajerial
+          Buat Tugas Baru
         </button>
       </div>
 

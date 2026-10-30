@@ -35,32 +35,9 @@ const Sidebar: React.FC = () => {
       path: getDashboardPath(userRole),
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
-    {
-      title: 'Semua Tugas',
-      path: '/semua-tugas',
-      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
-    },
-    {
-      title: 'Laporan Tiket',
-      path: '/menu-laporan',
-      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
-    },
-    {
-      title: 'Semua Tugas Koordinator',
-      path: '/semua-tugas-koor',
-      allowedRoles: ['KOORDINATOR'],
-    },
-    {
-      title: 'Tambah Tugas',
-      path: '/tambah-tugas',
-      allowedRoles: ['DIREKTUR', 'KADIV'],
-    },
-    {
-      title: 'Riwayat Tugas',
-      path: '/riwayat',
-      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
-    },
-    {
+
+    // rute khusus untuk Direktur
+        {
       title: 'Dokumen SOP',
       path: '/persetujuan-sop',
       allowedRoles: ['DIREKTUR'],
@@ -75,11 +52,41 @@ const Sidebar: React.FC = () => {
       path: '/laporan-sla',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR'],
     },
+
+    // Rute khusus untuk Kadiv
+    {
+      title: 'Semua Tugas',
+      path: '/semua-tugas-kadiv',
+      allowedRoles: ['KADIV'],
+    },
+
+    // Rute khusus untuk Koordinator
+    {
+      title: 'Semua Tugas Koordinator',
+      path: '/semua-tugas-koor',
+      allowedRoles: ['KOORDINATOR'],
+    },
+    {
+        title: 'Menu Laporan',
+        path: '/menu-laporan',
+        allowedRoles: ['KOORDINATOR'],
+    },
+
+    // Rute khusus untuk Staf
+    {
+      title: 'Riwayat Tugas',
+      path: '/riwayat',
+      allowedRoles: ['STAF'],
+    },
+
+    // Rute umum untuk semua role
+
     {
       title: 'Laporkan Masalah',
       path: '/laporkan-masalah',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
+
   ];
 
   const visibleMenus = menuItems.filter((item) =>
