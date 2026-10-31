@@ -95,6 +95,59 @@ const DokumenSop: React.FC = () => {
       ? sops
       : sops.filter((s) => String(s.divisi?.id) === selectedDivisi);
 
+  // --- HANDLER MODAL FORM (CREATE & UPDATE) ---
+  const handleOpenCreateModal = () => {
+    setModalMode('CREATE');
+    setFormData({ id: '', judul: '', kategori: 'K3 & Keselamatan', versi: 'v1.0', deskripsi: '', status: 'Aktif' });
+    setUploadFile(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (doc: Dokumen) => {
+    setModalMode('EDIT');
+    setFormData({ 
+      id: doc.id, 
+      judul: doc.judul, 
+      kategori: doc.kategori, 
+      versi: doc.versi, 
+      deskripsi: doc.deskripsi || '',
+      status: doc.status
+    });
+    setUploadFile(null);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // NANTINYA: Gunakan FormData dan kirim via api.post (Create) atau api.put (Edit)
+    console.log(`Menyimpan Dokumen (${modalMode}):`, formData, uploadFile);
+    alert(`Dokumen SOP berhasil ${modalMode === 'CREATE' ? 'ditambahkan' : 'diperbarui'}!`);
+    setIsModalOpen(false);
+    
+    // NANTINYA: Refresh list dokumen -> fetchDokumen()
+  };
+
+  // --- HANDLER ARCHIVE/DELETE ---
+  const handleDelete = (id: string) => {
+    if (window.confirm(`Anda yakin ingin mengarsipkan/menghapus dokumen ${id}?`)) {
+      alert(`Dokumen ${id} berhasil diarsipkan (Simulasi).`);
+      // NANTINYA: await api.delete(`/sop/${id}`) lalu refresh state[cite: 3]
+    }
+  };
+
+  // Helper Warna Status[cite: 3]
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Aktif': return 'bg-emerald-100 text-emerald-700 border border-emerald-200';
+      case 'Diarsipkan': return 'bg-slate-100 text-slate-600 border border-slate-200';
+      default: return 'bg-slate-100 text-slate-700';
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -335,6 +388,123 @@ const DokumenSop: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* --- MODAL FORM (HANYA MUNCUL JIKA isModalOpen TRUE) --- */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h2 className="text-lg font-bold text-slate-800">
+                {modalMode === 'CREATE' ? 'Upload Dokumen SOP Baru' : 'Edit Metadata SOP'}
+              </h2>
+              <button onClick={handleCloseModal} className="text-slate-400 hover:text-rose-500 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              <form id="sopForm" onSubmit={handleFormSubmit} className="flex flex-col gap-5">
+                
+                {modalMode === 'EDIT' && (
+                  <div className="bg-amber-50 text-amber-700 text-xs font-semibold px-4 py-2 rounded-lg border border-amber-200">
+                    SOP ID: {formData.id}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Judul Dokumen <span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" required
+                    value={formData.judul}
+                    onChange={(e) => setFormData({...formData, judul: e.target.value})}
+                    placeholder="Contoh: Prosedur Keselamatan Kerja IGD"
+                    className="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Kategori <span className="text-red-500">*</span></label>
+                    <select 
+                      required
+                      value={formData.kategori}
+                      onChange={(e) => setFormData({...formData, kategori: e.target.value})}
+                      className="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="K3 & Keselamatan">K3 & Keselamatan</option>
+                      <option value="Sarpras">Sarpras</option>
+                      <option value="Alat Medis">Alat Medis</option>
+                      <option value="Umum & Administrasi">Umum & Administrasi</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Versi <span className="text-red-500">*</span></label>
+                    <input 
+                      type="text" required
+                      value={formData.versi}
+                      onChange={(e) => setFormData({...formData, versi: e.target.value})}
+                      placeholder="Contoh: v1.0"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {modalMode === 'EDIT' && (
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Status Dokumen</label>
+                    <select 
+                      value={formData.status}
+                      onChange={(e) => setFormData({...formData, status: e.target.value})}
+                      className="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="Aktif">Aktif</option>
+                      <option value="Diarsipkan">Arsipkan (Nonaktif)</option>
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    {modalMode === 'CREATE' ? 'Upload File Baru' : 'Timpa dengan File Baru (Opsional)'}
+                  </label>
+                  <input 
+                    type="file" 
+                    onChange={(e) => setUploadFile(e.target.files ? e.target.files[0] : null)}
+                    className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                    accept=".pdf,.doc,.docx"
+                    required={modalMode === 'CREATE'}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Hanya menerima format PDF atau Word (Maks 10MB).</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Deskripsi / Catatan Perubahan (Opsional)</label>
+                  <textarea 
+                    rows={3}
+                    value={formData.deskripsi}
+                    onChange={(e) => setFormData({...formData, deskripsi: e.target.value})}
+                    placeholder="Tuliskan catatan singkat mengenai dokumen ini..."
+                    className="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  />
+                </div>
+
+              </form>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button type="button" onClick={handleCloseModal} className="px-4 py-2 border border-slate-200 text-slate-600 text-sm font-bold rounded-lg hover:bg-slate-100 transition-colors">
+                Batal
+              </button>
+              <button type="submit" form="sopForm" className="px-5 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 shadow-sm transition-colors">
+                {modalMode === 'CREATE' ? 'Simpan Dokumen' : 'Perbarui Metadata'}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

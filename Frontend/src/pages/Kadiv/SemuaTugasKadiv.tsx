@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // --- DUMMY DATA PROYEK MAKRO ---
 const daftarProyek = [
@@ -11,6 +12,8 @@ const daftarProyek = [
 export default function SemuaTugasKadiv() {
   const [activeTab, setActiveTab] = useState('AKTIF'); // AKTIF | PENGESAHAN | RIWAYAT
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const navigate = useNavigate(); // Inisialisasi hook navigasi
 
   // Helper Warna Badge Status
   const getStatusBadge = (status: string) => {
@@ -48,15 +51,17 @@ export default function SemuaTugasKadiv() {
   return (
     <div className="p-8 w-full min-h-screen bg-slate-50 flex flex-col gap-6">
       
-      {/* Header & Tombol Buat Instruksi */}
+      {/* Header & Tombol Buat Tugas */}
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Manajemen Instruksi & Proyek Divisi</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Manajemen Tugas & Proyek Divisi</h1>
           <p className="text-slate-500 text-sm mt-1">Pantau progres Koordinator dan lakukan pengesahan akhir tugas</p>
         </div>
-        <button className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-6 py-2.5 rounded-xl shadow-sm transition-colors flex items-center gap-2">
+        <button 
+         onClick={() => navigate('/tambah-tugas')}
+         className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-6 py-2.5 rounded-xl shadow-sm transition-colors flex items-center gap-2">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-          Buat Instruksi Manajerial
+          Buat Tugas Baru
         </button>
       </div>
 
@@ -132,11 +137,17 @@ export default function SemuaTugasKadiv() {
                     </td>
                     <td className="py-4 px-6 text-center">
                       {proyek.status === 'Menunggu Pengesahan' ? (
-                        <button className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm w-full">
+                        <button 
+                          onClick={() => navigate(`/detail-tugas-kadiv/${proyek.id}`)}
+                          className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm w-full"
+                        >
                           Tinjau
                         </button>
                       ) : (
-                        <button className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm w-full">
+                        <button 
+                          onClick={() => navigate(`/detail-tugas-kadiv/${proyek.id}`)}
+                          className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm w-full"
+                        >
                           Detail
                         </button>
                       )}

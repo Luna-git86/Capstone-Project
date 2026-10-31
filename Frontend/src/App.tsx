@@ -28,9 +28,9 @@ import SemuaTugasKadiv from './pages/Kadiv/SemuaTugasKadiv';
 export const getDashboardByRole = (role: string | null) => {
   switch (role) {
     case 'ADMIN':
-      return '/dashboard-admin';
+      return '/dashboard-admin'; // Admin masuk ke Dashboard Admin (UAT-1.1)
     case 'DIREKTUR':
-      return '/dashboard';
+      return '/dashboard'; // Direktur masuk ke Dashboard Eksekutif (UAT-5.1)
     case 'KADIV':
       return '/dashboard-kadiv';
     case 'KOORDINATOR':
@@ -59,6 +59,7 @@ const RoleProtectedRoute = ({ allowedRoles }: { allowedRoles: string[] }) => {
     return <Navigate to="/login" replace />;
   }
 
+  // Jika mencoba mengakses URL di luar wewenangnya, tampilkan peringatan Akses Ditolak
   if (!allowedRoles.includes(role)) {
     alert('Akses Ditolak! Anda tidak memiliki wewenang untuk mengakses halaman ini.');
     return <Navigate to={getDashboardByRole(role)} replace />;

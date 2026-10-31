@@ -35,6 +35,13 @@ const Sidebar: React.FC = () => {
       path: getDashboardPath(userRole),
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
+
+    // rute khusus untuk Direktur
+        {
+      title: 'Dokumen SOP',
+      path: '/persetujuan-sop',
+      allowedRoles: ['DIREKTUR'],
+    },
     {
       // Pengajuan tiket masalah ke pihak berwenang
       title: 'Laporkan Masalah',
@@ -47,16 +54,29 @@ const Sidebar: React.FC = () => {
       path: '/tambah-tugas',
       allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
     },
+
+    // Rute khusus untuk Kadiv
+    {
+      title: 'Semua Tugas',
+      path: '/semua-tugas-kadiv',
+      allowedRoles: ['KADIV'],
+    },
+
+    // Rute khusus untuk Koordinator
     {
       title: 'Daftar Tugas',
       path: '/semua-tugas',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
+
+    // Rute khusus untuk Staf
     {
       title: 'Riwayat Selesai',
       path: '/riwayat',
-      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+      allowedRoles: ['STAF'],
     },
+
+    // Rute umum untuk semua role
     {
       title: 'Panduan SOP',
       path: '/dokumen-sop',
