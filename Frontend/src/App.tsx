@@ -6,26 +6,23 @@ import DashboardAdmin from './pages/DashboardAdmin';
 import DashboardStaff from './pages/DashboardStaff';
 import SemuaTugas from './pages/SemuaTugas';
 import TambahTugas from './pages/TambahTugas';
+import LaporkanMasalah from './pages/LaporkanMasalah';
 import DokumenSOP from './pages/DokumenSop';
-import PersetujuanSop from './pages/PersetujuanSop';
 import RiwayatTugas from './pages/RiwayatTugas';
 import PeformaAnalisis from './pages/PeformaAnalisis';
-import LaporkanMasalah from './pages/LaporkanMasalah';
 import Login from './pages/Login';
 import LaporanSLA from './pages/LaporanSLA';
 
-// rute import Koordinator
+// Rute import Koordinator
 import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
 import DetailTugasKoor from './pages/Koordinator/DetailTugasKoor';
 import DetailValidasi from './pages/Koordinator/DetailValidasi';
 import MenuLaporan from './pages/Koordinator/MenuLaporan';
 import SemuaTugasKoordinator from './pages/Koordinator/SemuaTugas';
 
-// rute import Kadiv
+// Rute import Kadiv
 import DashboardKadiv from './pages/Kadiv/DashboardKadiv';
 import SemuaTugasKadiv from './pages/Kadiv/SemuaTugasKadiv';
-import DetailTugasKadiv from './pages/Kadiv/DetailTugasKadiv';
-
 
 // Fungsi penentu beranda sesuai Role masing-masing
 export const getDashboardByRole = (role: string | null) => {
@@ -53,7 +50,7 @@ const ProtectedRoute = () => {
   return <Outlet />;
 };
 
-// 2. Komponen Penjaga Role (RBAC sesuai UAT-1.2 & UAT-4.2)
+// 2. Komponen Penjaga Role (RBAC)
 const RoleProtectedRoute = ({ allowedRoles }: { allowedRoles: string[] }) => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('userRole');
@@ -84,25 +81,24 @@ function App() {
         {/* Rute Terlindungi Token & Role di dalam Layout */}
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
-            {/* Dashboard Admin: Manajemen Akun & Matriks RBAC (Khusus Admin) - UAT-1.1 */}
+            {/* 1. Kelola Akun Pegawai (Khusus Admin) */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN']} />}>
               <Route path="/dashboard-admin" element={<DashboardAdmin />} />
             </Route>
 
-            {/* Dashboard Eksekutif & Analitik (Khusus Direktur) - UAT-5.1 */}
+            {/* 2. Beranda Eksekutif & Analitik (Khusus Direktur) */}
             <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR']} />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/performa" element={<PeformaAnalisis />} />
             </Route>
 
-            {/* Dashboard Manajerial (Khusus Kepala Divisi) - UAT-3.1 */}
+            {/* 3. Beranda Manajerial (Khusus Kepala Divisi) */}
             <Route element={<RoleProtectedRoute allowedRoles={['KADIV']} />}>
               <Route path="/dashboard-kadiv" element={<DashboardKadiv />} />
               <Route path="/semua-tugas-kadiv" element={<SemuaTugasKadiv />} />
-              <Route path="/detail-tugas-kadiv/:id" element={<DetailTugasKadiv />} />
             </Route>
 
-            {/* Dashboard Koordinator (Khusus Koordinator) - UAT-2.1 */}
+            {/* 4. Beranda Koordinator (Khusus Koordinator) */}
             <Route element={<RoleProtectedRoute allowedRoles={['KOORDINATOR']} />}>
               <Route path="/dashboard-koordinator" element={<DashboardKoordinator />} />
               <Route path="/detail-tugas-koordinator/:id" element={<DetailTugasKoor />} />
@@ -111,32 +107,32 @@ function App() {
               <Route path="/semua-tugas-koor" element={<SemuaTugasKoordinator />} />
             </Route>
 
-            {/* Dashboard Operasional (Khusus Staf) - UAT-4.1 */}
+            {/* 5. Beranda Operasional (Khusus Staf) */}
             <Route element={<RoleProtectedRoute allowedRoles={['STAF']} />}>
               <Route path="/dashboard-staff" element={<DashboardStaff />} />
             </Route>
 
-            {/* Pengajuan Tugas Baru (Admin & Staf Diblokir sesuai UAT-1.2 & Proposal) */}
-            <Route element={<RoleProtectedRoute allowedRoles={['KOORDINATOR', 'KADIV']} />}>
+            {/* 6. Menu Buat Tugas dengan Batas Waktu Jam (Khusus Koordinator, Kadiv, Direktur) */}
+            <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR']} />}>
               <Route path="/tambah-tugas" element={<TambahTugas />} />
             </Route>
 
-            {/* Pengesahan Dokumen SOP (Eksklusif Direktur sesuai UAT-1.2 & UAT-5.2) */}
-            <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR']} />}>
-              <Route path="/persetujuan-sop" element={<PersetujuanSop />} />
+            {/* 7. Menu Laporkan Masalah / Ajukan Tiket ke Pihak Berwenang */}
+            <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
+              <Route path="/laporkan-masalah" element={<LaporkanMasalah />} />
             </Route>
 
-            {/* Laporan SLA */}
-            <Route element={<RoleProtectedRoute allowedRoles={['ADMIN','DIREKTUR','KADIV','KOORDINATOR',]}/>}>
+            {/* 8. Laporan Kinerja / SLA */}
+            <Route element={<RoleProtectedRoute allowedRoles={['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR']} />}>
               <Route path="/laporan-sla" element={<LaporanSLA />} />
             </Route>
 
-            {/* Rute Umum Lintas Role */}
+            {/* 9. Rute Umum Lintas Role (Daftar Tugas, Riwayat, Panduan SOP) */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
-              <Route path="/dokumen-sop" element={<DokumenSOP />} />
               <Route path="/semua-tugas" element={<SemuaTugas />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
-              <Route path="/laporkan-masalah" element={<LaporkanMasalah />} />
+              <Route path="/dokumen-sop" element={<DokumenSOP />} />
+              <Route path="/persetujuan-sop" element={<Navigate to="/dokumen-sop" replace />} />
             </Route>
           </Route>
         </Route>

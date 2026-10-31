@@ -1,140 +1,224 @@
-import { useState } from 'react';
+// Frontend/src/pages/LaporkanMasalah.tsx
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
-export default function LaporkanMasalah() {
-  const [judul, setJudul] = useState('');
-  const [kategori, setKategori] = useState('');
-  const [lokasi, setLokasi] = useState('');
-  const [urgensi, setUrgensi] = useState('NORMAL');
-  const [deskripsi, setDeskripsi] = useState('');
-  const [fileName, setFileName] = useState<string | null>(null);
+interface Divisi {
+  id: number;
+  nama: string;
+}
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFileName(e.target.files[0].name);
+const getLabelKategoriMasalah = (namaDivisi: string) => {
+  const lower = namaDivisi.toLowerCase();
+  if (lower.includes('umum') || lower.includes('it')) {
+    return 'Fasilitas Gedung, AC, Listrik, Air & IT → (Divisi Umum & IT)';
+  }
+  if (lower.includes('penunjang')) {
+    return 'Alat Medis, Rontgen, Lab, Gizi & Farmasi → (Divisi Penunjang Medis)';
+  }
+  if (lower.includes('keperawatan') || lower.includes('kebidanan')) {
+    return 'Ruang Rawat Inap, Nifas, IGD & Keperawatan → (Divisi Keperawatan & Kebidanan)';
+  }
+  if (lower.includes('pelayanan medis')) {
+    return 'Poliklinik, Ruang Operasi & Layanan Medis → (Divisi Pelayanan Medis)';
+  }
+  if (lower.includes('administrasi') || lower.includes('keuangan')) {
+    return 'Kasir, Tagihan, BPJS & Administrasi → (Divisi Administrasi & Keuangan)';
+  }
+  if (lower.includes('hrd') || lower.includes('marketing')) {
+    return 'Kepegawaian & Informasi Rumah Sakit → (Divisi HRD & Marketing)';
+  }
+  return namaDivisi;
+};
+
+const LaporkanMasalah: React.FC = () => {
+  const navigate = useNavigate();
+  const [divisiList, setDivisiList] = useState<Divisi[]>([]);
+  const [formData, setFormData] = useState({
+    divisiId: '',
+    judul: '',
+    lokasi: '',
+    deskripsi: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [createdTicket, setCreatedTicket] = useState<any | null>(null);
+
+  useEffect(() => {
+    const fetchDivisi = async () => {
+      try {
+        const res = await api.get('/auth/divisi');
+        const list: Divisi[] = res.data.data || res.data || [];
+        setDivisiList(list);
+        if (list.length > 0) {
+          const defaultDiv =
+            list.find((d) => d.nama.toLowerCase().includes('umum')) || list[0];
+          setFormData((prev) => ({ ...prev, divisiId: String(defaultDiv.id) }));
+        }
+      } catch (err) {
+        console.error('Gagal mengambil daftar divisi:', err);
+      }
+    };
+    fetchDivisi();
+  }, []);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setCreatedTicket(null);
+    setLoading(true);
+
+    try {
+      const res = await api.post('/tickets', {
+        tipe: 'LAPORAN_MASALAH',
+        divisiId: Number(formData.divisiId),
+        judul: formData.judul,
+        lokasi: formData.lokasi,
+        deskripsi: formData.deskripsi,
+      });
+
+      setCreatedTicket(res.data.data);
+      setFormData((prev) => ({
+        ...prev,
+        judul: '',
+        lokasi: '',
+        deskripsi: '',
+      }));
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message || 'Gagal mengajukan tiket laporan masalah.'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Di sini nantinya Anda akan memanggil API backend
-    alert('Laporan masalah berhasil dikirim ke antrean sistem!');
-    console.log({ judul, kategori, lokasi, urgensi, deskripsi, fileName });
-  };
-
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 leading-tight">Laporkan Masalah</h1>
-        <p className="text-slate-500 mt-2">Buat tiket laporan baru untuk masalah teknis, fasilitas, atau operasional agar segera ditindaklanjuti.</p>
+    <div className="p-6 max-w-3xl mx-auto space-y-6">
+      <div>
+        <span className="px-2.5 py-1 text-xs font-bold bg-amber-100 text-amber-800 rounded-full uppercase">
+          Pengajuan Tiket Keluhan
+        </span>
+        <h1 className="text-2xl font-bold text-slate-800 mt-2">
+          Laporkan Masalah / Kerusakan Fasilitas
+        </h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Ajukan tiket masalah kepada Koordinator / Kepala Divisi berwenang agar segera dibuatkan penugasan dan ditangani oleh petugas teknis.
+        </p>
       </div>
 
-      {/* Form Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          
-          {/* Baris 1: Judul Masalah */}
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700">Judul Masalah <span className="text-red-500">*</span></label>
-            <input 
-              type="text" 
+      {error && (
+        <div className="p-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl">
+          {error}
+        </div>
+      )}
+
+      {createdTicket && (
+        <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-3">
+          <h3 className="text-sm font-bold text-emerald-900">
+            ✅ Tiket Masalah #T-{String(createdTicket.id).padStart(3, '0')} Berhasil Diajukan!
+          </h3>
+          <p className="text-xs text-emerald-800">
+            Tiket Anda telah masuk ke bagian <strong>{createdTicket.divisi?.nama}</strong> dengan status <strong>Menunggu Dibuatkan Tugas</strong> oleh Koordinator/Kepala Divisi.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/semua-tugas')}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm"
+          >
+            Pantau di Daftar Tugas →
+          </button>
+        </div>
+      )}
+
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4"
+      >
+        <div>
+          <label className="block text-sm font-bold text-slate-800 mb-1">
+            1. Kategori Masalah & Bagian yang Berwenang *
+          </label>
+          <select
+            name="divisiId"
+            value={formData.divisiId}
+            onChange={handleChange}
+            required
+            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+          >
+            {divisiList.map((d) => (
+              <option key={d.id} value={String(d.id)}>
+                {getLabelKategoriMasalah(d.nama)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold text-slate-800 mb-1">
+              2. Masalah / Kerusakan yang Ditemukan *
+            </label>
+            <input
+              type="text"
+              name="judul"
+              value={formData.judul}
+              onChange={handleChange}
               required
-              value={judul}
-              onChange={(e) => setJudul(e.target.value)}
-              placeholder="Contoh: AC Bocor di Ruang Tunggu Poli Anak" 
-              className="w-full border border-slate-300 rounded-lg px-4 py-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder-slate-400"
+              placeholder="Contoh: AC Bocor / Komputer Poli Mati"
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
           </div>
 
-          {/* Baris 2: Kategori & Lokasi */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-bold text-slate-700">Kategori <span className="text-red-500">*</span></label>
-              <select 
-                required
-                value={kategori}
-                onChange={(e) => setKategori(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-4 py-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white text-slate-700"
-              >
-                <option value="" disabled>Pilih kategori masalah...</option>
-                <option value="IT & Jaringan">IT & Jaringan</option>
-                <option value="Fasilitas & Gedung">Fasilitas & Gedung</option>
-                <option value="Peralatan Medis">Peralatan Medis</option>
-                <option value="Logistik & Farmasi">Logistik & Farmasi</option>
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-bold text-slate-700">Lokasi Spesifik <span className="text-red-500">*</span></label>
-              <input 
-                type="text" 
-                required
-                value={lokasi}
-                onChange={(e) => setLokasi(e.target.value)}
-                placeholder="Contoh: Lantai 2, Gedung B" 
-                className="w-full border border-slate-300 rounded-lg px-4 py-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder-slate-400"
-              />
-            </div>
-          </div>
-
-          {/* Baris 4: Deskripsi */}
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold text-slate-700">Deskripsi Lengkap <span className="text-red-500">*</span></label>
-            <textarea 
+          <div>
+            <label className="block text-sm font-bold text-slate-800 mb-1">
+              3. Lokasi Ruangan / Nama Alat *
+            </label>
+            <input
+              type="text"
+              name="lokasi"
+              value={formData.lokasi}
+              onChange={handleChange}
               required
-              rows={4}
-              value={deskripsi}
-              onChange={(e) => setDeskripsi(e.target.value)}
-              placeholder="Jelaskan masalah secara detail..." 
-              className="w-full border border-slate-300 rounded-lg px-4 py-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder-slate-400 resize-y"
-            ></textarea>
+              placeholder="Contoh: Ruang Poli Anak - AC Unit 1"
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
           </div>
+        </div>
 
-          {/* Baris 5: File Upload (Drag & Drop Zone) */}
-          <div className="flex flex-col gap-2 mt-2">
-            <label className="text-sm font-bold text-slate-700">Lampirkan Bukti Foto/Dokumen (Opsional)</label>
-            <div className="relative border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center text-center hover:bg-slate-50 transition-colors group cursor-pointer">
-              
-              {/* Hidden Input File */}
-              <input 
-                type="file" 
-                onChange={handleFileChange}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-              />
-              
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3 group-hover:bg-blue-200 transition-colors">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-              </div>
-              
-              {fileName ? (
-                <div className="flex items-center gap-2 text-sm font-bold text-blue-600 bg-blue-50 px-4 py-2 rounded-full">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  {fileName}
-                </div>
-              ) : (
-                <>
-                  <p className="text-sm font-bold text-slate-700 mb-1">Klik untuk unggah atau seret file ke sini</p>
-                  <p className="text-xs text-slate-500">Mendukung format JPG, PNG, atau PDF (Maks. 5MB)</p>
-                </>
-              )}
-            </div>
-          </div>
+        <div>
+          <label className="block text-sm font-bold text-slate-800 mb-1">
+            4. Keterangan Detail Masalah *
+          </label>
+          <textarea
+            name="deskripsi"
+            rows={4}
+            value={formData.deskripsi}
+            onChange={handleChange}
+            required
+            placeholder="Jelaskan kondisi masalah secara singkat agar atasan dapat menentukan prioritas dan petugas yang tepat..."
+            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+          />
+        </div>
 
-          {/* Baris 6: Tombol Aksi */}
-          <div className="flex items-center justify-end gap-4 mt-4 pt-6 border-t border-slate-100">
-            <button type="button" className="px-6 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
-              Batal
-            </button>
-            <button type="submit" className="px-8 py-3 text-sm font-bold text-white bg-[#005bb5] hover:bg-blue-700 shadow-md shadow-blue-500/20 rounded-lg transition-colors flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-              Kirim Laporan
-            </button>
-          </div>
-
-        </form>
-      </div>
-
+        <div className="pt-2 flex justify-end">
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-bold rounded-lg shadow-sm transition"
+          >
+            {loading ? 'Mengirim Tiket...' : 'Ajukan Tiket Masalah'}
+          </button>
+        </div>
+      </form>
     </div>
   );
-}
+};
+
+export default LaporkanMasalah;
