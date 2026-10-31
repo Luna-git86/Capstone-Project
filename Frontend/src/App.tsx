@@ -23,6 +23,9 @@ import SemuaTugasKoordinator from './pages/Koordinator/SemuaTugas';
 // Rute import Kadiv
 import DashboardKadiv from './pages/Kadiv/DashboardKadiv';
 import SemuaTugasKadiv from './pages/Kadiv/SemuaTugasKadiv';
+import DetailTugasKadiv from './pages/Kadiv/DetailTugasKadiv';
+import DaftarEskalasiKadiv from './pages/Kadiv/DaftarEskalasiKadiv';
+import DetailEskalasi from './pages/Kadiv/DetailEskalasi';
 
 // Fungsi penentu beranda sesuai Role masing-masing
 export const getDashboardByRole = (role: string | null) => {
@@ -96,6 +99,9 @@ function App() {
             <Route element={<RoleProtectedRoute allowedRoles={['KADIV']} />}>
               <Route path="/dashboard-kadiv" element={<DashboardKadiv />} />
               <Route path="/semua-tugas-kadiv" element={<SemuaTugasKadiv />} />
+              <Route path="/detail-tugas-kadiv/:id" element={<DetailTugasKadiv />} />
+              <Route path="/daftar-eskalasi-kadiv" element={<DaftarEskalasiKadiv />} />
+              <Route path="/detail-eskalasi/:id" element={<DetailEskalasi />} />
             </Route>
 
             {/* 4. Beranda Koordinator (Khusus Koordinator) */}
@@ -132,7 +138,6 @@ function App() {
               <Route path="/semua-tugas" element={<SemuaTugas />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
               <Route path="/dokumen-sop" element={<DokumenSOP />} />
-              <Route path="/persetujuan-sop" element={<Navigate to="/dokumen-sop" replace />} />
             </Route>
           </Route>
         </Route>

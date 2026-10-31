@@ -37,23 +37,8 @@ const Sidebar: React.FC = () => {
     },
 
     // rute khusus untuk Direktur
-        {
-      title: 'Dokumen SOP',
-      path: '/persetujuan-sop',
-      allowedRoles: ['DIREKTUR'],
-    },
-    {
-      // Pengajuan tiket masalah ke pihak berwenang
-      title: 'Laporkan Masalah',
-      path: '/laporkan-masalah',
-      allowedRoles: ['KADIV', 'KOORDINATOR', 'STAF'],
-    },
-    {
-      // Pembuatan tugas resmi dengan batas waktu jam (Khusus Koordinator s/d Direktur)
-      title: 'Buat Tugas',
-      path: '/tambah-tugas',
-      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
-    },
+
+
 
     // Rute khusus untuk Kadiv
     {
@@ -61,13 +46,24 @@ const Sidebar: React.FC = () => {
       path: '/semua-tugas-kadiv',
       allowedRoles: ['KADIV'],
     },
+    {
+      title: 'Daftar Eskalasi',
+      path: '/daftar-eskalasi-kadiv',
+      allowedRoles: ['KADIV'],
+    },
 
     // Rute khusus untuk Koordinator
     {
-      title: 'Daftar Tugas',
-      path: '/semua-tugas',
-      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+      title: 'Semua Tugas',
+      path: '/semua-tugas-koor',
+      allowedRoles: ['KOORDINATOR'],
     },
+    {
+        title: 'Menu Laporan',
+        path: '/menu-laporan',
+        allowedRoles: ['KOORDINATOR'],
+    },
+
 
     // Rute khusus untuk Staf
     {
@@ -78,14 +74,20 @@ const Sidebar: React.FC = () => {
 
     // Rute umum untuk semua role
     {
-      title: 'Panduan SOP',
+      title: 'Dokumen SOP',
       path: '/dokumen-sop',
-      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
     {
       title: 'Laporan Kinerja',
       path: '/laporan-sla',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR'],
+    },
+    {
+      // Pengajuan tiket masalah ke pihak berwenang
+      title: 'Laporkan Masalah',
+      path: '/laporkan-masalah',
+      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
   ];
 
