@@ -35,37 +35,59 @@ const Sidebar: React.FC = () => {
       path: getDashboardPath(userRole),
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
+
+    // rute khusus untuk Direktur
+
+
+
+    // Rute khusus untuk Kadiv
     {
-      // Pengajuan tiket masalah ke pihak berwenang
-      title: 'Laporkan Masalah',
-      path: '/laporkan-masalah',
-      allowedRoles: ['KADIV', 'KOORDINATOR', 'STAF'],
+      title: 'Daftar Eskalasi',
+      path: '/daftar-eskalasi-kadiv',
+      allowedRoles: ['KADIV'],
+    },
+
+    // Rute khusus untuk Koordinator
+    {
+        title: 'Menu Laporan',
+        path: '/menu-laporan',
+        allowedRoles: ['KOORDINATOR'],
+    },
+
+
+    // Rute khusus untuk Staf
+    {
+      title: 'Riwayat Selesai',
+      path: '/riwayat',
+      allowedRoles: ['STAF'],
     },
     {
-      // Pembuatan tugas resmi dengan batas waktu jam (Khusus Koordinator s/d Direktur)
-      title: 'Buat Tugas',
-      path: '/tambah-tugas',
-      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
+      title: 'Tugas Saya',
+      path: '/semua-tugas-staff',
+      allowedRoles: ['STAF'],
     },
+
+    // Rute umum untuk semua role
     {
-      title: 'Daftar Tugas',
+      title: 'Semua Tugas',
       path: '/semua-tugas',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
     {
-      title: 'Riwayat Selesai',
-      path: '/riwayat',
-      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
-    },
-    {
-      title: 'Panduan SOP',
+      title: 'Dokumen SOP',
       path: '/dokumen-sop',
-      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
     {
       title: 'Laporan Kinerja',
       path: '/laporan-sla',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR'],
+    },
+    {
+      // Pengajuan tiket masalah ke pihak berwenang
+      title: 'Laporkan Masalah',
+      path: '/laporkan-masalah',
+      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
   ];
 

@@ -1,9 +1,8 @@
 // Frontend/src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
+
 import DashboardAdmin from './pages/DashboardAdmin';
-import DashboardStaff from './pages/DashboardStaff';
 import SemuaTugas from './pages/SemuaTugas';
 import TambahTugas from './pages/TambahTugas';
 import LaporkanMasalah from './pages/LaporkanMasalah';
@@ -12,25 +11,33 @@ import RiwayatTugas from './pages/RiwayatTugas';
 import PeformaAnalisis from './pages/PeformaAnalisis';
 import Login from './pages/Login';
 import LaporanSLA from './pages/LaporanSLA';
+import Dashboard from './pages/Dashboard';
+
+// Rute import Staff
+import DashboardStaff from './pages/Staf/DashboardStaff';
+
 
 // Rute import Koordinator
 import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
 import DetailTugasKoor from './pages/Koordinator/DetailTugasKoor';
 import DetailValidasi from './pages/Koordinator/DetailValidasi';
 import MenuLaporan from './pages/Koordinator/MenuLaporan';
-import SemuaTugasKoordinator from './pages/Koordinator/SemuaTugas';
+
 
 // Rute import Kadiv
 import DashboardKadiv from './pages/Kadiv/DashboardKadiv';
-import SemuaTugasKadiv from './pages/Kadiv/SemuaTugasKadiv';
+
+import DetailTugasKadiv from './pages/Kadiv/DetailTugasKadiv';
+import DaftarEskalasiKadiv from './pages/Kadiv/DaftarEskalasiKadiv';
+import DetailEskalasi from './pages/Kadiv/DetailEskalasi';
 
 // Fungsi penentu beranda sesuai Role masing-masing
 export const getDashboardByRole = (role: string | null) => {
   switch (role) {
     case 'ADMIN':
-      return '/dashboard-admin';
+      return '/dashboard-admin'; // Admin masuk ke Dashboard Admin (UAT-1.1)
     case 'DIREKTUR':
-      return '/dashboard';
+      return '/dashboard'; // Direktur masuk ke Dashboard Eksekutif (UAT-5.1)
     case 'KADIV':
       return '/dashboard-kadiv';
     case 'KOORDINATOR':
@@ -59,6 +66,7 @@ const RoleProtectedRoute = ({ allowedRoles }: { allowedRoles: string[] }) => {
     return <Navigate to="/login" replace />;
   }
 
+  // Jika mencoba mengakses URL di luar wewenangnya, tampilkan peringatan Akses Ditolak
   if (!allowedRoles.includes(role)) {
     alert('Akses Ditolak! Anda tidak memiliki wewenang untuk mengakses halaman ini.');
     return <Navigate to={getDashboardByRole(role)} replace />;
@@ -94,7 +102,10 @@ function App() {
             {/* 3. Beranda Manajerial (Khusus Kepala Divisi) */}
             <Route element={<RoleProtectedRoute allowedRoles={['KADIV']} />}>
               <Route path="/dashboard-kadiv" element={<DashboardKadiv />} />
-              <Route path="/semua-tugas-kadiv" element={<SemuaTugasKadiv />} />
+
+              <Route path="/detail-tugas-kadiv/:id" element={<DetailTugasKadiv />} />
+              <Route path="/daftar-eskalasi-kadiv" element={<DaftarEskalasiKadiv />} />
+              <Route path="/detail-eskalasi/:id" element={<DetailEskalasi />} />
             </Route>
 
             {/* 4. Beranda Koordinator (Khusus Koordinator) */}
@@ -103,12 +114,12 @@ function App() {
               <Route path="/detail-tugas-koordinator/:id" element={<DetailTugasKoor />} />
               <Route path="/detail-validasi/:id" element={<DetailValidasi />} />
               <Route path="/menu-laporan" element={<MenuLaporan />} />
-              <Route path="/semua-tugas-koor" element={<SemuaTugasKoordinator />} />
             </Route>
 
             {/* 5. Beranda Operasional (Khusus Staf) */}
             <Route element={<RoleProtectedRoute allowedRoles={['STAF']} />}>
               <Route path="/dashboard-staff" element={<DashboardStaff />} />
+
             </Route>
 
             {/* 6. Menu Buat Tugas dengan Batas Waktu Jam (Khusus Koordinator, Kadiv, Direktur) */}
@@ -131,7 +142,6 @@ function App() {
               <Route path="/semua-tugas" element={<SemuaTugas />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
               <Route path="/dokumen-sop" element={<DokumenSOP />} />
-              <Route path="/persetujuan-sop" element={<Navigate to="/dokumen-sop" replace />} />
             </Route>
           </Route>
         </Route>
