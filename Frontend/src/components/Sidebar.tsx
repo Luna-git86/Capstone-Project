@@ -42,22 +42,12 @@ const Sidebar: React.FC = () => {
 
     // Rute khusus untuk Kadiv
     {
-      title: 'Semua Tugas',
-      path: '/semua-tugas-kadiv',
-      allowedRoles: ['KADIV'],
-    },
-    {
       title: 'Daftar Eskalasi',
       path: '/daftar-eskalasi-kadiv',
       allowedRoles: ['KADIV'],
     },
 
     // Rute khusus untuk Koordinator
-    {
-      title: 'Semua Tugas',
-      path: '/semua-tugas-koor',
-      allowedRoles: ['KOORDINATOR'],
-    },
     {
         title: 'Menu Laporan',
         path: '/menu-laporan',
@@ -71,8 +61,18 @@ const Sidebar: React.FC = () => {
       path: '/riwayat',
       allowedRoles: ['STAF'],
     },
+    {
+      title: 'Tugas Saya',
+      path: '/semua-tugas-staff',
+      allowedRoles: ['STAF'],
+    },
 
     // Rute umum untuk semua role
+    {
+      title: 'Semua Tugas',
+      path: '/semua-tugas',
+      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+    },
     {
       title: 'Dokumen SOP',
       path: '/dokumen-sop',

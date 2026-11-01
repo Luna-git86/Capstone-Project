@@ -1,6 +1,6 @@
 // Frontend/src/pages/DashboardStaff.tsx
 import React, { useEffect, useState } from 'react';
-import api from '../services/api';
+import api from '../../services/api';
 
 interface Ticket {
   id: number;

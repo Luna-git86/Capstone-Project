@@ -318,7 +318,7 @@ const DokumenSop: React.FC = () => {
                           rel="noopener noreferrer"
                           className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg whitespace-nowrap"
                         >
-                          📥 Baca / Unduh SOP
+                          Baca / Unduh SOP
                         </a>
                       ) : (
                         <span className="px-3 py-1.5 bg-slate-100 text-slate-500 text-xs font-medium rounded-lg whitespace-nowrap">

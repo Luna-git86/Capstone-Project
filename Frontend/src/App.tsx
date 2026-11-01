@@ -1,9 +1,8 @@
 // Frontend/src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
+
 import DashboardAdmin from './pages/DashboardAdmin';
-import DashboardStaff from './pages/DashboardStaff';
 import SemuaTugas from './pages/SemuaTugas';
 import TambahTugas from './pages/TambahTugas';
 import LaporkanMasalah from './pages/LaporkanMasalah';
@@ -12,17 +11,22 @@ import RiwayatTugas from './pages/RiwayatTugas';
 import PeformaAnalisis from './pages/PeformaAnalisis';
 import Login from './pages/Login';
 import LaporanSLA from './pages/LaporanSLA';
+import Dashboard from './pages/Dashboard';
+
+// Rute import Staff
+import DashboardStaff from './pages/Staf/DashboardStaff';
+
 
 // Rute import Koordinator
 import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
 import DetailTugasKoor from './pages/Koordinator/DetailTugasKoor';
 import DetailValidasi from './pages/Koordinator/DetailValidasi';
 import MenuLaporan from './pages/Koordinator/MenuLaporan';
-import SemuaTugasKoordinator from './pages/Koordinator/SemuaTugas';
+
 
 // Rute import Kadiv
 import DashboardKadiv from './pages/Kadiv/DashboardKadiv';
-import SemuaTugasKadiv from './pages/Kadiv/SemuaTugasKadiv';
+
 import DetailTugasKadiv from './pages/Kadiv/DetailTugasKadiv';
 import DaftarEskalasiKadiv from './pages/Kadiv/DaftarEskalasiKadiv';
 import DetailEskalasi from './pages/Kadiv/DetailEskalasi';
@@ -98,7 +102,7 @@ function App() {
             {/* 3. Beranda Manajerial (Khusus Kepala Divisi) */}
             <Route element={<RoleProtectedRoute allowedRoles={['KADIV']} />}>
               <Route path="/dashboard-kadiv" element={<DashboardKadiv />} />
-              <Route path="/semua-tugas-kadiv" element={<SemuaTugasKadiv />} />
+
               <Route path="/detail-tugas-kadiv/:id" element={<DetailTugasKadiv />} />
               <Route path="/daftar-eskalasi-kadiv" element={<DaftarEskalasiKadiv />} />
               <Route path="/detail-eskalasi/:id" element={<DetailEskalasi />} />
@@ -110,12 +114,12 @@ function App() {
               <Route path="/detail-tugas-koordinator/:id" element={<DetailTugasKoor />} />
               <Route path="/detail-validasi/:id" element={<DetailValidasi />} />
               <Route path="/menu-laporan" element={<MenuLaporan />} />
-              <Route path="/semua-tugas-koor" element={<SemuaTugasKoordinator />} />
             </Route>
 
             {/* 5. Beranda Operasional (Khusus Staf) */}
             <Route element={<RoleProtectedRoute allowedRoles={['STAF']} />}>
               <Route path="/dashboard-staff" element={<DashboardStaff />} />
+
             </Route>
 
             {/* 6. Menu Buat Tugas dengan Batas Waktu Jam (Khusus Koordinator, Kadiv, Direktur) */}

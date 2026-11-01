@@ -69,6 +69,9 @@ const SemuaTugas: React.FC = () => {
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
   const [staffList, setStaffList] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // PENAMBAHAN: State untuk Tab & Filter
+  const [activeTab, setActiveTab] = useState<'AKTIF' | 'RIWAYAT'>('AKTIF');
   const [filterStatus, setFilterStatus] = useState('SEMUA');
 
   // 1. Modal Buat Tugas dari Tiket Masalah (Koordinator / Kadiv / Direktur)
@@ -96,8 +99,10 @@ const SemuaTugas: React.FC = () => {
   const [escalateNote, setEscalateNote] = useState('');
 
   const userRole = localStorage.getItem('userRole') || 'STAF';
+  const userId = Number(localStorage.getItem('userId')) || 0;
   const isAdmin = userRole === 'ADMIN';
   const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(userRole);
+  const isStaff = !isAdmin && !isAtasan;
 
   const fetchData = async () => {
     try {
@@ -267,6 +272,11 @@ const SemuaTugas: React.FC = () => {
           label: 'Selesai (Tervalidasi)',
           cls: 'bg-emerald-100 text-emerald-700',
         };
+      case 'DITOLAK':
+        return {
+          label: 'Ditolak / Dibatalkan',
+          cls: 'bg-slate-200 text-slate-700',
+        };
       default:
         return { label: status, cls: 'bg-slate-100 text-slate-700' };
     }
@@ -288,10 +298,21 @@ const SemuaTugas: React.FC = () => {
     return `https://wa.me/${wa}?text=${msg}`;
   };
 
-  const filteredTickets =
-    filterStatus === 'SEMUA'
-      ? tickets
-      : tickets.filter((t) => t.status === filterStatus);
+  // --- LOGIKA FILTER DATA CERDAS ---
+  const filteredTickets = tickets.filter((t) => {
+    // 1. Filter Kepemilikan (Penting untuk Staf jika backend belum memfilter)
+    if (isStaff && t.pelaksana?.id !== userId) return false;
+
+    // 2. Filter Berdasarkan Tab Utama
+    const isCompletedOrRejected = ['SELESAI', 'DITOLAK'].includes(t.status);
+    if (activeTab === 'AKTIF' && isCompletedOrRejected) return false;
+    if (activeTab === 'RIWAYAT' && !isCompletedOrRejected) return false;
+
+    // 3. Filter Dropdown (Semua vs Spesifik)
+    if (filterStatus !== 'SEMUA' && t.status !== filterStatus) return false;
+
+    return true;
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -306,236 +327,280 @@ const SemuaTugas: React.FC = () => {
               : 'Kelola tiket masalah menjadi tugas, laporkan penyelesaian dengan bukti foto, dan evaluasi hasil kerja.'}
           </p>
         </div>
-
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3.5 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700"
-        >
-          <option value="SEMUA">Semua Status ({tickets.length})</option>
-          <option value="MENUNGGU_TRIASE">Tiket Masalah (Belum Dibuatkan Tugas)</option>
-          <option value="DIPROSES">Sedang Dikerjakan</option>
-          <option value="MENUNGGU_VALIDASI">Menunggu Evaluasi Foto</option>
-          <option value="HOLD_ESKALASI">Tertahan (Kendala Biaya/Alat)</option>
-          <option value="SELESAI">Selesai (Tervalidasi)</option>
-        </select>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase bg-slate-50">
-              <th className="py-3.5 px-4">Tiket & Deskripsi</th>
-              <th className="py-3.5 px-4">Lokasi & Batas Waktu (Jam)</th>
-              <th className="py-3.5 px-4">Divisi & Petugas</th>
-              <th className="py-3.5 px-4">Status & Bukti Kerja</th>
-              {!isAdmin && <th className="py-3.5 px-4 text-right">Tindakan</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-sm">
-            {loading ? (
-              <tr>
-                <td colSpan={isAdmin ? 4 : 5} className="py-8 text-center text-slate-500">
-                  Memuat data...
-                </td>
-              </tr>
-            ) : filteredTickets.length === 0 ? (
-              <tr>
-                <td colSpan={isAdmin ? 4 : 5} className="py-8 text-center text-slate-400">
-                  Belum ada data tiket atau tugas pada kategori ini.
-                </td>
-              </tr>
-            ) : (
-              filteredTickets.map((t) => {
-                const badge = getStatusBadge(t.status);
-                const isOverdue =
-                  t.deadline &&
-                  t.status !== 'SELESAI' &&
-                  new Date(t.deadline) < new Date();
+      {/* KONTAINER UTAMA: Tabel menyatu dengan desain Tab di Header */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        
+        {/* Header Tabel (Menyatu dengan Tab dan Dropdown Filter) */}
+        <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-b border-slate-200 bg-white gap-4">
+          
+          <div className="flex bg-slate-50 p-1 rounded-lg w-full sm:w-auto border border-slate-100">
+             <button 
+               onClick={() => {
+                  setActiveTab('AKTIF');
+                  setFilterStatus('SEMUA'); 
+               }}
+               className={`flex-1 sm:flex-none px-6 py-2 text-sm font-bold rounded-md transition-colors ${activeTab === 'AKTIF' ? 'bg-white text-blue-700 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+             >
+               Tugas Aktif
+             </button>
+             <button 
+               onClick={() => {
+                   setActiveTab('RIWAYAT');
+                   setFilterStatus('SEMUA');
+               }}
+               className={`flex-1 sm:flex-none px-6 py-2 text-sm font-bold rounded-md transition-colors ${activeTab === 'RIWAYAT' ? 'bg-white text-blue-700 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+             >
+               Riwayat Tugas
+             </button>
+          </div>
 
-                return (
-                  <tr key={t.id} className="hover:bg-slate-50 align-top">
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-blue-600 text-xs">
-                          #T-{String(t.id).padStart(3, '0')}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 text-[10px] font-bold rounded ${
-                            t.prioritas === 'HIGH'
-                              ? 'bg-rose-100 text-rose-700'
-                              : t.prioritas === 'MEDIUM'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-blue-100 text-blue-700'
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="w-full sm:w-auto px-3.5 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700"
+          >
+            <option value="SEMUA">Semua Status</option>
+            {activeTab === 'AKTIF' && (
+              <>
+                <option value="MENUNGGU_TRIASE">Tiket Masalah (Belum Dibuatkan Tugas)</option>
+                <option value="DIPROSES">Sedang Dikerjakan</option>
+                <option value="MENUNGGU_VALIDASI">Menunggu Evaluasi Foto</option>
+                <option value="HOLD_ESKALASI">Tertahan (Kendala Biaya/Alat)</option>
+              </>
+            )}
+            {activeTab === 'RIWAYAT' && (
+              <>
+                 <option value="SELESAI">Selesai (Tervalidasi)</option>
+                 <option value="DITOLAK">Ditolak / Dibatalkan</option>
+              </>
+            )}
+          </select>
+        </div>
+
+        {/* Area Tabel */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[950px]">
+            <thead>
+              <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase bg-slate-50">
+                <th className="py-3.5 px-4">Tiket & Deskripsi</th>
+                <th className="py-3.5 px-4">Lokasi & Batas Waktu (Jam)</th>
+                <th className="py-3.5 px-4">Divisi & Petugas</th>
+                <th className="py-3.5 px-4">Status & Bukti Kerja</th>
+                {!isAdmin && <th className="py-3.5 px-4 text-right">Tindakan</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {loading ? (
+                <tr>
+                  <td colSpan={isAdmin ? 4 : 5} className="py-8 text-center text-slate-500">
+                    Memuat data...
+                  </td>
+                </tr>
+              ) : filteredTickets.length === 0 ? (
+                <tr>
+                  <td colSpan={isAdmin ? 4 : 5} className="py-8 text-center text-slate-400">
+                    Belum ada data tiket atau tugas pada kategori ini.
+                  </td>
+                </tr>
+              ) : (
+                filteredTickets.map((t) => {
+                  const badge = getStatusBadge(t.status);
+                  const isOverdue =
+                    t.deadline &&
+                    t.status !== 'SELESAI' &&
+                    new Date(t.deadline) < new Date();
+
+                  return (
+                    <tr key={t.id} className="hover:bg-slate-50 align-top">
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-blue-600 text-xs">
+                            #T-{String(t.id).padStart(3, '0')}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded ${
+                              t.prioritas === 'HIGH'
+                                ? 'bg-rose-100 text-rose-700'
+                                : t.prioritas === 'MEDIUM'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}
+                          >
+                            {t.prioritas}
+                          </span>
+                        </div>
+                        <p className="font-bold text-slate-800 mt-1">{t.judul}</p>
+                        <p className="text-xs text-slate-600 mt-0.5">{t.deskripsi}</p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Pengaju: <strong>{t.pembuat?.nama || '-'}</strong> ({t.pembuat?.role})
+                        </p>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-xs space-y-1">
+                        <p className="font-semibold text-slate-800">
+                          {t.lokasi || '-'}
+                        </p>
+                        <p
+                          className={`font-medium ${
+                            isOverdue ? 'text-rose-600 font-bold' : 'text-slate-600'
                           }`}
                         >
-                          {t.prioritas}
-                        </span>
-                      </div>
-                      <p className="font-bold text-slate-800 mt-1">{t.judul}</p>
-                      <p className="text-xs text-slate-600 mt-0.5">{t.deskripsi}</p>
-                      <p className="text-[11px] text-slate-400 mt-1">
-                        Pengaju: <strong>{t.pembuat?.nama || '-'}</strong> ({t.pembuat?.role})
-                      </p>
-                    </td>
-
-                    <td className="py-3.5 px-4 text-xs space-y-1">
-                      <p className="font-semibold text-slate-800">
-                        📍 {t.lokasi || '-'}
-                      </p>
-                      <p
-                        className={`font-medium ${
-                          isOverdue ? 'text-rose-600 font-bold' : 'text-slate-600'
-                        }`}
-                      >
-                        ⏰ Batas Waktu: {formatDateTime(t.deadline)}
-                      </p>
-                      {isOverdue && (
-                        <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-700 rounded">
-                          Melewati Batas Waktu!
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-4 text-xs space-y-1">
-                      <p className="font-bold text-slate-800">
-                        Divisi: {t.divisi?.nama || '-'}
-                      </p>
-                      <p className="text-slate-600">
-                        Pemberi Tugas:{' '}
-                        <span className="font-semibold text-indigo-700">
-                          {t.penanggungJawab?.nama || 'Menunggu Koordinator/Kadiv'}
-                        </span>
-                      </p>
-                      <p className="text-slate-600">
-                        Pelaksana:{' '}
-                        <span className="font-semibold text-emerald-700">
-                          {t.pelaksana?.nama || 'Belum Ditunjuk'}
-                        </span>
-                      </p>
-                    </td>
-
-                    <td className="py-3.5 px-4 space-y-1.5">
-                      <span
-                        className={`inline-block px-2.5 py-1 text-xs font-bold rounded ${badge.cls}`}
-                      >
-                        {badge.label}
-                      </span>
-
-                      {t.laporanPenyelesaian && (
-                        <p className="text-xs text-slate-700 bg-slate-100 p-2 rounded border border-slate-200">
-                          <strong>Laporan Staf:</strong> {t.laporanPenyelesaian}
+                          Batas Waktu: {formatDateTime(t.deadline)}
                         </p>
-                      )}
-
-                      {t.fotoBukti && (
-                        <div>
-                          <img
-                            src={t.fotoBukti}
-                            alt="Bukti Penyelesaian"
-                            className="w-20 h-16 object-cover rounded border border-slate-300 cursor-pointer hover:opacity-90"
-                            onClick={() => {
-                              setEvalTarget(t);
-                              setEvalNote(t.catatanRevisi || '');
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      {t.catatanRevisi && (
-                        <p className="text-xs text-rose-700 bg-rose-50 p-2 rounded border border-rose-200">
-                          <strong>Catatan Evaluasi / Kendala:</strong> {t.catatanRevisi}
-                        </p>
-                      )}
-                    </td>
-
-                    {!isAdmin && (
-                      <td className="py-3.5 px-4 text-right space-y-1.5">
-                        {/* Aksi untuk Koordinator, Kadiv, Direktur */}
-                        {isAtasan && (
-                          <div className="flex flex-col items-end gap-1.5">
-                            {t.status !== 'SELESAI' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedTriage(t);
-                                  setTriageForm({
-                                    divisiId: t.divisi?.id ? String(t.divisi.id) : '',
-                                    prioritas: t.prioritas,
-                                    pelaksanaId: t.pelaksana?.id
-                                      ? String(t.pelaksana.id)
-                                      : '',
-                                    deadline: toDateTimeLocalInput(t.deadline),
-                                    catatanRevisi: t.catatanRevisi || '',
-                                  });
-                                }}
-                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md"
-                              >
-                                📋 Buat Tugas & Atur Jam
-                              </button>
-                            )}
-
-                            {t.status === 'MENUNGGU_VALIDASI' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEvalTarget(t);
-                                  setEvalNote(t.catatanRevisi || '');
-                                }}
-                                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-md shadow-sm"
-                              >
-                                🔍 Evaluasi Foto & Hasil
-                              </button>
-                            )}
-
-                            {t.pelaksana?.noHp && t.status !== 'SELESAI' && (
-                              <a
-                                href={getWhatsAppLink(t)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md"
-                              >
-                                📲 Kirim WA Staf
-                              </a>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Aksi untuk Staf Pelaksana (Lapor Selesai + Kirim Foto) */}
-                        {(t.status === 'DIPROSES' || t.status === 'HOLD_ESKALASI') && (
-                          <div className="flex flex-col items-end gap-1.5 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setReportTarget(t);
-                                setReportText(t.laporanPenyelesaian || '');
-                                setReportPhoto(t.fotoBukti || '');
-                              }}
-                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-md shadow-sm"
-                            >
-                              📷 Lapor Selesai (Kirim Foto)
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEscalateTarget(t);
-                                setEscalateNote(t.catatanRevisi || '');
-                              }}
-                              className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-semibold rounded-md"
-                            >
-                              ⚠️ Lapor Kendala / Biaya
-                            </button>
-                          </div>
+                        {isOverdue && (
+                          <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-700 rounded">
+                            Melewati Batas Waktu!
+                          </span>
                         )}
                       </td>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+
+                      <td className="py-3.5 px-4 text-xs space-y-1">
+                        <p className="font-bold text-slate-800">
+                          Divisi: {t.divisi?.nama || '-'}
+                        </p>
+                        <p className="text-slate-600">
+                          Pemberi Tugas:{' '}
+                          <span className="font-semibold text-indigo-700">
+                            {t.penanggungJawab?.nama || 'Menunggu Koordinator/Kadiv'}
+                          </span>
+                        </p>
+                        <p className="text-slate-600">
+                          Pelaksana:{' '}
+                          <span className="font-semibold text-emerald-700">
+                            {t.pelaksana?.nama || 'Belum Ditunjuk'}
+                          </span>
+                        </p>
+                      </td>
+
+                      <td className="py-3.5 px-4 space-y-1.5">
+                        <span
+                          className={`inline-block px-2.5 py-1 text-xs font-bold rounded ${badge.cls}`}
+                        >
+                          {badge.label}
+                        </span>
+
+                        {t.laporanPenyelesaian && (
+                          <p className="text-xs text-slate-700 bg-slate-100 p-2 rounded border border-slate-200">
+                            <strong>Laporan Staf:</strong> {t.laporanPenyelesaian}
+                          </p>
+                        )}
+
+                        {t.fotoBukti && (
+                          <div>
+                            <img
+                              src={t.fotoBukti}
+                              alt="Bukti Penyelesaian"
+                              className="w-20 h-16 object-cover rounded border border-slate-300 cursor-pointer hover:opacity-90"
+                              onClick={() => {
+                                setEvalTarget(t);
+                                setEvalNote(t.catatanRevisi || '');
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        {t.catatanRevisi && (
+                          <p className="text-xs text-rose-700 bg-rose-50 p-2 rounded border border-rose-200">
+                            <strong>Catatan Evaluasi / Kendala:</strong> {t.catatanRevisi}
+                          </p>
+                        )}
+                      </td>
+
+                      {!isAdmin && (
+                        <td className="py-3.5 px-4 text-right space-y-1.5">
+                          {/* Aksi untuk Koordinator, Kadiv, Direktur */}
+                          {isAtasan && activeTab === 'AKTIF' && (
+                            <div className="flex flex-col items-end gap-1.5">
+                              {t.status !== 'SELESAI' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedTriage(t);
+                                    setTriageForm({
+                                      divisiId: t.divisi?.id ? String(t.divisi.id) : '',
+                                      prioritas: t.prioritas,
+                                      pelaksanaId: t.pelaksana?.id
+                                        ? String(t.pelaksana.id)
+                                        : '',
+                                      deadline: toDateTimeLocalInput(t.deadline),
+                                      catatanRevisi: t.catatanRevisi || '',
+                                    });
+                                  }}
+                                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md"
+                                >
+                                  Buat Tugas & Atur Jam
+                                </button>
+                              )}
+
+                              {t.status === 'MENUNGGU_VALIDASI' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEvalTarget(t);
+                                    setEvalNote(t.catatanRevisi || '');
+                                  }}
+                                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-md shadow-sm"
+                                >
+                                  Evaluasi Foto & Hasil
+                                </button>
+                              )}
+
+                              {t.pelaksana?.noHp && t.status !== 'SELESAI' && (
+                                <a
+                                  href={getWhatsAppLink(t)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md"
+                                >
+                                  Kirim WA Staf
+                                </a>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Aksi untuk Staf Pelaksana (Lapor Selesai + Kirim Foto) */}
+                          {isStaff && activeTab === 'AKTIF' && (t.status === 'DIPROSES' || t.status === 'HOLD_ESKALASI') && (
+                            <div className="flex flex-col items-end gap-1.5 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReportTarget(t);
+                                  setReportText(t.laporanPenyelesaian || '');
+                                  setReportPhoto(t.fotoBukti || '');
+                                }}
+                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-md shadow-sm"
+                              >
+                                Lapor Selesai (Kirim Foto)
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEscalateTarget(t);
+                                  setEscalateNote(t.catatanRevisi || '');
+                                }}
+                                className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-semibold rounded-md"
+                              >
+                                Lapor Kendala / Biaya
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Info untuk Tab Riwayat */}
+                          {activeTab === 'RIWAYAT' && (
+                            <span className="text-xs text-slate-400 italic">Tugas Ditutup</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* MODAL 1: Buat Tugas & Atur Jam dari Tiket Masalah (Koordinator / Kadiv / Direktur) */}
@@ -797,14 +862,14 @@ const SemuaTugas: React.FC = () => {
                     onClick={() => handleEvaluationDecision('DIPROSES')}
                     className="px-4 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-lg"
                   >
-                    🔄 Minta Revisi / Kerjakan Ulang
+                    Minta Revisi / Kerjakan Ulang
                   </button>
                   <button
                     type="button"
                     onClick={() => handleEvaluationDecision('SELESAI')}
                     className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
                   >
-                    ✅ Setujui & Nyatakan Selesai
+                    Setujui & Nyatakan Selesai
                   </button>
                 </div>
               </div>
