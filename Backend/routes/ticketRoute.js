@@ -1,6 +1,7 @@
 // Backend/routes/ticketRoute.js
 const express = require('express');
 const router = express.Router();
+const ticketController = require('../controllers/ticketController');
 
 const {
   createTicket,
@@ -10,6 +11,7 @@ const {
   getAssignableStaff,
   getSops,
   createOrUpdateSop,
+  getTicketById, // <-- DITAMBAHKAN DI SINI
 } = require('../controllers/ticketController');
 
 const {
@@ -61,6 +63,14 @@ router.get(
   '/',
   checkRole(['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']),
   getTickets
+);
+
+// ---> TAMBAHKAN RUTE DETAIL TUGAS DI SINI <---
+// Lihat Detail Tugas Berdasarkan ID (Semua Role Termasuk Admin)
+router.get(
+  '/:id',
+  checkRole(['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']),
+  getTicketById
 );
 
 // Bagi Tugas / Tunjuk Staf Pelaksana (Khusus Atasan: Direktur, Kadiv, Koordinator)

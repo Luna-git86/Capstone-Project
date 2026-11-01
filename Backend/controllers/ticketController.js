@@ -482,6 +482,33 @@ const createOrUpdateSop = async (req, res) => {
   }
 };
 
+// ---> TAMBAHKAN FUNGSI BARU INI DI SINI <---
+const getTicketById = async (req, res) => {
+  try {
+    const ticketId = parseInt(req.params.id);
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: {
+        pembuat: { select: { id: true, nama: true, noHp: true, role: true } },
+        penanggungJawab: { select: { id: true, nama: true, noHp: true, role: true } },
+        divisi: { select: { id: true, nama: true } },
+        pelaksana: { select: { id: true, nama: true, noHp: true, telegramChatId: true } },
+      }
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ message: 'Tugas tidak ditemukan' });
+    }
+
+    return res.status(200).json({ data: ticket });
+    
+  } catch (error) {
+    console.error("Error getTicketById:", error);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+};
+
 module.exports = {
   createTicket,
   getTickets,
@@ -490,4 +517,5 @@ module.exports = {
   getAssignableStaff,
   getSops,
   createOrUpdateSop,
+  getTicketById,
 };
