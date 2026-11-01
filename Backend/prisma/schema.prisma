@@ -25,6 +25,8 @@ enum Prioritas {
 enum StatusTiket {
   MENUNGGU_TRIASE
   DIPROSES
+  MENUNGGU_VALIDASI
+  HOLD_ESKALASI
   SELESAI
   DITOLAK
 }
@@ -45,57 +47,64 @@ model Divisi {
 }
 
 model User {
-  id                 Int     @id @default(autoincrement())
+  id                 Int                 @id @default(autoincrement())
   nama               String
-  noHp               String  @unique
-  email              String? @unique
+  noHp               String              @unique
+  email              String?             @unique
   password           String
-  role               Role    @default(STAF)
+  role               Role                @default(STAF)
   divisiId           Int?
-  divisi             Divisi? @relation(fields: [divisiId], references: [id])
-  ticketsCreated     Ticket[]          @relation("TiketDibuat")
-  ticketsAssigned    Ticket[]          @relation("TiketDitugaskan")
-  sopsCreated        DokumenSop[]      @relation("SopDiajukan")
+  divisi             Divisi?             @relation(fields: [divisiId], references: [id])
+  ticketsCreated     Ticket[]            @relation("TiketDibuat")
+  ticketsResponsible Ticket[]            @relation("TiketPenanggungJawab")
+  ticketsAssigned    Ticket[]            @relation("TiketDitugaskan")
+  sopsCreated        DokumenSop[]        @relation("SopDiajukan")
   auditLogs          AuditLog[]
   notificationLogs   NotificationLog[]
   telegramLinkTokens TelegramLinkToken[]
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  telegramChatId     String?  @unique
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  telegramChatId     String?             @unique
 }
 
 model Ticket {
-  id            Int         @id @default(autoincrement())
-  judul         String
-  deskripsi     String
-  prioritas     Prioritas   @default(LOW)
-  status        StatusTiket @default(MENUNGGU_TRIASE)
-  deadline      DateTime?
-  completedAt   DateTime?
-  catatanRevisi String?
-  pembuatId     Int
-  pembuat       User @relation("TiketDibuat", fields: [pembuatId], references: [id])
-  pelaksanaId   Int?
-  pelaksana     User? @relation("TiketDitugaskan", fields: [pelaksanaId], references: [id])
-  divisiId      Int?
-  divisi        Divisi? @relation(fields: [divisiId], references: [id])
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  notificationLogs NotificationLog[]
+  id                  Int               @id @default(autoincrement())
+  judul               String
+  lokasi              String?           // Lokasi ruangan / nama aset
+  deskripsi           String
+  prioritas           Prioritas         @default(LOW)
+  status              StatusTiket       @default(MENUNGGU_TRIASE)
+  deadline            DateTime?         // Menyimpan tanggal beserta jam & menit
+  completedAt         DateTime?
+  laporanPenyelesaian String?           // Keterangan penyelesaian dari staf
+  fotoBukti           String?           // Foto bukti pengerjaan (Base64 / URL)
+  catatanRevisi       String?           // Catatan evaluasi atasan (jika revisi) atau kendala biaya
+  pembuatId           Int
+  pembuat             User              @relation("TiketDibuat", fields: [pembuatId], references: [id])
+  penanggungJawabId   Int?
+  penanggungJawab     User?             @relation("TiketPenanggungJawab", fields: [penanggungJawabId], references: [id])
+  pelaksanaId         Int?
+  pelaksana           User?             @relation("TiketDitugaskan", fields: [pelaksanaId], references: [id])
+  divisiId            Int?
+  divisi              Divisi?           @relation(fields: [divisiId], references: [id])
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  notificationLogs    NotificationLog[]
 }
 
 model DokumenSop {
-  id          Int       @id @default(autoincrement())
-  nomorSop    String    @unique
-  judul       String
-  deskripsi   String?
-  fileUrl     String?
-  status      StatusSop @default(MENUNGGU_VALIDASI)
-  divisiId    Int?
-  divisi      Divisi? @relation(fields: [divisiId], references: [id])
-  pengajuId   Int
-  pengaju     User @relation("SopDiajukan", fields: [pengajuId], references: [id])
-  disahkanPada DateTime?
+  id           Int       @id @default(autoincrement())
+  nomorSop     String    @unique
+  judul        String
+  revisi       String    @default("Revisi 1")
+  deskripsi    String?
+  fileUrl      String?
+  status       StatusSop @default(DISAHKAN)
+  divisiId     Int?
+  divisi       Divisi?   @relation(fields: [divisiId], references: [id])
+  pengajuId    Int
+  pengaju      User      @relation("SopDiajukan", fields: [pengajuId], references: [id])
+  disahkanPada DateTime? @default(now())
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -112,13 +121,14 @@ model AuditLog {
 }
 
 model TelegramLinkToken {
-  id        Int      @id @default(autoincrement())
-  tokenHash String   @unique
+  id        Int       @id @default(autoincrement())
+  tokenHash String    @unique
   userId    Int
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, expiresAt])
 }
 
@@ -136,8 +146,9 @@ model NotificationLog {
   sentAt         DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
-  ticket    Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  recipient User   @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  ticket         Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  recipient      User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
   @@index([status, createdAt])
   @@index([ticketId, type])
 }

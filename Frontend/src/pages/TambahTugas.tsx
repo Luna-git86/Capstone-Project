@@ -1,297 +1,357 @@
-import React, { useState, useEffect, useRef } from 'react';
+// Frontend/src/pages/TambahTugas.tsx
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
-// --- TIPE DATA ---
-interface Pegawai {
+interface Divisi {
   id: number;
   nama: string;
-  role: 'STAF' | 'KOORDINATOR' | 'KADIV' | 'DIREKTUR';
-  divisi: string;
 }
 
-export default function TambahTugas() {
+interface Pelaksana {
+  id: number;
+  nama: string;
+  noHp?: string;
+  role: string;
+  divisiId: number | null;
+}
+
+const TambahTugas: React.FC = () => {
   const navigate = useNavigate();
+  const userRole = localStorage.getItem('userRole') || 'KOORDINATOR';
+  const userDivisiId = localStorage.getItem('userDivisiId') || '';
 
-  // State untuk form
-  const [judul, setJudul] = useState('');
-  const [deskripsi, setDeskripsi] = useState('');
-  const [prioritas, setPrioritas] = useState('MEDIUM');
-  const [deadline, setDeadline] = useState('');
-  const [pelaksanaId, setPelaksanaId] = useState('');
-  const [kategori, setKategori] = useState(''); // State baru untuk kategori
-  
-  // State untuk file upload
-  const [file, setFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [formData, setFormData] = useState({
+    judul: '',
+    lokasi: '',
+    deskripsi: '',
+    prioritas: 'MEDIUM',
+    divisiId: userDivisiId,
+    pelaksanaId: '',
+    deadline: '', // Format YYYY-MM-DDTHH:mm (Tanggal & Jam)
+  });
 
-  // State untuk data dinamis
-  const [daftarPelaksana, setDaftarPelaksana] = useState<Pegawai[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Ambil role user yang sedang login dari localStorage
-  const currentRole = localStorage.getItem('userRole') || 'STAF'; 
+  const [divisiList, setDivisiList] = useState<Divisi[]>([]);
+  const [pelaksanaList, setPelaksanaList] = useState<Pelaksana[]>([]);
+  const [loadingOptions, setLoadingOptions] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [createdTicket, setCreatedTicket] = useState<any | null>(null);
 
   useEffect(() => {
-    // Fungsi simulasi untuk mengambil daftar pegawai dari API
-    const fetchPelaksana = async () => {
+    const fetchInitialDivisi = async () => {
       try {
-        setLoading(true);
-        // SIMULASI DUMMY DATA SEMENTARA
-        const dummyPegawai: Pegawai[] = [
-          { id: 1, nama: 'Andi (Staf Sarpras)', role: 'STAF', divisi: 'Sarpras' },
-          { id: 2, nama: 'Budi (Staf IT)', role: 'STAF', divisi: 'IT' },
-          { id: 3, nama: 'Hafidz (Koor. Sarpras)', role: 'KOORDINATOR', divisi: 'Sarpras' },
-          { id: 4, nama: 'Siti (Koor. IT)', role: 'KOORDINATOR', divisi: 'IT' },
-          { id: 5, nama: 'Dr. Hendra (Kadiv Operasional)', role: 'KADIV', divisi: 'Operasional' },
-        ];
+        const res = await api.get('/tickets/options');
+        const listDivisi: Divisi[] = res.data.divisi || [];
+        setDivisiList(listDivisi);
 
-        let filteredPegawai: Pegawai[] = [];
-
-        if (currentRole === 'KOORDINATOR') {
-          filteredPegawai = dummyPegawai.filter(p => p.role === 'STAF');
-        } else if (currentRole === 'KADIV') {
-          filteredPegawai = dummyPegawai.filter(p => p.role === 'KOORDINATOR' || p.role === 'STAF');
-        } else if (currentRole === 'DIREKTUR') {
-          filteredPegawai = dummyPegawai.filter(p => p.role !== 'DIREKTUR');
+        if (!formData.divisiId && listDivisi.length > 0) {
+          setFormData((prev) => ({
+            ...prev,
+            divisiId: String(listDivisi[0].id),
+          }));
         }
+      } catch (err) {
+        console.error('Gagal memuat opsi divisi:', err);
+      }
+    };
+    fetchInitialDivisi();
+  }, []);
 
-        setDaftarPelaksana(filteredPegawai);
-      } catch (error) {
-        console.error('Gagal mengambil daftar pelaksana:', error);
+  useEffect(() => {
+    if (!formData.divisiId) {
+      setPelaksanaList([]);
+      return;
+    }
+
+    const fetchPelaksanaByDivisi = async () => {
+      try {
+        setLoadingOptions(true);
+        const res = await api.get(`/tickets/options?divisiId=${formData.divisiId}`);
+        setPelaksanaList(res.data.pelaksana || []);
+      } catch (err) {
+        console.error('Gagal memuat daftar staf pelaksana:', err);
+        setPelaksanaList([]);
       } finally {
-        setLoading(false);
+        setLoadingOptions(false);
       }
     };
 
-    if (currentRole === 'STAF') {
-       navigate('/unauthorized');
+    fetchPelaksanaByDivisi();
+  }, [formData.divisiId]);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    if (name === 'divisiId') {
+      setFormData({ ...formData, divisiId: value, pelaksanaId: '' });
     } else {
-       fetchPelaksana();
+      setFormData({ ...formData, [name]: value });
     }
-  }, [currentRole, navigate]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // NANTINYA: Kirim data ke backend menggunakan api.post('/tickets', formData)
-    // Jika ada file, gunakan FormData alih-alih JSON
-    console.log({ judul, pelaksanaId, prioritas, deadline, kategori, file, deskripsi });
-    alert('Tugas berhasil ditambahkan!');
-    navigate(-1);
-  };
+    setError('');
+    setCreatedTicket(null);
+    setSubmitting(true);
 
-  const getPageTitle = () => {
-    if (currentRole === 'DIREKTUR') return 'Buat Instruksi Direksi';
-    if (currentRole === 'KADIV') return 'Buat Instruksi Manajerial';
-    return 'Tambah Tugas Baru'; 
-  };
+    try {
+      const response = await api.post('/tickets', {
+        tipe: 'BUAT_TUGAS',
+        judul: formData.judul,
+        lokasi: formData.lokasi,
+        deskripsi: formData.deskripsi,
+        prioritas: formData.prioritas,
+        divisiId: Number(formData.divisiId),
+        pelaksanaId: formData.pelaksanaId ? Number(formData.pelaksanaId) : null,
+        deadline: new Date(formData.deadline).toISOString(),
+      });
 
-  // --- LOGIKA DRAG & DROP FILE ---
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setFile(e.dataTransfer.files[0]);
-      e.dataTransfer.clearData();
+      setCreatedTicket(response.data.data);
+      setFormData((prev) => ({
+        ...prev,
+        judul: '',
+        lokasi: '',
+        deskripsi: '',
+        pelaksanaId: '',
+        deadline: '',
+      }));
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message || 'Gagal menerbitkan tugas baru.'
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
-    }
+  const formatDateTime = (dateStr: string | null) => {
+    if (!dateStr) return '-';
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(dateStr));
   };
 
-  const handleRemoveFile = () => {
-    setFile(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  const generateWhatsAppUrl = (ticket: any) => {
+    const rawPhone = ticket?.pelaksana?.noHp || '';
+    let waNumber = rawPhone.replace(/[\s\-]/g, '');
+    if (waNumber.startsWith('0')) {
+      waNumber = '62' + waNumber.slice(1);
     }
+    const text = encodeURIComponent(
+      `*[PENUGASAN BARU RSIA QURRATA A'YUN]*\n` +
+        `No. Tiket: #T-${String(ticket.id).padStart(3, '0')}\n` +
+        `Tugas: ${ticket.judul}\n` +
+        `Lokasi: ${ticket.lokasi || '-'}\n` +
+        `Prioritas: *${ticket.prioritas}*\n` +
+        `Batas Waktu: *${formatDateTime(ticket.deadline)}*\n` +
+        `Instruksi: ${ticket.deskripsi}\n\n` +
+        `Silakan kerjakan dan unggah foto bukti penyelesaiannya di web E-Ticketing RSIA.`
+    );
+    return `https://wa.me/${waNumber}?text=${text}`;
   };
 
   return (
-    <div className="p-8 w-full min-h-screen bg-slate-50 flex justify-center">
-      <div className="max-w-3xl w-full bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
-        
-        <div className="mb-8 border-b border-slate-100 pb-4">
-          <h1 className="text-2xl font-bold text-slate-800">{getPageTitle()}</h1>
-          <p className="text-slate-500 text-sm mt-1">Isi formulir di bawah ini untuk mendelegasikan pekerjaan ke tim Anda.</p>
+    <div className="p-6 max-w-3xl mx-auto space-y-6">
+      <div>
+        <span className="px-2.5 py-1 text-xs font-bold bg-blue-100 text-blue-800 rounded-full uppercase">
+          Wewenang Penugasan ({userRole})
+        </span>
+        <h1 className="text-2xl font-bold text-slate-800 mt-2">
+          Buat Tugas Baru
+        </h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Tetapkan staf pelaksana, prioritas, serta batas waktu pengerjaan (lengkap hingga jam & menit).
+        </p>
+      </div>
+
+      {error && (
+        <div className="p-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl">
+          {error}
+        </div>
+      )}
+
+      {createdTicket && (
+        <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-3">
+          <h3 className="text-sm font-bold text-emerald-900">
+            ✅ Tugas #T-{String(createdTicket.id).padStart(3, '0')} Berhasil Diterbitkan!
+          </h3>
+          <p className="text-xs text-emerald-800">
+            Pelaksana: <strong>{createdTicket.pelaksana?.nama || '-'}</strong> • Batas Waktu:{' '}
+            <strong>{formatDateTime(createdTicket.deadline)}</strong>
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => navigate('/semua-tugas')}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm"
+            >
+              Lihat di Daftar Tugas →
+            </button>
+
+            {createdTicket.pelaksana?.noHp && (
+              <a
+                href={generateWhatsAppUrl(createdTicket)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm"
+              >
+                📲 Kirim Surat Tugas ke WhatsApp {createdTicket.pelaksana.nama}
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold text-slate-800 mb-1">
+              Nama Tugas *
+            </label>
+            <input
+              type="text"
+              name="judul"
+              value={formData.judul}
+              onChange={handleChange}
+              required
+              placeholder="Contoh: Perbaikan & Cuci AC Ruang Nifas"
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-800 mb-1">
+              Lokasi Ruangan / Aset *
+            </label>
+            <input
+              type="text"
+              name="lokasi"
+              value={formData.lokasi}
+              onChange={handleChange}
+              required
+              placeholder="Contoh: Gedung Utama Lt. 2 - Kamar Nifas 3"
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          
-          {/* Input Judul */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">Nama Tugas / Instruksi <span className="text-red-500">*</span></label>
-            <input 
-              type="text" 
+            <label className="block text-sm font-bold text-slate-800 mb-1">
+              Divisi Tujuan *
+            </label>
+            <select
+              name="divisiId"
+              value={formData.divisiId}
+              onChange={handleChange}
               required
-              value={judul}
-              onChange={(e) => setJudul(e.target.value)}
-              placeholder="Cth: Inspeksi Panel Listrik Bulanan"
-              className="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm"
+            >
+              <option value="" disabled>
+                -- Pilih Divisi --
+              </option>
+              {divisiList.map((d) => (
+                <option key={d.id} value={String(d.id)}>
+                  {d.nama}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-800 mb-1">
+              Tunjuk Staf Pelaksana *
+            </label>
+            <select
+              name="pelaksanaId"
+              value={formData.pelaksanaId}
+              onChange={handleChange}
+              required
+              disabled={loadingOptions}
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm"
+            >
+              <option value="">
+                {loadingOptions ? 'Memuat daftar staf...' : '-- Pilih Staf Pelaksana --'}
+              </option>
+              {pelaksanaList.map((staf) => (
+                <option key={staf.id} value={String(staf.id)}>
+                  {staf.nama} {staf.noHp ? `(${staf.noHp})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold text-slate-800 mb-1">
+              Prioritas Tugas *
+            </label>
+            <select
+              name="prioritas"
+              value={formData.prioritas}
+              onChange={handleChange}
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-semibold"
+            >
+              <option value="LOW">Biasa (Low)</option>
+              <option value="MEDIUM">Penting (Medium)</option>
+              <option value="HIGH">Darurat / Segera (High)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-800 mb-1">
+              Batas Waktu Pengerjaan (Tanggal & Jam) *
+            </label>
+            <input
+              type="datetime-local"
+              name="deadline"
+              value={formData.deadline}
+              onChange={handleChange}
+              required
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
           </div>
+        </div>
 
-          {/* Grid 2 Kolom: Pelaksana & Prioritas */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Pilih Pelaksana <span className="text-red-500">*</span></label>
-              <select 
-                required
-                value={pelaksanaId}
-                onChange={(e) => setPelaksanaId(e.target.value)}
-                disabled={loading}
-                className="w-full p-3 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="" disabled>-- Pilih Orang atau Tim --</option>
-                {loading ? (
-                  <option disabled>Memuat daftar pelaksana...</option>
-                ) : (
-                  daftarPelaksana.map((pegawai) => (
-                    <option key={pegawai.id} value={pegawai.id}>
-                      {pegawai.nama} - [{pegawai.role}]
-                    </option>
-                  ))
-                )}
-              </select>
-              <p className="text-[11px] text-slate-500 mt-1.5">
-                {currentRole === 'KOORDINATOR' && 'Menampilkan daftar Staf di divisi Anda.'}
-                {currentRole === 'KADIV' && 'Menampilkan daftar Koordinator dan Staf di divisi Anda.'}
-                {currentRole === 'DIREKTUR' && 'Menampilkan semua personel rumah sakit.'}
-              </p>
-            </div>
+        <div>
+          <label className="block text-sm font-bold text-slate-800 mb-1">
+            Instruksi Detail Pengerjaan *
+          </label>
+          <textarea
+            name="deskripsi"
+            rows={4}
+            value={formData.deskripsi}
+            onChange={handleChange}
+            required
+            placeholder="Tuliskan instruksi pengerjaan dan standar hasil yang perlu difoto oleh staf saat selesai..."
+            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm"
+          />
+        </div>
 
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Tingkat Prioritas</label>
-              <select 
-                value={prioritas}
-                onChange={(e) => setPrioritas(e.target.value)}
-                className="w-full p-3 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="LOW">Rendah (Low)</option>
-                <option value="MEDIUM">Sedang (Medium)</option>
-                <option value="HIGH">Tinggi (High)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Grid 2 Kolom: Deadline & Kategori */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Batas Waktu (Deadline) <span className="text-red-500">*</span></label>
-              <input 
-                type="date" 
-                required
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-            
-            {/* Form Kategori Baru */}
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Kategori Tugas</label>
-              <select 
-                value={kategori}
-                onChange={(e) => setKategori(e.target.value)}
-                className="w-full p-3 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="" disabled>-- Pilih Kategori --</option>
-                <option value="MAINTENANCE">Pemeliharaan (Maintenance)</option>
-                <option value="REPAIR">Perbaikan (Repair)</option>
-                <option value="INSPECTION">Inspeksi Rutin</option>
-                <option value="PROJECT">Proyek Baru</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Area Drag & Drop Upload File */}
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">Lampiran Dokumen / Foto (Opsional)</label>
-            <div 
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`w-full p-6 border-2 border-dashed rounded-xl text-center cursor-pointer transition-colors ${
-                isDragging ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 bg-slate-50 hover:bg-slate-100'
-              }`}
-            >
-              <input 
-                type="file" 
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-              />
-              
-              {!file ? (
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                  <p className="text-sm font-semibold text-slate-600">Klik untuk upload atau drag & drop file ke sini</p>
-                  <p className="text-xs text-slate-400">PDF, Word, JPG, PNG (Maks. 5MB)</p>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-indigo-200 shadow-sm" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <svg className="w-6 h-6 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                    <span className="text-sm font-semibold text-slate-700 truncate">{file.name}</span>
-                  </div>
-                  <button 
-                    type="button" 
-                    onClick={handleRemoveFile}
-                    className="text-slate-400 hover:text-rose-500 p-1 transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Input Deskripsi (Dipindah ke bawah) */}
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">Instruksi Detail</label>
-            <textarea 
-              rows={4}
-              value={deskripsi}
-              onChange={(e) => setDeskripsi(e.target.value)}
-              placeholder="Tulis rincian langkah kerja atau catatan tambahan di sini..."
-              className="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-            />
-          </div>
-
-          {/* Tombol Aksi */}
-          <div className="flex justify-end gap-3 mt-4 pt-6 border-t border-slate-100">
-            <button 
-              type="button" 
-              onClick={() => navigate(-1)}
-              className="px-6 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
-            >
-              Batal
-            </button>
-            <button 
-              type="submit" 
-              className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2"
-            >
-              Delegasikan Tugas
-            </button>
-          </div>
-
-        </form>
-      </div>
+        <div className="pt-2 flex justify-end">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-bold rounded-lg shadow-sm transition"
+          >
+            {submitting ? 'Menyimpan...' : 'Terbitkan Tugas'}
+          </button>
+        </div>
+      </form>
     </div>
   );
-}
+};
+
+export default TambahTugas;
