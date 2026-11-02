@@ -1,6 +1,6 @@
 // Frontend/src/pages/TambahTugas.tsx
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 
 interface Divisi {
@@ -18,8 +18,14 @@ interface Pelaksana {
 
 const TambahTugas: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const userRole = localStorage.getItem('userRole') || 'KOORDINATOR';
   const userDivisiId = localStorage.getItem('userDivisiId') || '';
+
+  // Tangkap parameter query parentId jika pembuatan tiket diturunkan dari arahan Kadiv
+  const searchParams = new URLSearchParams(location.search);
+  const parentId = searchParams.get('parentId');
+  const parentTitle = searchParams.get('parentTitle');
 
   const [formData, setFormData] = useState({
     judul: '',
@@ -70,7 +76,7 @@ const TambahTugas: React.FC = () => {
         const res = await api.get(`/tickets/options?divisiId=${formData.divisiId}`);
         setPelaksanaList(res.data.pelaksana || []);
       } catch (err) {
-        console.error('Gagal memuat daftar staf pelaksana:', err);
+        console.error('Gagal memuat daftar pelaksana:', err);
         setPelaksanaList([]);
       } finally {
         setLoadingOptions(false);
@@ -98,7 +104,7 @@ const TambahTugas: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const response = await api.post('/tickets', {
+      const payload: any = {
         tipe: 'BUAT_TUGAS',
         judul: formData.judul,
         lokasi: formData.lokasi,
@@ -107,7 +113,13 @@ const TambahTugas: React.FC = () => {
         divisiId: Number(formData.divisiId),
         pelaksanaId: formData.pelaksanaId ? Number(formData.pelaksanaId) : null,
         deadline: new Date(formData.deadline).toISOString(),
-      });
+      };
+
+      if (parentId) {
+        payload.parentTicketId = Number(parentId);
+      }
+
+      const response = await api.post('/tickets', payload);
 
       setCreatedTicket(response.data.data);
       setFormData((prev) => ({
@@ -157,6 +169,32 @@ const TambahTugas: React.FC = () => {
     return `https://wa.me/${waNumber}?text=${text}`;
   };
 
+  // Label adaptif berbasis peran hierarki
+  const pageTitle =
+    userRole === 'KADIV'
+      ? 'Terbitkan Arahan Divisi ke Koordinator'
+      : parentId
+      ? 'Terbitkan Tiket Operasional (Turunan Arahan)'
+      : userRole === 'KOORDINATOR'
+      ? 'Terbitkan Tugas Operasional Staf'
+      : userRole === 'DIREKTUR'
+      ? 'Terbitkan Arahan Direksi'
+      : 'Buat Tugas Baru';
+
+  const pelaksanaLabel =
+    userRole === 'KADIV'
+      ? 'Pilih Koordinator Penerima Arahan *'
+      : userRole === 'KOORDINATOR'
+      ? 'Tunjuk Staf Pelaksana *'
+      : 'Pilih Penerima Tugas *';
+
+  const submitButtonText =
+    userRole === 'KADIV'
+      ? 'Terbitkan Arahan ke Koordinator'
+      : parentId
+      ? 'Terbitkan Tiket Operasional'
+      : 'Terbitkan Tugas';
+
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div>
@@ -164,12 +202,36 @@ const TambahTugas: React.FC = () => {
           Wewenang Penugasan ({userRole})
         </span>
         <h1 className="text-2xl font-bold text-slate-800 mt-2">
-          Buat Tugas Baru
+          {pageTitle}
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Tetapkan staf pelaksana, prioritas, serta batas waktu pengerjaan (lengkap hingga jam & menit).
+          {userRole === 'KADIV'
+            ? 'Menerbitkan target atau arahan divisi kepada Koordinator unit kerja terkait.'
+            : parentId
+            ? `Tiket ini ditautkan sebagai pelaksana operasional dari arahan induk Kadiv #T-${parentId}.`
+            : 'Tetapkan pelaksana, prioritas, serta batas waktu pengerjaan (lengkap hingga jam & menit).'}
         </p>
       </div>
+
+      {parentId && (
+        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between">
+          <div>
+            <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wider">
+              Tugas Ditautkan ke Arahan Induk
+            </span>
+            <p className="text-sm font-bold text-indigo-950 mt-0.5">
+              #T-{String(parentId).padStart(3, '0')} {parentTitle ? `— ${parentTitle}` : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate(`/detail-tugas/${parentId}`)}
+            className="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline"
+          >
+            Lihat Arahan Induk →
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="p-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl">
@@ -183,7 +245,7 @@ const TambahTugas: React.FC = () => {
             ✅ Tugas #T-{String(createdTicket.id).padStart(3, '0')} Berhasil Diterbitkan!
           </h3>
           <p className="text-xs text-emerald-800">
-            Pelaksana: <strong>{createdTicket.pelaksana?.nama || '-'}</strong> • Batas Waktu:{' '}
+            Penerima: <strong>{createdTicket.pelaksana?.nama || '-'}</strong> ({createdTicket.pelaksana?.role || '-'}) • Batas Waktu:{' '}
             <strong>{formatDateTime(createdTicket.deadline)}</strong>
           </p>
 
@@ -203,7 +265,7 @@ const TambahTugas: React.FC = () => {
                 rel="noopener noreferrer"
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm"
               >
-                📲 Kirim Surat Tugas ke WhatsApp {createdTicket.pelaksana.nama}
+                📲 Kirim Pemberitahuan ke WhatsApp {createdTicket.pelaksana.nama}
               </a>
             )}
           </div>
@@ -217,7 +279,7 @@ const TambahTugas: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold text-slate-800 mb-1">
-              Nama Tugas *
+              Judul Tugas / Arahan *
             </label>
             <input
               type="text"
@@ -225,7 +287,7 @@ const TambahTugas: React.FC = () => {
               value={formData.judul}
               onChange={handleChange}
               required
-              placeholder="Contoh: Perbaikan & Cuci AC Ruang Nifas"
+              placeholder={userRole === 'KADIV' ? "Contoh: Arahan Optimalisasi Layanan Nifas" : "Contoh: Perbaikan & Cuci AC Ruang Nifas"}
               className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
           </div>
@@ -271,7 +333,7 @@ const TambahTugas: React.FC = () => {
 
           <div>
             <label className="block text-sm font-bold text-slate-800 mb-1">
-              Tunjuk Staf Pelaksana *
+              {pelaksanaLabel}
             </label>
             <select
               name="pelaksanaId"
@@ -282,11 +344,11 @@ const TambahTugas: React.FC = () => {
               className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm"
             >
               <option value="">
-                {loadingOptions ? 'Memuat daftar staf...' : '-- Pilih Staf Pelaksana --'}
+                {loadingOptions ? 'Memuat daftar penerima...' : '-- Pilih Penerima --'}
               </option>
               {pelaksanaList.map((staf) => (
                 <option key={staf.id} value={String(staf.id)}>
-                  {staf.nama} {staf.noHp ? `(${staf.noHp})` : ''}
+                  {staf.nama} ({staf.role}) {staf.noHp ? `• ${staf.noHp}` : ''}
                 </option>
               ))}
             </select>
@@ -296,7 +358,7 @@ const TambahTugas: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold text-slate-800 mb-1">
-              Prioritas Tugas *
+              Prioritas *
             </label>
             <select
               name="prioritas"
@@ -312,7 +374,7 @@ const TambahTugas: React.FC = () => {
 
           <div>
             <label className="block text-sm font-bold text-slate-800 mb-1">
-              Batas Waktu Pengerjaan (Tanggal & Jam) *
+              Batas Waktu Target (Tanggal & Jam) *
             </label>
             <input
               type="datetime-local"
@@ -327,7 +389,7 @@ const TambahTugas: React.FC = () => {
 
         <div>
           <label className="block text-sm font-bold text-slate-800 mb-1">
-            Instruksi Detail Pengerjaan *
+            {userRole === 'KADIV' ? 'Arahan / Instruksi Divisi *' : 'Instruksi Detail Pengerjaan *'}
           </label>
           <textarea
             name="deskripsi"
@@ -335,7 +397,11 @@ const TambahTugas: React.FC = () => {
             value={formData.deskripsi}
             onChange={handleChange}
             required
-            placeholder="Tuliskan instruksi pengerjaan dan standar hasil yang perlu difoto oleh staf saat selesai..."
+            placeholder={
+              userRole === 'KADIV'
+                ? 'Jelaskan tujuan dan arahan kerja untuk ditindaklanjuti oleh Koordinator ke staf pelaksana...'
+                : 'Tuliskan instruksi pengerjaan dan standar hasil yang perlu difoto oleh staf saat selesai...'
+            }
             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm"
           />
         </div>
@@ -346,7 +412,7 @@ const TambahTugas: React.FC = () => {
             disabled={submitting}
             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-bold rounded-lg shadow-sm transition"
           >
-            {submitting ? 'Menyimpan...' : 'Terbitkan Tugas'}
+            {submitting ? 'Menyimpan...' : submitButtonText}
           </button>
         </div>
       </form>

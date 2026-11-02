@@ -87,6 +87,9 @@ model Ticket {
   pelaksana           User?             @relation("TiketDitugaskan", fields: [pelaksanaId], references: [id])
   divisiId            Int?
   divisi              Divisi?           @relation(fields: [divisiId], references: [id])
+  parentTicketId      Int?
+  parentTicket        Ticket?           @relation("TiketHierarki", fields: [parentTicketId], references: [id], onDelete: SetNull)
+  childTickets        Ticket[]          @relation("TiketHierarki")
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
   notificationLogs    NotificationLog[]

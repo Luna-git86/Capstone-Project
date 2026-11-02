@@ -19,6 +19,7 @@ const Login: React.FC = () => {
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
     localStorage.removeItem('userDivisiId');
+    localStorage.removeItem('telegramLinked');
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,8 +36,10 @@ const Login: React.FC = () => {
       const { token, user } = response.data;
 
       localStorage.setItem('token', token);
+      localStorage.setItem('userId', String(user.id));
       localStorage.setItem('userRole', user.role);
       localStorage.setItem('userName', user.nama || user.noHp);
+      localStorage.setItem('telegramLinked', user.telegramLinked ? '1' : '0');
       if (user.divisiId) {
         localStorage.setItem('userDivisiId', String(user.divisiId));
       }

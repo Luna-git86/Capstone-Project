@@ -136,6 +136,7 @@ function App() {
             {/* 9. Rute Umum Lintas Role (Daftar Tugas, Riwayat, Panduan SOP) */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
               <Route path="/semua-tugas" element={<SemuaTugas />} />
+              <Route path="/semua-tugas-staff" element={<SemuaTugas />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
               <Route path="/dokumen-sop" element={<DokumenSOP />} />
               <Route path="/detail-tugas/:id" element={<DetailTugas />} />

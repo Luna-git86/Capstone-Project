@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "db:migrate": "prisma migrate dev --name init_rsia_tables",
-    "db:generate": "prisma generate"
+    "db:generate": "prisma generate",
+    "test": "node --require ./tests/setupEnv.js --test ./tests/*.test.js"
   },
   "dependencies": {
     "@prisma/client": "5.11.0",

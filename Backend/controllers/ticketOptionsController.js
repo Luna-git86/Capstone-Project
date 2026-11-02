@@ -3,7 +3,10 @@ const prisma = require('../db');
 
 const getTicketOptions = async (req, res) => {
   try {
-    // 1. Ambil seluruh daftar divisi agar pelaporan & disposisi lintas divisi tidak terblokir
+    const callerRole = req.user?.role;
+    const callerDivisiId = req.user?.divisiId ? Number(req.user.divisiId) : null;
+
+    // 1. Ambil seluruh daftar divisi agar pengguna dapat memilih Divisi Tujuan
     const divisi = await prisma.divisi.findMany({
       orderBy: { nama: 'asc' },
       select: {
@@ -13,35 +16,47 @@ const getTicketOptions = async (req, res) => {
     });
 
     const rawDivisiId = req.query.divisiId;
-    let wherePelaksana = { role: 'STAF' };
+    let selectedDivisiId = null;
 
-    // 2. Jika parameter ?divisiId= dikirim dari Frontend, saring staf sesuai divisi tersebut
     if (rawDivisiId !== undefined && rawDivisiId !== '') {
-      const divisiId = Number(rawDivisiId);
-
-      if (!Number.isInteger(divisiId) || divisiId <= 0) {
+      selectedDivisiId = Number(rawDivisiId);
+      if (!Number.isInteger(selectedDivisiId) || selectedDivisiId <= 0) {
         return res.status(400).json({
           message: 'ID divisi tidak valid.',
         });
       }
-
-      const targetDivisi = await prisma.divisi.findUnique({
-        where: { id: divisiId },
-      });
-
-      if (!targetDivisi) {
-        return res.status(404).json({
-          message: 'Divisi tidak ditemukan.',
-        });
-      }
-
-      wherePelaksana = {
-        divisiId,
-        role: 'STAF',
-      };
+    } else if (callerDivisiId && ['KADIV', 'KOORDINATOR'].includes(callerRole)) {
+      selectedDivisiId = callerDivisiId;
     }
 
-    // 3. Ambil daftar staf pelaksana beserta noHp untuk integrasi WhatsApp
+    // 2. Tentukan target role pelaksana sesuai aturan hierarki:
+    // - DIREKTUR -> KADIV atau KOORDINATOR
+    // - KADIV -> KOORDINATOR
+    // - KOORDINATOR -> STAF
+    // - Lainnya / Default -> STAF
+    let allowedRoles = ['STAF'];
+    if (callerRole === 'KADIV') {
+      allowedRoles = ['KOORDINATOR'];
+    } else if (callerRole === 'KOORDINATOR') {
+      allowedRoles = ['STAF'];
+    } else if (callerRole === 'DIREKTUR') {
+      const requestedRole = req.query.targetRole || req.query.role;
+      if (requestedRole && ['KADIV', 'KOORDINATOR'].includes(requestedRole)) {
+        allowedRoles = [requestedRole];
+      } else {
+        allowedRoles = ['KADIV', 'KOORDINATOR'];
+      }
+    }
+
+    const wherePelaksana = {
+      role: { in: allowedRoles },
+    };
+
+    if (selectedDivisiId) {
+      wherePelaksana.divisiId = selectedDivisiId;
+    }
+
+    // 3. Ambil daftar user pelaksana yang berwenang
     const pelaksana = await prisma.user.findMany({
       where: wherePelaksana,
       orderBy: { nama: 'asc' },

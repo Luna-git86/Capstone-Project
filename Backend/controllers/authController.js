@@ -165,6 +165,7 @@ const login = async (req, res) => {
         role: user.role,
         divisiId: user.divisiId,
         namaDivisi: user.divisi?.nama || null,
+        telegramLinked: Boolean(user.telegramChatId),
       },
     });
   } catch (error) {
@@ -343,6 +344,74 @@ const createTelegramLink = async (req, res) => {
   }
 };
 
+const getTelegramStatus = async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ message: 'Identitas pengguna tidak valid.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { telegramChatId: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+    }
+
+    return res.status(200).json({
+      linked: Boolean(user.telegramChatId),
+    });
+  } catch (error) {
+    console.error('Gagal membaca status Telegram:', error);
+    return res.status(500).json({ message: 'Gagal membaca status Telegram.' });
+  }
+};
+
+const unlinkTelegram = async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ message: 'Identitas pengguna tidak valid.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, telegramChatId: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+    }
+
+    if (!user.telegramChatId) {
+      return res.status(200).json({
+        message: 'Akun ini belum terhubung ke Telegram.',
+        linked: false,
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: { telegramChatId: null },
+      }),
+      prisma.telegramLinkToken.deleteMany({
+        where: { userId },
+      }),
+    ]);
+
+    return res.status(200).json({
+      message: 'Telegram berhasil diputus dari akun ini. Nomor/akun Telegram itu bisa dihubungkan ke akun lain.',
+      linked: false,
+    });
+  } catch (error) {
+    console.error('Gagal memutus tautan Telegram:', error);
+    return res.status(500).json({ message: 'Gagal memutus tautan Telegram.' });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -350,4 +419,6 @@ module.exports = {
   getUsers,
   getDivisi,
   createTelegramLink,
+  getTelegramStatus,
+  unlinkTelegram,
 };

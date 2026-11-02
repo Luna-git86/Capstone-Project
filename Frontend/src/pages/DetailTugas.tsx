@@ -15,12 +15,27 @@ interface TicketDetail {
   laporanPenyelesaian: string | null;
   fotoBukti: string | null;
   catatanRevisi: string | null;
-  sumber: 'STAF' | 'KADIV'; 
   pembuat?: { id: number; nama: string; role: string };
   penanggungJawab?: { id: number; nama: string; role: string };
   pelaksana?: { id: number; nama: string; role: string };
   divisi?: { id: number; nama: string };
-  subTugas?: any[];
+  parentTicket?: {
+    id: number;
+    judul: string;
+    status: string;
+    prioritas: string;
+    deadline: string | null;
+    pembuat?: { id: number; nama: string; role: string };
+  } | null;
+  childTickets?: Array<{
+    id: number;
+    judul: string;
+    status: string;
+    prioritas: string;
+    deadline: string | null;
+    completedAt: string | null;
+    pelaksana?: { id: number; nama: string; role: string };
+  }>;
 }
 
 interface Divisi { id: number; nama: string; }
@@ -256,6 +271,30 @@ export default function DetailTugas() {
         </div>
       </div>
 
+      {/* BANNER RELASI ARAHAN INDUK (JIKA ADA) */}
+      {ticket.parentTicket && (
+        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">
+              🔗 Ditugaskan Berdasarkan Arahan Induk
+            </span>
+            <p className="text-sm font-bold text-slate-800 mt-0.5">
+              #T-{String(ticket.parentTicket.id).padStart(3, '0')} — {ticket.parentTicket.judul}
+            </p>
+            <p className="text-xs text-slate-500">
+              Diterbitkan oleh: {ticket.parentTicket.pembuat?.nama || 'Pimpinan'} ({ticket.parentTicket.pembuat?.role || '-'})
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate(`/detail-tugas/${ticket.parentTicket?.id}`)}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm whitespace-nowrap self-start sm:self-auto"
+          >
+            Buka Arahan Induk →
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* KOLOM KIRI (Detail Makro & Hasil) */}
@@ -282,6 +321,51 @@ export default function DetailTugas() {
               {ticket.deskripsi}
             </div>
           </div>
+
+          {/* MENAMPILKAN TIKET OPERASIONAL TURUNAN (SUB-TUGAS STAF) */}
+          {ticket.childTickets && ticket.childTickets.length > 0 && (
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+                <h3 className="text-sm font-bold text-indigo-800 uppercase tracking-wider">
+                  📋 Tiket Operasional Lapangan ({ticket.childTickets.length})
+                </h3>
+                <span className="text-xs text-slate-500 font-medium">
+                  {ticket.childTickets.filter(c => c.status === 'SELESAI').length} dari {ticket.childTickets.length} Selesai
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {ticket.childTickets.map((child) => (
+                  <div
+                    key={child.id}
+                    onClick={() => navigate(`/detail-tugas/${child.id}`)}
+                    className="p-3.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg cursor-pointer transition flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-indigo-700">#T-{String(child.id).padStart(3, '0')}</span>
+                        <span className="text-xs font-bold text-slate-800">{child.judul}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Pelaksana: <strong>{child.pelaksana?.nama || 'Belum ada'}</strong> • Batas: {child.deadline ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(child.deadline)) : '-'}
+                      </p>
+                    </div>
+                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase ${
+                      child.status === 'SELESAI'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : child.status === 'MENUNGGU_VALIDASI'
+                        ? 'bg-purple-100 text-purple-800'
+                        : child.status === 'DIPROSES'
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      {child.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Menampilkan bukti hasil kerja */}
           {(ticket.fotoBukti || ticket.laporanPenyelesaian) && (
@@ -324,18 +408,45 @@ export default function DetailTugas() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between border-b border-slate-50 pb-2">
                 <span className="text-slate-500">Pembuat:</span>
-                <span className="font-semibold text-slate-800">{ticket.pembuat?.nama || '-'}</span>
+                <span className="font-semibold text-slate-800">{ticket.pembuat?.nama || '-'} ({ticket.pembuat?.role || '-'})</span>
               </div>
               <div className="flex justify-between border-b border-slate-50 pb-2">
-                <span className="text-slate-500">Koordinator:</span>
+                <span className="text-slate-500">Penanggung Jawab:</span>
                 <span className="font-semibold text-indigo-700">{ticket.penanggungJawab?.nama || '-'}</span>
               </div>
               <div className="flex justify-between pb-1">
-                <span className="text-slate-500">Pelaksana:</span>
-                <span className="font-semibold text-emerald-700">{ticket.pelaksana?.nama || 'Belum Ditunjuk'}</span>
+                <span className="text-slate-500">Penerima / Pelaksana:</span>
+                <span className="font-semibold text-emerald-700">{ticket.pelaksana?.nama || 'Belum Ditunjuk'} ({ticket.pelaksana?.role || '-'})</span>
               </div>
             </div>
           </div>
+
+          {/* =========================================
+              PANEL TINDAK LANJUT KOORDINATOR (ARAHAN KADIV -> TIKET OPERASIONAL STAF)
+              ========================================= */}
+          {isKoor && (
+            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-5 rounded-xl border border-indigo-200 shadow-sm space-y-3">
+              <h3 className="text-sm font-bold text-indigo-900">
+                🚀 Tindak Lanjut Koordinator
+              </h3>
+              <p className="text-xs text-indigo-700 leading-relaxed">
+                Terbitkan tugas operasional kepada Staf pelaksana berdasarkan tugas atau arahan ini.
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    `/tambah-tugas?parentId=${ticket.id}&parentTitle=${encodeURIComponent(
+                      ticket.judul
+                    )}`
+                  )
+                }
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm transition flex items-center justify-center gap-1.5"
+              >
+                <span>+ Terbitkan Tiket Operasional untuk Staf</span>
+              </button>
+            </div>
+          )}
 
           {/* =========================================
               PANEL AKSI (CONDITIONAL RENDERING RBAC) 
@@ -454,7 +565,7 @@ export default function DetailTugas() {
              <div className="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm">
                <h3 className="text-sm font-bold text-amber-800 mb-2">Tindakan Manajerial</h3>
                <p className="text-xs text-slate-600 mb-3">Tugas ini membutuhkan persetujuan anggaran tambahan atau pihak ketiga (vendor).</p>
-               <button onClick={() => navigate('/kadiv/eskalasi')} className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm rounded shadow">
+               <button onClick={() => navigate('/daftar-eskalasi-kadiv')} className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm rounded shadow">
                   Proses Pengajuan Eskalasi
                </button>
              </div>

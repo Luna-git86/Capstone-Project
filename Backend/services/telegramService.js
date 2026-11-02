@@ -1,4 +1,6 @@
 const prisma = require('../db');
+const { isNotificationTypeEnabled } = require('../config/notificationConfig');
+const { buildDedupeKey } = require('./ticketNotificationService');
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
@@ -20,58 +22,127 @@ async function sendTelegramMessage(chatId, message) {
   return result.result;
 }
 
-async function notifyTicketStatus({ ticketId, recipient, ticketTitle, status, deadline }) {
+async function loadRecipient(db, recipientId) {
+  if (!recipientId) return null;
+  return db.user.findUnique({
+    where: { id: recipientId },
+    select: { id: true, nama: true, telegramChatId: true, role: true },
+  });
+}
+
+async function notifyTicketEvent(
+  { ticketId, recipientId, type, message, occurrenceToken },
+  deps = {}
+) {
+  const db = deps.prisma || prisma;
+  const sendMessage = deps.sendTelegramMessage || sendTelegramMessage;
+
+  if (!ticketId || !recipientId || !type || !occurrenceToken) {
+    return { skipped: true, reason: 'INVALID_EVENT' };
+  }
+
+  if (!isNotificationTypeEnabled(type)) {
+    return { skipped: true, reason: 'DISABLED' };
+  }
+
+  const recipient = await loadRecipient(db, recipientId);
   if (!recipient?.id) {
-    console.warn(`[Telegram] Notifikasi tiket #${ticketId} dilewati: pembuat tiket tidak ditemukan.`);
-    return { skipped: true };
+    console.warn(`[Telegram] Notifikasi tiket #${ticketId} dilewati: penerima ${recipientId} tidak ditemukan.`);
+    return { skipped: true, reason: 'RECIPIENT_NOT_FOUND' };
   }
 
   const chatId = recipient.telegramChatId ? String(recipient.telegramChatId) : '';
-  const dedupeKey = `ticket:${ticketId}:status:${status}:${Date.now()}`;
-  const deadlineText = deadline ? new Date(deadline).toLocaleString('id-ID') : 'Belum ditentukan';
-  const message = [
-    '🔔 Pembaruan Tiket E-Ticketing RSIA Qurrata A’yun',
-    '',
-    `Tiket: #${ticketId} - ${ticketTitle}`,
-    `Status terbaru: ${status.replaceAll('_', ' ')}`,
-    `Deadline: ${deadlineText}`,
-  ].join('\n');
+  const dedupeKey = buildDedupeKey({
+    ticketId,
+    type,
+    recipientId: recipient.id,
+    occurrenceToken,
+  });
 
-  let log;
-  try {
-    log = await prisma.notificationLog.create({
+  let log = await db.notificationLog.findUnique({ where: { dedupeKey } });
+
+  if (log?.status === 'SENT' || log?.status === 'PENDING') {
+    return { duplicate: true };
+  }
+
+  if (log) {
+    log = await db.notificationLog.update({
+      where: { id: log.id },
       data: {
-        ticketId,
-        recipientId: recipient.id,
-        type: `STATUS_${status}`,
         status: 'PENDING',
+        attempts: { increment: 1 },
+        errorMessage: null,
         message,
         telegramChatId: chatId || 'UNLINKED',
-        dedupeKey,
-        attempts: 1,
       },
     });
-  } catch (error) {
-    if (error.code === 'P2002') return { duplicate: true };
-    throw error;
+  } else {
+    try {
+      log = await db.notificationLog.create({
+        data: {
+          ticketId,
+          recipientId: recipient.id,
+          type,
+          status: 'PENDING',
+          message,
+          telegramChatId: chatId || 'UNLINKED',
+          dedupeKey,
+          attempts: 1,
+        },
+      });
+    } catch (error) {
+      if (error.code === 'P2002') return { duplicate: true };
+      throw error;
+    }
   }
 
   try {
-    if (!chatId) throw new Error('Akun pembuat tiket belum menghubungkan Telegram.');
-    await sendTelegramMessage(chatId, message);
-    await prisma.notificationLog.update({
+    if (!chatId) throw new Error('Telegram penerima belum terhubung.');
+    await sendMessage(chatId, message);
+    await db.notificationLog.update({
       where: { id: log.id },
       data: { status: 'SENT', sentAt: new Date(), errorMessage: null },
     });
-    return { sent: true };
+    return { sent: true, chatId, recipientId: recipient.id };
   } catch (error) {
-    await prisma.notificationLog.update({
+    await db.notificationLog.update({
       where: { id: log.id },
-      data: { status: 'FAILED', errorMessage: String(error.message).slice(0, 500) },
+      data: {
+        status: 'FAILED',
+        errorMessage: String(error.message || error).slice(0, 500),
+      },
     });
-    console.error(`[Telegram] Gagal mengirim notifikasi tiket #${ticketId}:`, error.message);
-    return { sent: false, error: error.message };
+    console.error(`[Telegram] Gagal mengirim ${type} tiket #${ticketId}:`, error.message);
+    return { sent: false, error: error.message, recipientId: recipient.id };
   }
 }
 
-module.exports = { sendTelegramMessage, notifyTicketStatus };
+async function notifyDeadlineEvent({ ticket, recipient, type, message }, deps = {}) {
+  if (!ticket?.id) {
+    return { skipped: true, reason: 'NO_TICKET' };
+  }
+  if (!recipient?.id) {
+    console.warn(`[Telegram] Pengingat tiket #${ticket.id} dilewati: pelaksana tidak ditemukan.`);
+    return { skipped: true, reason: 'NO_ASSIGNEE' };
+  }
+  if (!ticket.deadline) {
+    return { skipped: true, reason: 'NO_DEADLINE' };
+  }
+
+  return notifyTicketEvent(
+    {
+      ticketId: ticket.id,
+      recipientId: recipient.id,
+      type,
+      message,
+      occurrenceToken: new Date(ticket.deadline).toISOString(),
+    },
+    deps
+  );
+}
+
+module.exports = {
+  sendTelegramMessage,
+  notifyTicketEvent,
+  notifyDeadlineEvent,
+};

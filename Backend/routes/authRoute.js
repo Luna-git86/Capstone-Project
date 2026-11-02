@@ -15,6 +15,18 @@ router.post(
   authController.createTelegramLink
 );
 
+router.get(
+  '/telegram/status',
+  verifyToken,
+  authController.getTelegramStatus
+);
+
+router.delete(
+  '/telegram/link',
+  verifyToken,
+  authController.unlinkTelegram
+);
+
 // Rute Eksklusif Admin Sistem (UAT-1.1): Manajemen Akun, Register & Reset Password
 router.get('/users', verifyToken, checkRole(['ADMIN']), authController.getUsers);
 router.post('/register', verifyToken, checkRole(['ADMIN']), authController.register);

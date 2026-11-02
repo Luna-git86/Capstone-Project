@@ -1,6 +1,6 @@
 // Frontend/src/pages/SemuaTugas.tsx
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 
 interface Ticket {
@@ -56,6 +56,8 @@ const SemuaTugas: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   const navigate = useNavigate();
+  const location = useLocation();
+  const isTugasSaya = location.pathname === '/semua-tugas-staff';
 
   // STATE UNTUK TAB & FILTER
   const [activeTab, setActiveTab] = useState<'AKTIF' | 'RIWAYAT'>('AKTIF');
@@ -75,8 +77,25 @@ const SemuaTugas: React.FC = () => {
   const [escalateTarget, setEscalateTarget] = useState<Ticket | null>(null);
   const [escalateNote, setEscalateNote] = useState('');
 
+  const getUserId = (): number => {
+    const stored = localStorage.getItem('userId');
+    if (stored) return Number(stored);
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload?.id) {
+          const id = Number(payload.id);
+          localStorage.setItem('userId', String(id));
+          return id;
+        }
+      } catch (e) {}
+    }
+    return 0;
+  };
+
   const userRole = localStorage.getItem('userRole') || 'STAF';
-  const userId = Number(localStorage.getItem('userId')) || 0;
+  const userId = getUserId();
   const isAdmin = userRole === 'ADMIN';
   const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(userRole);
   const isStaff = !isAdmin && !isAtasan;
@@ -165,7 +184,10 @@ const SemuaTugas: React.FC = () => {
 
   // LOGIKA SMART FILTER
   const filteredTickets = tickets.filter((t) => {
-    if (isStaff && t.pelaksana?.id !== userId) return false;
+    if (isTugasSaya) {
+      // Menu "Tugas Saya" khusus menampilkan tugas yang ditugaskan kepada staf ini
+      if (t.pelaksana?.id !== userId) return false;
+    }
     const isCompletedOrRejected = ['SELESAI', 'DITOLAK'].includes(t.status);
     if (activeTab === 'AKTIF' && isCompletedOrRejected) return false;
     if (activeTab === 'RIWAYAT' && !isCompletedOrRejected) return false;
@@ -179,8 +201,14 @@ const SemuaTugas: React.FC = () => {
       {/* HEADER UTAMA */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Daftar Tiket Masalah, Tugas & Evaluasi</h1>
-          <p className="text-sm text-slate-500">Kelola tiket masalah menjadi tugas, laporkan penyelesaian dengan bukti foto, dan evaluasi hasil kerja.</p>
+          <h1 className="text-2xl font-bold text-slate-800">
+            {isTugasSaya ? 'Tugas Saya' : 'Daftar Tiket Masalah, Tugas & Evaluasi'}
+          </h1>
+          <p className="text-sm text-slate-500">
+            {isTugasSaya
+              ? 'Daftar tugas operasional yang didelegasikan khusus kepada Anda untuk dikerjakan dan dilaporkan.'
+              : 'Kelola tiket masalah menjadi tugas, laporkan penyelesaian dengan bukti foto, dan evaluasi hasil kerja.'}
+          </p>
         </div>
         {isAtasan && (
           <button 
@@ -250,7 +278,15 @@ const SemuaTugas: React.FC = () => {
               {loading ? (
                 <tr><td colSpan={5} className="py-8 text-center text-slate-500">Memuat data...</td></tr>
               ) : filteredTickets.length === 0 ? (
-                <tr><td colSpan={5} className="py-8 text-center text-slate-400 font-medium">Belum ada data tiket.</td></tr>
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-400 font-medium">
+                    {isTugasSaya
+                      ? activeTab === 'AKTIF'
+                        ? 'Belum ada tugas aktif yang ditugaskan kepada Anda saat ini.'
+                        : 'Belum ada riwayat tugas selesai.'
+                      : 'Belum ada data tiket.'}
+                  </td>
+                </tr>
               ) : (
                 filteredTickets.map((t) => {
                   const badge = getStatusBadge(t.status);

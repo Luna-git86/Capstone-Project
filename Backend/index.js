@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { startTelegramBot } = require('./services/telegramBot');
+const { startDeadlineScheduler } = require('./jobs/deadlineScheduler');
 require('dotenv').config();
 
 const app = express();
@@ -22,7 +23,14 @@ app.get('/', (req, res) => {
   res.send('Server Backend E-Ticketing RSIA berjalan dengan baik!');
 });
 
+function startBackgroundServices() {
+  startTelegramBot();
+  startDeadlineScheduler();
+}
+
 app.listen(port, () => {
   console.log(`Server Backend berjalan di http://localhost:${port}`);
-  startTelegramBot();
+  startBackgroundServices();
 });
+
+module.exports = { app, startBackgroundServices };
