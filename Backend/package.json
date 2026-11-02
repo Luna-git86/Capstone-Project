@@ -9,13 +9,14 @@
   },
   "dependencies": {
     "@prisma/client": "5.11.0",
+    "array.prototype.findindex": "^2.2.4",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.3",
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^4.6.0",
-    "node-telegram-bot-api": "^2.1.0",
+    "node-telegram-bot-api": "^0.66.0",
     "pg": "^8.23.1"
   },
   "devDependencies": {

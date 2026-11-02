@@ -35,59 +35,35 @@ const Sidebar: React.FC = () => {
       path: getDashboardPath(userRole),
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
-
-    // rute khusus untuk Direktur
-
-
-
-    // Rute khusus untuk Kadiv
     {
-      title: 'Daftar Eskalasi',
-      path: '/daftar-eskalasi-kadiv',
-      allowedRoles: ['KADIV'],
-    },
-
-    // Rute khusus untuk Koordinator
-    {
-        title: 'Menu Laporan',
-        path: '/menu-laporan',
-        allowedRoles: ['KOORDINATOR'],
-    },
-
-
-    // Rute khusus untuk Staf
-    {
-      title: 'Riwayat Selesai',
-      path: '/riwayat',
-      allowedRoles: ['STAF'],
+      title: 'Laporkan Masalah',
+      path: '/laporkan-masalah',
+      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
     {
-      title: 'Tugas Saya',
-      path: '/semua-tugas-staff',
-      allowedRoles: ['STAF'],
+      title: 'Buat Tugas',
+      path: '/tambah-tugas',
+      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
     },
-
-    // Rute umum untuk semua role
     {
-      title: 'Semua Tugas',
+      title: 'Daftar Tugas',
       path: '/semua-tugas',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
+    // {
+    //   title: 'Riwayat Selesai',
+    //   path: '/riwayat',
+    //   allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+    // },
     {
-      title: 'Dokumen SOP',
+      title: 'Panduan SOP',
       path: '/dokumen-sop',
-      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
     {
       title: 'Laporan Kinerja',
       path: '/laporan-sla',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR'],
-    },
-    {
-      // Pengajuan tiket masalah ke pihak berwenang
-      title: 'Laporkan Masalah',
-      path: '/laporkan-masalah',
-      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
   ];
 

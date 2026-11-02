@@ -1,6 +1,6 @@
 // Frontend/src/pages/TambahTugas.tsx
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 
 interface Divisi {
@@ -14,12 +14,31 @@ interface Pelaksana {
   noHp?: string;
   role: string;
   divisiId: number | null;
+  divisi?: { id: number; nama: string };
+}
+
+interface IncomingTicket {
+  id: number;
+  judul: string;
+  lokasi: string | null;
+  deskripsi: string;
+  prioritas: 'LOW' | 'MEDIUM' | 'HIGH';
+  status: string;
+  divisiId?: number | null;
+  divisi?: { id: number; nama: string } | null;
+  pembuat?: { nama: string; role: string };
 }
 
 const TambahTugas: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preselectedTicketId = searchParams.get('ticketId') || '';
+
   const userRole = localStorage.getItem('userRole') || 'KOORDINATOR';
   const userDivisiId = localStorage.getItem('userDivisiId') || '';
+
+  const [incomingTickets, setIncomingTickets] = useState<IncomingTicket[]>([]);
+  const [selectedTicketId, setSelectedTicketId] = useState<string>(preselectedTicketId);
 
   const [formData, setFormData] = useState({
     judul: '',
@@ -28,57 +47,108 @@ const TambahTugas: React.FC = () => {
     prioritas: 'MEDIUM',
     divisiId: userDivisiId,
     pelaksanaId: '',
-    deadline: '', // Format YYYY-MM-DDTHH:mm (Tanggal & Jam)
+    deadline: '',
   });
 
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
-  const [pelaksanaList, setPelaksanaList] = useState<Pelaksana[]>([]);
-  const [loadingOptions, setLoadingOptions] = useState<boolean>(false);
+  const [allStaffList, setAllStaffList] = useState<Pelaksana[]>([]);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [createdTicket, setCreatedTicket] = useState<any | null>(null);
 
+  // 1. Muat daftar tiket masalah (MENUNGGU_TRIASE), daftar divisi, dan daftar staf
   useEffect(() => {
-    const fetchInitialDivisi = async () => {
+    const loadInitialData = async () => {
       try {
-        const res = await api.get('/tickets/options');
-        const listDivisi: Divisi[] = res.data.divisi || [];
-        setDivisiList(listDivisi);
+        const ticketRes = await api.get('/tickets');
+        const allTickets: IncomingTicket[] = Array.isArray(ticketRes.data)
+          ? ticketRes.data
+          : ticketRes.data?.data || [];
+        const waitingTickets = allTickets.filter(
+          (t) => t.status === 'MENUNGGU_TRIASE'
+        );
+        setIncomingTickets(waitingTickets);
 
+        // Jika ada ticketId dari parameter URL (?ticketId=...), langsung isi form
+        if (preselectedTicketId) {
+          const found = waitingTickets.find(
+            (t) => String(t.id) === String(preselectedTicketId)
+          );
+          if (found) {
+            setFormData((prev) => ({
+              ...prev,
+              judul: found.judul,
+              lokasi: found.lokasi || '',
+              deskripsi: found.deskripsi,
+              prioritas: found.prioritas || 'MEDIUM',
+              divisiId: found.divisi?.id
+                ? String(found.divisi.id)
+                : prev.divisiId,
+            }));
+          }
+        }
+      } catch (e) {
+        console.warn('Gagal memuat tiket masuk:', e);
+      }
+
+      try {
+        const divRes = await api.get('/auth/divisi');
+        const listDivisi: Divisi[] = divRes.data?.data || divRes.data || [];
+        setDivisiList(listDivisi);
         if (!formData.divisiId && listDivisi.length > 0) {
           setFormData((prev) => ({
             ...prev,
-            divisiId: String(listDivisi[0].id),
+            divisiId: prev.divisiId || String(listDivisi[0].id),
           }));
         }
-      } catch (err) {
-        console.error('Gagal memuat opsi divisi:', err);
+      } catch (e) {
+        console.warn('Gagal memuat divisi:', e);
+      }
+
+      try {
+        const staffRes = await api.get('/tickets/staff');
+        setAllStaffList(staffRes.data?.data || staffRes.data || []);
+      } catch (e) {
+        try {
+          const optRes = await api.get('/tickets/options');
+          setAllStaffList(optRes.data?.pelaksana || []);
+        } catch (errOpt) {
+          console.warn('Gagal memuat staf:', errOpt);
+        }
       }
     };
-    fetchInitialDivisi();
-  }, []);
 
-  useEffect(() => {
-    if (!formData.divisiId) {
-      setPelaksanaList([]);
+    loadInitialData();
+  }, [preselectedTicketId]);
+
+  // Saat memilih tiket laporan masalah dari dropdown, isi form secara otomatis
+  const handleSelectIncomingTicket = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setSelectedTicketId(val);
+
+    if (!val) {
+      setFormData((prev) => ({
+        ...prev,
+        judul: '',
+        lokasi: '',
+        deskripsi: '',
+      }));
       return;
     }
 
-    const fetchPelaksanaByDivisi = async () => {
-      try {
-        setLoadingOptions(true);
-        const res = await api.get(`/tickets/options?divisiId=${formData.divisiId}`);
-        setPelaksanaList(res.data.pelaksana || []);
-      } catch (err) {
-        console.error('Gagal memuat daftar staf pelaksana:', err);
-        setPelaksanaList([]);
-      } finally {
-        setLoadingOptions(false);
-      }
-    };
-
-    fetchPelaksanaByDivisi();
-  }, [formData.divisiId]);
+    const found = incomingTickets.find((t) => String(t.id) === val);
+    if (found) {
+      setFormData((prev) => ({
+        ...prev,
+        judul: found.judul,
+        lokasi: found.lokasi || '',
+        deskripsi: found.deskripsi,
+        prioritas: found.prioritas || 'MEDIUM',
+        divisiId: found.divisi?.id ? String(found.divisi.id) : prev.divisiId,
+        pelaksanaId: '',
+      }));
+    }
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -100,6 +170,7 @@ const TambahTugas: React.FC = () => {
     try {
       const response = await api.post('/tickets', {
         tipe: 'BUAT_TUGAS',
+        ticketId: selectedTicketId ? Number(selectedTicketId) : undefined,
         judul: formData.judul,
         lokasi: formData.lokasi,
         deskripsi: formData.deskripsi,
@@ -110,6 +181,7 @@ const TambahTugas: React.FC = () => {
       });
 
       setCreatedTicket(response.data.data);
+      setSelectedTicketId('');
       setFormData((prev) => ({
         ...prev,
         judul: '',
@@ -120,7 +192,7 @@ const TambahTugas: React.FC = () => {
       }));
     } catch (err: any) {
       setError(
-        err.response?.data?.message || 'Gagal menerbitkan tugas baru.'
+        err.response?.data?.message || 'Gagal menerbitkan tugas.'
       );
     } finally {
       setSubmitting(false);
@@ -157,6 +229,12 @@ const TambahTugas: React.FC = () => {
     return `https://wa.me/${waNumber}?text=${text}`;
   };
 
+  // Utamakan staf di divisi yang dipilih, namun jika kosong tampilkan semua staf agar tidak macet
+  const filteredStaff = allStaffList.filter(
+    (s) => !formData.divisiId || String(s.divisiId) === String(formData.divisiId)
+  );
+  const staffToDisplay = filteredStaff.length > 0 ? filteredStaff : allStaffList;
+
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div>
@@ -164,10 +242,10 @@ const TambahTugas: React.FC = () => {
           Wewenang Penugasan ({userRole})
         </span>
         <h1 className="text-2xl font-bold text-slate-800 mt-2">
-          Buat Tugas Baru
+          Buat Tugas Baru / Tindak Lanjuti Tiket Masalah
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Tetapkan staf pelaksana, prioritas, serta batas waktu pengerjaan (lengkap hingga jam & menit).
+          Pilih dari tiket laporan masalah yang masuk atau buat instruksi tugas baru lengkap dengan batas waktu (tanggal & jam).
         </p>
       </div>
 
@@ -214,6 +292,30 @@ const TambahTugas: React.FC = () => {
         onSubmit={handleSubmit}
         className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4"
       >
+        {/* PILIH DARI TIKET LAPORAN MASALAH YANG MASUK */}
+        <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2">
+          <label className="block text-xs font-bold text-amber-900 uppercase">
+            📌 Ambil dari Tiket Laporan Masalah yang Masuk (Opsional)
+          </label>
+          <select
+            value={selectedTicketId}
+            onChange={handleSelectIncomingTicket}
+            className="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-lg text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          >
+            <option value="">
+              -- Buat Tugas Baru Tanpa Tiket ({incomingTickets.length} Tiket Masalah Menunggu) --
+            </option>
+            {incomingTickets.map((t) => (
+              <option key={t.id} value={String(t.id)}>
+                #T-{String(t.id).padStart(3, '0')} | {t.judul} ({t.lokasi || 'Tanpa lokasi'}) — Dilaporkan oleh {t.pembuat?.nama || 'Pegawai'}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-amber-800">
+            Jika Anda memilih salah satu tiket di atas, data di bawah akan terisi otomatis dan tiket tersebut langsung berubah menjadi tugas aktif.
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold text-slate-800 mb-1">
@@ -278,15 +380,12 @@ const TambahTugas: React.FC = () => {
               value={formData.pelaksanaId}
               onChange={handleChange}
               required
-              disabled={loadingOptions}
               className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm"
             >
-              <option value="">
-                {loadingOptions ? 'Memuat daftar staf...' : '-- Pilih Staf Pelaksana --'}
-              </option>
-              {pelaksanaList.map((staf) => (
+              <option value="">-- Pilih Staf Pelaksana --</option>
+              {staffToDisplay.map((staf) => (
                 <option key={staf.id} value={String(staf.id)}>
-                  {staf.nama} {staf.noHp ? `(${staf.noHp})` : ''}
+                  {staf.nama} {staf.divisi?.nama ? `(${staf.divisi.nama})` : ''}
                 </option>
               ))}
             </select>
@@ -346,7 +445,11 @@ const TambahTugas: React.FC = () => {
             disabled={submitting}
             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-bold rounded-lg shadow-sm transition"
           >
-            {submitting ? 'Menyimpan...' : 'Terbitkan Tugas'}
+            {submitting
+              ? 'Menyimpan...'
+              : selectedTicketId
+              ? 'Jadikan Tugas & Tetapkan Staf'
+              : 'Terbitkan Tugas Baru'}
           </button>
         </div>
       </form>

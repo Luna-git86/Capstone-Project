@@ -2,20 +2,20 @@
 const prisma = require('../db');
 const { notifyTicketStatus } = require('../services/telegramService');
 
-// 1. Pengajuan Laporan Masalah (Semua Pegawai Operasional) & Pembuatan Tugas (Koordinator s/d Direktur)
+// 1. Buat Tiket Masalah Baru ATAU Buat Tugas (Termasuk dari Tiket Masalah yang Sudah Ada)
 const createTicket = async (req, res) => {
   try {
     const role = req.user.role;
     const pembuatId = Number(req.user.id);
 
-    // Admin hanya boleh memantau tugas dan mengonfigurasi akun
     if (role === 'ADMIN') {
       return res.status(403).json({
-        message: 'Admin hanya memiliki akses untuk melihat tugas dan mengelola akun.',
+        message: 'Admin hanya memiliki akses untuk memantau tugas dan mengelola akun.',
       });
     }
 
     const {
+      ticketId, // Jika Koordinator/Kadiv/Direktur membuat tugas berdasarkan tiket yang sudah ada
       judul,
       lokasi,
       deskripsi,
@@ -23,41 +23,124 @@ const createTicket = async (req, res) => {
       divisiId,
       pelaksanaId,
       deadline,
-      tipe, // 'LAPORAN_MASALAH' atau 'BUAT_TUGAS'
+      catatanRevisi,
+      tipe,
     } = req.body;
 
+    const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(role);
+    const isBuatTugas = tipe === 'BUAT_TUGAS';
+
+    if (isBuatTugas && !isAtasan) {
+      return res.status(403).json({
+        message: 'Hanya Koordinator, Kepala Divisi, dan Direktur yang dapat membuat tugas.',
+      });
+    }
+
+    // JIKA MEMBUAT TUGAS BERDASARKAN TIKET LAPORAN MASALAH YANG SUDAH ADA
+    if (ticketId) {
+      if (!isAtasan) {
+        return res.status(403).json({
+          message: 'Hanya Koordinator, Kepala Divisi, dan Direktur yang dapat menindaklanjuti tiket menjadi tugas.',
+        });
+      }
+
+      const existingTicket = await prisma.ticket.findUnique({
+        where: { id: Number(ticketId) },
+        include: {
+          pembuat: { select: { id: true, nama: true, telegramChatId: true } },
+        },
+      });
+
+      if (!existingTicket) {
+        return res.status(404).json({ message: 'Tiket laporan masalah tidak ditemukan.' });
+      }
+
+      let parsedDeadline = existingTicket.deadline;
+      if (deadline) {
+        const d = new Date(deadline);
+        if (!Number.isNaN(d.getTime())) {
+          parsedDeadline = d;
+        }
+      }
+
+      if (!parsedDeadline) {
+        return res.status(400).json({
+          message: 'Batas waktu (tanggal dan jam) wajib diisi saat membuat tugas.',
+        });
+      }
+
+      const updatedTicket = await prisma.ticket.update({
+        where: { id: Number(ticketId) },
+        data: {
+          judul: judul ? judul.trim() : existingTicket.judul,
+          lokasi: lokasi !== undefined ? String(lokasi).trim() : existingTicket.lokasi,
+          deskripsi: deskripsi ? deskripsi.trim() : existingTicket.deskripsi,
+          prioritas: prioritas || existingTicket.prioritas,
+          divisiId: divisiId ? Number(divisiId) : existingTicket.divisiId,
+          pelaksanaId: pelaksanaId ? Number(pelaksanaId) : existingTicket.pelaksanaId,
+          penanggungJawabId: pembuatId,
+          deadline: parsedDeadline,
+          status: 'DIPROSES',
+          catatanRevisi:
+            catatanRevisi !== undefined ? catatanRevisi : existingTicket.catatanRevisi,
+        },
+        include: {
+          pembuat: { select: { id: true, nama: true, noHp: true, role: true } },
+          penanggungJawab: { select: { id: true, nama: true, noHp: true, role: true } },
+          divisi: { select: { id: true, nama: true } },
+          pelaksana: {
+            select: { id: true, nama: true, noHp: true, role: true, telegramChatId: true },
+          },
+        },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          action: 'CONVERT_TICKET_TO_TASK',
+          entityType: 'Ticket',
+          entityId: updatedTicket.id,
+          userId: pembuatId,
+          details: `${role} membuat tugas dari tiket #T-${String(updatedTicket.id).padStart(3, '0')} untuk ${updatedTicket.pelaksana?.nama || '-'}`,
+        },
+      });
+
+      try {
+        await notifyTicketStatus({
+          ticketId: updatedTicket.id,
+          recipient: existingTicket.pembuat,
+          ticketTitle: updatedTicket.judul,
+          status: 'DIPROSES',
+          deadline: updatedTicket.deadline,
+        });
+      } catch (e) {
+        console.error('[Telegram] Gagal mengirim notifikasi:', e.message);
+      }
+
+      return res.status(200).json({
+        message: `Tiket #T-${String(updatedTicket.id).padStart(3, '0')} berhasil dijadikan tugas untuk ${updatedTicket.pelaksana?.nama || 'Staf'}!`,
+        data: updatedTicket,
+      });
+    }
+
+    // JIKA MEMBUAT TIKET MASALAH BARU ATAU TUGAS BARU DARI NOL
     if (!judul || !judul.trim() || !deskripsi || !deskripsi.trim()) {
       return res.status(400).json({
         message: 'Judul dan deskripsi wajib diisi.',
       });
     }
 
-    if (!divisiId) {
+    // Ambil user dari DB jika divisiId tidak dikirim
+    const dbUser = await prisma.user.findUnique({ where: { id: pembuatId } });
+    const rawDivisiId = divisiId || dbUser?.divisiId;
+
+    if (!rawDivisiId) {
       return res.status(400).json({
         message: 'Silakan pilih Divisi / Bagian Tujuan.',
       });
     }
 
-    const selectedDivisiId = Number(divisiId);
-    const divisi = await prisma.divisi.findUnique({
-      where: { id: selectedDivisiId },
-    });
+    const selectedDivisiId = Number(rawDivisiId);
 
-    if (!divisi) {
-      return res.status(400).json({ message: 'Divisi tujuan tidak ditemukan.' });
-    }
-
-    const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(role);
-    const isBuatTugas = tipe === 'BUAT_TUGAS';
-
-    // Jika melalui menu Buat Tugas, wajib memiliki role Koordinator, Kadiv, atau Direktur
-    if (isBuatTugas && !isAtasan) {
-      return res.status(403).json({
-        message: 'Hanya Koordinator, Kepala Divisi, dan Direktur yang berwenang membuat tugas.',
-      });
-    }
-
-    // Saat membuat tugas langsung, batas waktu (tanggal & jam) wajib diisi
     let selectedDeadline = null;
     if (isBuatTugas && (!deadline || String(deadline).trim() === '')) {
       return res.status(400).json({
@@ -65,37 +148,29 @@ const createTicket = async (req, res) => {
       });
     }
 
-    if (deadline !== undefined && deadline !== null && deadline !== '') {
-      const parsedDeadline = new Date(deadline);
-      if (Number.isNaN(parsedDeadline.getTime())) {
-        return res.status(400).json({ message: 'Format tanggal dan jam batas waktu tidak valid.' });
+    if (deadline) {
+      const parsed = new Date(deadline);
+      if (Number.isNaN(parsed.getTime())) {
+        return res.status(400).json({ message: 'Format batas waktu tidak valid.' });
       }
-      selectedDeadline = parsedDeadline;
+      selectedDeadline = parsed;
     }
 
     let selectedPelaksanaId = null;
     let penanggungJawabId = null;
 
-    if (isBuatTugas) {
+    if (isAtasan && pelaksanaId) {
+      selectedPelaksanaId = Number(pelaksanaId);
       penanggungJawabId = pembuatId;
-      if (pelaksanaId !== undefined && pelaksanaId !== null && pelaksanaId !== '') {
-        selectedPelaksanaId = Number(pelaksanaId);
-        const pelaksana = await prisma.user.findUnique({
-          where: { id: selectedPelaksanaId },
-        });
-        if (!pelaksana) {
-          return res.status(400).json({ message: 'Staf pelaksana tidak ditemukan.' });
-        }
-      }
+    } else if (isBuatTugas) {
+      penanggungJawabId = pembuatId;
     }
 
     const validPrioritas = ['LOW', 'MEDIUM', 'HIGH'];
     const selectedPrioritas =
       prioritas && validPrioritas.includes(prioritas) ? prioritas : 'MEDIUM';
 
-    // Laporan masalah berstatus MENUNGGU_TRIASE, sedangkan pembuatan tugas yang menunjuk staf langsung DIPROSES
-    const initialStatus =
-      isBuatTugas && selectedPelaksanaId ? 'DIPROSES' : 'MENUNGGU_TRIASE';
+    const initialStatus = selectedPelaksanaId ? 'DIPROSES' : 'MENUNGGU_TRIASE';
 
     const newTicket = await prisma.ticket.create({
       data: {
@@ -115,7 +190,7 @@ const createTicket = async (req, res) => {
         penanggungJawab: { select: { id: true, nama: true, noHp: true, role: true } },
         divisi: { select: { id: true, nama: true } },
         pelaksana: {
-          select: { id: true, nama: true, noHp: true, telegramChatId: true },
+          select: { id: true, nama: true, noHp: true, role: true, telegramChatId: true },
         },
       },
     });
@@ -126,14 +201,15 @@ const createTicket = async (req, res) => {
         entityType: 'Ticket',
         entityId: newTicket.id,
         userId: pembuatId,
-        details: `${role} ${isBuatTugas ? 'membuat tugas' : 'melaporkan masalah'} #T-${String(newTicket.id).padStart(3, '0')} (${newTicket.judul}) ke Divisi ${newTicket.divisi?.nama}`,
+        details: `${role} membuat ${isBuatTugas ? 'tugas' : 'tiket masalah'} #T-${String(newTicket.id).padStart(3, '0')} (${newTicket.judul})`,
       },
     });
 
     return res.status(201).json({
-      message: isBuatTugas
-        ? 'Tugas berhasil dibuat dan ditugaskan!'
-        : `Tiket laporan masalah berhasil diajukan ke bagian ${newTicket.divisi?.nama} untuk segera dibuatkan tugas!`,
+      message:
+        initialStatus === 'DIPROSES'
+          ? 'Tugas berhasil diterbitkan dan ditugaskan ke staf!'
+          : 'Tiket laporan masalah berhasil diajukan!',
       data: newTicket,
     });
   } catch (error) {
@@ -144,19 +220,50 @@ const createTicket = async (req, res) => {
   }
 };
 
-// 2. Ambil Daftar Tiket & Tugas
+// 2. Ambil Daftar Tugas (Memastikan Data Selalu Muncul di Semua Role)
 const getTickets = async (req, res) => {
   try {
-    const { role, divisiId, id: userId } = req.user;
+    const userId = Number(req.user.id);
+    const role = req.user.role;
+
+    // Ambil data user langsung dari database agar tidak gagal jika token JWT tidak menyimpan divisiId
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, divisiId: true },
+    });
+
+    const userDivisiId = currentUser?.divisiId || req.user.divisiId || null;
     let filter = {};
 
-    if (['KADIV', 'KOORDINATOR', 'STAF'].includes(role)) {
+    if (['ADMIN', 'DIREKTUR'].includes(role)) {
+      // Admin dan Direktur melihat seluruh tiket tanpa terkecuali
+      filter = {};
+    } else if (['KADIV', 'KOORDINATOR'].includes(role)) {
+      // Kadiv dan Koordinator melihat:
+      // 1. Semua tiket di divisinya
+      // 2. Semua tiket yang berstatus MENUNGGU_TRIASE (agar bisa langsung dibuatkan tugas)
+      // 3. Tiket yang mereka buat atau awasi sendiri
       const orConditions = [
-        { pembuatId: Number(userId) },
-        { pelaksanaId: Number(userId) },
+        { status: 'MENUNGGU_TRIASE' },
+        { pembuatId: userId },
+        { penanggungJawabId: userId },
+        { pelaksanaId: userId },
       ];
-      if (divisiId) {
-        orConditions.push({ divisiId: Number(divisiId) });
+      if (userDivisiId) {
+        orConditions.push({ divisiId: Number(userDivisiId) });
+      }
+      filter = { OR: orConditions };
+    } else {
+      // Role STAF melihat:
+      // 1. Tugas yang ditugaskan kepadanya (pelaksanaId)
+      // 2. Tiket masalah yang ia laporkan sendiri (pembuatId)
+      // 3. Tiket di divisinya (jika memiliki divisiId)
+      const orConditions = [
+        { pembuatId: userId },
+        { pelaksanaId: userId },
+      ];
+      if (userDivisiId) {
+        orConditions.push({ divisiId: Number(userDivisiId) });
       }
       filter = { OR: orConditions };
     }
@@ -195,7 +302,7 @@ const getTickets = async (req, res) => {
   }
 };
 
-// 3. Mengubah Laporan Masalah Menjadi Tugas (Oleh Koordinator / Kadiv / Direktur)
+// 3. Buat Tugas dari Tiket Masalah / Disposisi oleh Koordinator, Kadiv, Direktur
 const triageTicket = async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -223,7 +330,7 @@ const triageTicket = async (req, res) => {
 
     if (!selectedDeadline) {
       return res.status(400).json({
-        message: 'Silakan tetapkan batas waktu (tanggal dan jam) pengerjaan tugas.',
+        message: 'Batas waktu (tanggal dan jam) wajib diisi saat membuat tugas.',
       });
     }
 
@@ -250,7 +357,7 @@ const triageTicket = async (req, res) => {
         penanggungJawab: { select: { id: true, nama: true, noHp: true, role: true } },
         divisi: { select: { id: true, nama: true } },
         pelaksana: {
-          select: { id: true, nama: true, noHp: true, telegramChatId: true },
+          select: { id: true, nama: true, noHp: true, role: true, telegramChatId: true },
         },
       },
     });
@@ -261,7 +368,7 @@ const triageTicket = async (req, res) => {
         entityType: 'Ticket',
         entityId: updatedTicket.id,
         userId: Number(req.user.id),
-        details: `${req.user.role} membuatkan tugas dari tiket #T-${String(updatedTicket.id).padStart(3, '0')} untuk ${updatedTicket.pelaksana?.nama || '-'} dengan batas waktu ${selectedDeadline.toISOString()}`,
+        details: `${req.user.role} membuat tugas dari tiket #T-${String(updatedTicket.id).padStart(3, '0')} untuk ${updatedTicket.pelaksana?.nama || '-'}`,
       },
     });
 
@@ -289,7 +396,7 @@ const triageTicket = async (req, res) => {
   }
 };
 
-// 4. Pelaporan Penyelesaian Tugas (+ Foto Bukti) oleh Staf & Evaluasi oleh Atasan
+// 4. Pelaporan Penyelesaian (+ Foto Bukti) & Evaluasi Atasan
 const updateTicketStatus = async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -298,7 +405,7 @@ const updateTicketStatus = async (req, res) => {
 
     if (role === 'ADMIN') {
       return res.status(403).json({
-        message: 'Admin hanya dapat melihat tugas dan tidak dapat mengubah status.',
+        message: 'Admin hanya dapat memantau tugas dan tidak dapat mengubah status.',
       });
     }
 
@@ -315,14 +422,12 @@ const updateTicketStatus = async (req, res) => {
       return res.status(400).json({ message: 'Status tidak valid.' });
     }
 
-    // Hanya Atasan (Koordinator, Kadiv, Direktur) yang boleh mengesahkan status menjadi SELESAI (Evaluasi Lulus)
     if (status === 'SELESAI' && !['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(role)) {
       return res.status(403).json({
-        message: 'Penyelesaian tugas harus melalui pelaporan bukti foto dan dievaluasi oleh Koordinator/Kadiv/Direktur.',
+        message: 'Penyelesaian tugas harus melalui pelaporan bukti foto dan disetujui oleh Koordinator/Kadiv/Direktur.',
       });
     }
 
-    // Saat staf mengirim laporan selesai (MENUNGGU_VALIDASI), wajib menyertakan foto bukti
     const currentTicket = await prisma.ticket.findUnique({
       where: { id },
       include: {
@@ -395,9 +500,9 @@ const updateTicketStatus = async (req, res) => {
     return res.status(200).json({
       message:
         status === 'MENUNGGU_VALIDASI'
-          ? 'Laporan penyelesaian dan foto bukti berhasil dikirim untuk dievaluasi atasan!'
+          ? 'Laporan penyelesaian dan foto bukti berhasil dikirim untuk dievaluasi!'
           : status === 'SELESAI'
-          ? 'Evaluasi disetujui! Tugas resmi dinyatakan Selesai.'
+          ? 'Evaluasi disetujui! Tugas dinyatakan Selesai.'
           : `Status tugas diperbarui menjadi ${status.replace('_', ' ')}!`,
       data: updatedTicket,
     });
@@ -482,33 +587,6 @@ const createOrUpdateSop = async (req, res) => {
   }
 };
 
-// ---> TAMBAHKAN FUNGSI BARU INI DI SINI <---
-const getTicketById = async (req, res) => {
-  try {
-    const ticketId = parseInt(req.params.id);
-
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
-      include: {
-        pembuat: { select: { id: true, nama: true, noHp: true, role: true } },
-        penanggungJawab: { select: { id: true, nama: true, noHp: true, role: true } },
-        divisi: { select: { id: true, nama: true } },
-        pelaksana: { select: { id: true, nama: true, noHp: true, telegramChatId: true } },
-      }
-    });
-
-    if (!ticket) {
-      return res.status(404).json({ message: 'Tugas tidak ditemukan' });
-    }
-
-    return res.status(200).json({ data: ticket });
-    
-  } catch (error) {
-    console.error("Error getTicketById:", error);
-    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
-  }
-};
-
 module.exports = {
   createTicket,
   getTickets,
@@ -517,5 +595,4 @@ module.exports = {
   getAssignableStaff,
   getSops,
   createOrUpdateSop,
-  getTicketById,
 };
