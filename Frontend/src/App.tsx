@@ -12,6 +12,7 @@ import PeformaAnalisis from './pages/PeformaAnalisis';
 import Login from './pages/Login';
 import LaporanSLA from './pages/LaporanSLA';
 import Dashboard from './pages/Dashboard';
+import DetailTugas from './pages/DetailTugas';
 
 // Rute import Staff
 import DashboardStaff from './pages/Staf/DashboardStaff';
@@ -19,15 +20,12 @@ import DashboardStaff from './pages/Staf/DashboardStaff';
 
 // Rute import Koordinator
 import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
-import DetailTugasKoor from './pages/Koordinator/DetailTugasKoor';
 import DetailValidasi from './pages/Koordinator/DetailValidasi';
 import MenuLaporan from './pages/Koordinator/MenuLaporan';
 
 
 // Rute import Kadiv
 import DashboardKadiv from './pages/Kadiv/DashboardKadiv';
-
-import DetailTugasKadiv from './pages/Kadiv/DetailTugasKadiv';
 import DaftarEskalasiKadiv from './pages/Kadiv/DaftarEskalasiKadiv';
 import DetailEskalasi from './pages/Kadiv/DetailEskalasi';
 
@@ -103,7 +101,6 @@ function App() {
             <Route element={<RoleProtectedRoute allowedRoles={['KADIV']} />}>
               <Route path="/dashboard-kadiv" element={<DashboardKadiv />} />
 
-              <Route path="/detail-tugas-kadiv/:id" element={<DetailTugasKadiv />} />
               <Route path="/daftar-eskalasi-kadiv" element={<DaftarEskalasiKadiv />} />
               <Route path="/detail-eskalasi/:id" element={<DetailEskalasi />} />
             </Route>
@@ -111,7 +108,6 @@ function App() {
             {/* 4. Beranda Koordinator (Khusus Koordinator) */}
             <Route element={<RoleProtectedRoute allowedRoles={['KOORDINATOR']} />}>
               <Route path="/dashboard-koordinator" element={<DashboardKoordinator />} />
-              <Route path="/detail-tugas-koordinator/:id" element={<DetailTugasKoor />} />
               <Route path="/detail-validasi/:id" element={<DetailValidasi />} />
               <Route path="/menu-laporan" element={<MenuLaporan />} />
             </Route>
@@ -142,6 +138,8 @@ function App() {
               <Route path="/semua-tugas" element={<SemuaTugas />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
               <Route path="/dokumen-sop" element={<DokumenSOP />} />
+              <Route path="/detail-tugas/:id" element={<DetailTugas />} />
+
             </Route>
           </Route>
         </Route>
