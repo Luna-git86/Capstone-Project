@@ -1,6 +1,8 @@
 // Backend/services/telegramBot.js
 
-const TelegramBot = require('node-telegram-bot-api');
+const TelegramBotPkg = require('node-telegram-bot-api');
+const TelegramBot =
+  TelegramBotPkg.default || TelegramBotPkg.TelegramBot || TelegramBotPkg;
 const crypto = require('crypto');
 const prisma = require('../db');
 
