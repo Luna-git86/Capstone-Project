@@ -1,7 +1,6 @@
 // Backend/routes/ticketRoute.js
 const express = require('express');
 const router = express.Router();
-const ticketController = require('../controllers/ticketController');
 
 const {
   createTicket,
@@ -11,7 +10,6 @@ const {
   getAssignableStaff,
   getSops,
   createOrUpdateSop,
-  getTicketById, // <-- DITAMBAHKAN DI SINI
 } = require('../controllers/ticketController');
 
 const {
@@ -25,7 +23,7 @@ const {
 
 router.use(verifyToken);
 
-// Pilihan dropdown divisi & pelaksana
+// Pilihan dropdown divisi & pelaksana dibuka untuk semua role
 router.get(
   '/options',
   checkRole(['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']),
@@ -51,29 +49,21 @@ router.post(
   createOrUpdateSop
 );
 
-// Buat Laporan / Tugas (Hanya Direktur, Kadiv, Koordinator, dan Staf — Admin Tidak Boleh)
+// Buat Laporan Masalah (Semua kecuali Admin) & Buat Tugas (Koordinator, Kadiv, Direktur)
 router.post(
   '/',
   checkRole(['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']),
   createTicket
 );
 
-// Lihat Daftar Tugas (Semua Role Termasuk Admin)
+// Lihat Daftar Tugas (Semua Role)
 router.get(
   '/',
   checkRole(['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']),
   getTickets
 );
 
-// ---> TAMBAHKAN RUTE DETAIL TUGAS DI SINI <---
-// Lihat Detail Tugas Berdasarkan ID (Semua Role Termasuk Admin)
-router.get(
-  '/:id',
-  checkRole(['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']),
-  getTicketById
-);
-
-// Bagi Tugas / Tunjuk Staf Pelaksana (Khusus Atasan: Direktur, Kadiv, Koordinator)
+// Buat Tugas dari Tiket Masalah / Disposisi (Direktur, Kadiv, Koordinator)
 router.patch(
   '/:id/triage',
   checkRole(['DIREKTUR', 'KADIV', 'KOORDINATOR']),
@@ -86,7 +76,7 @@ router.put(
   triageTicket
 );
 
-// Ubah Status Tugas (Admin Tidak Boleh)
+// Ubah Status Tugas & Evaluasi Foto
 router.patch(
   '/:id/status',
   checkRole(['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']),
