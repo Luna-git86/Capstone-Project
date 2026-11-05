@@ -1,165 +1,70 @@
 // Backend/controllers/authController.js
-const prisma = require('../db');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
+const prisma = require('../db');
 
-const DAFTAR_DIVISI_RSIA = [
-  'Pelayanan Medis',
-  'Penunjang Medis',
-  'Keperawatan & Kebidanan',
-  'Umum & IT',
-  'Administrasi & Keuangan',
-  'HRD & Marketing',
-];
+const JWT_SECRET = process.env.JWT_SECRET || 'rahasia_negara_api_2026';
 
-// Normalisasi Nomor HP (menghapus spasi/strip dan menyeragamkan awalan +62/62 menjadi 08)
-const normalizePhone = (phone = '') => {
-  let cleaned = String(phone).replace(/[\s\-]/g, '');
-  if (cleaned.startsWith('+62')) {
-    cleaned = '0' + cleaned.slice(3);
-  } else if (cleaned.startsWith('62')) {
-    cleaned = '0' + cleaned.slice(2);
-  }
-  return cleaned;
-};
-
-const ensureDivisiSeeded = async () => {
-  const count = await prisma.divisi.count();
-  if (count === 0) {
-    for (const nama of DAFTAR_DIVISI_RSIA) {
-      await prisma.divisi.upsert({
-        where: { nama },
-        update: {},
-        create: { nama },
-      });
-    }
-  }
-};
-
-// 1. Registrasi Akun Baru oleh Admin Sistem (UAT-1.1)
-const register = async (req, res) => {
-  try {
-    await ensureDivisiSeeded();
-
-    const { nama, noHp, email, password, role, divisiId, idDivisi } = req.body;
-
-    if (!nama || !noHp || !password) {
-      return res.status(400).json({ message: 'Nama, Nomor HP, dan password wajib diisi.' });
-    }
-
-    const cleanNoHp = normalizePhone(noHp);
-    const cleanEmail = email && email.trim() !== '' ? email.trim().toLowerCase() : null;
-
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { noHp: cleanNoHp },
-          ...(cleanEmail ? [{ email: cleanEmail }] : []),
-        ],
-      },
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ message: 'Nomor HP atau Email sudah terdaftar di sistem.' });
-    }
-
-    const hashedPassword = await bcrypt.hash(String(password), 10);
-    const parsedDivisiId = divisiId || idDivisi ? Number(divisiId || idDivisi) : null;
-    const assignedRole = role || 'STAF';
-
-    const newUser = await prisma.user.create({
-      data: {
-        nama: nama.trim(),
-        noHp: cleanNoHp,
-        email: cleanEmail,
-        password: hashedPassword,
-        role: assignedRole,
-        divisiId: parsedDivisiId,
-      },
-      include: {
-        divisi: true,
-      },
-    });
-
-    if (req.user && req.user.id) {
-      await prisma.auditLog.create({
-        data: {
-          action: 'CREATE_USER_RBAC',
-          entityType: 'User',
-          entityId: newUser.id,
-          userId: req.user.id,
-          details: `Admin mendaftarkan akun ${newUser.nama} (No HP: ${newUser.noHp}) dengan role ${newUser.role}`,
-        },
-      });
-    }
-
-    return res.status(201).json({
-      message: `Akun ${newUser.nama} (${newUser.noHp}) berhasil didaftarkan!`,
-      user: {
-        id: newUser.id,
-        nama: newUser.nama,
-        noHp: newUser.noHp,
-        email: newUser.email,
-        role: newUser.role,
-        divisi: newUser.divisi,
-      },
-    });
-  } catch (error) {
-    console.error('Error pada register:', error);
-    return res.status(500).json({ message: 'Terjadi kesalahan pada server saat membuat akun.' });
-  }
-};
-
-// 2. Login Pengguna Menggunakan Nomor HP atau Email
+// 1. Login Pengguna (UAT-1.1, UAT-1.5 s/d UAT-1.8, UAT-1.12)
 const login = async (req, res) => {
   try {
     const { noHp, email, identifier, password } = req.body;
-    const rawKey = (noHp || identifier || email || '').trim();
+    const loginId = (noHp || identifier || email || '').trim();
 
-    if (!rawKey || !password) {
-      return res.status(400).json({ message: 'Nomor HP dan password wajib diisi.' });
+    if (!loginId || !password) {
+      return res.status(400).json({
+        message: 'Nomor HP dan kata sandi wajib diisi.',
+      });
     }
-
-    const cleanPhoneKey = normalizePhone(rawKey);
-    const cleanEmailKey = rawKey.toLowerCase();
-    const plus62Key = cleanPhoneKey.startsWith('0') ? '+62' + cleanPhoneKey.slice(1) : cleanPhoneKey;
-    const prefix62Key = cleanPhoneKey.startsWith('0') ? '62' + cleanPhoneKey.slice(1) : cleanPhoneKey;
 
     const user = await prisma.user.findFirst({
       where: {
         OR: [
-          { noHp: rawKey },
-          { noHp: cleanPhoneKey },
-          { noHp: plus62Key },
-          { noHp: prefix62Key },
-          { email: cleanEmailKey },
+          { noHp: loginId },
+          { email: loginId },
         ],
       },
-      include: { divisi: true },
+      include: {
+        divisi: { select: { id: true, nama: true } },
+      },
     });
 
     if (!user) {
-      console.log(`[LOGIN GAGAL] Akun dengan input "${rawKey}" tidak ditemukan di database.`);
       return res.status(401).json({
-        message: 'Nomor HP belum terdaftar. Pastikan akun sudah disimpan di Dashboard Admin.',
+        message: 'Nomor HP atau kata sandi tidak sesuai.',
       });
     }
 
-    const isPasswordValid = await bcrypt.compare(String(password), user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      console.log(`[LOGIN GAGAL] Password salah untuk akun ${user.nama} (${user.noHp}).`);
-      return res.status(401).json({ message: 'Password yang Anda masukkan salah.' });
+      return res.status(401).json({
+        message: 'Nomor HP atau kata sandi tidak sesuai.',
+      });
     }
 
     const token = jwt.sign(
-      { id: user.id, role: user.role, divisiId: user.divisiId },
-      process.env.JWT_SECRET || 'kunci_rahasia_rsia_2026',
+      {
+        id: user.id,
+        nama: user.nama,
+        role: user.role,
+        divisiId: user.divisiId,
+      },
+      JWT_SECRET,
       { expiresIn: '1d' }
     );
 
+    await prisma.auditLog.create({
+      data: {
+        action: 'LOGIN',
+        entityType: 'User',
+        entityId: user.id,
+        userId: user.id,
+        details: `${user.nama} (${user.role}) berhasil masuk ke sistem.`,
+      },
+    });
+
     return res.status(200).json({
-      message: 'Login berhasil',
+      message: 'Login berhasil!',
       token,
       user: {
         id: user.id,
@@ -168,64 +73,88 @@ const login = async (req, res) => {
         email: user.email,
         role: user.role,
         divisiId: user.divisiId,
-        namaDivisi: user.divisi?.nama || null,
-        telegramLinked: Boolean(user.telegramChatId),
+        divisi: user.divisi?.nama || null,
       },
     });
   } catch (error) {
-    console.error('Error pada login:', error);
+    console.error('Error login:', error);
     return res.status(500).json({ message: 'Terjadi kesalahan pada server saat login.' });
   }
 };
 
-// 3. Reset Password Akun oleh Admin Sistem (Recorded in AuditLog)
-const resetPassword = async (req, res) => {
+// 2. Registrasi / Tambah Akun Pegawai Baru oleh Admin (UAT-1.2)
+const register = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { newPassword } = req.body;
+    const { nama, noHp, email, password, role, divisiId } = req.body;
 
-    if (!newPassword || String(newPassword).trim().length < 6) {
-      return res.status(400).json({ message: 'Password baru minimal harus 6 karakter.' });
+    if (!nama || !noHp || !password || !role) {
+      return res.status(400).json({
+        message: 'Nama, Nomor HP, Kata Sandi, dan Jabatan wajib diisi.',
+      });
     }
 
-    const targetUser = await prisma.user.findUnique({
-      where: { id: Number(id) },
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { noHp: noHp.trim() },
+          ...(email ? [{ email: email.trim() }] : []),
+        ],
+      },
     });
 
-    if (!targetUser) {
-      return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+    if (existingUser) {
+      return res.status(400).json({
+        message: 'Nomor HP atau Email sudah terdaftar pada akun lain.',
+      });
     }
 
-    const hashedPassword = await bcrypt.hash(String(newPassword).trim(), 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    await prisma.user.update({
-      where: { id: Number(id) },
-      data: { password: hashedPassword },
+    const newUser = await prisma.user.create({
+      data: {
+        nama: nama.trim(),
+        noHp: noHp.trim(),
+        email: email && email.trim() !== '' ? email.trim() : null,
+        password: hashedPassword,
+        role,
+        divisiId: divisiId ? Number(divisiId) : null,
+      },
+      include: {
+        divisi: { select: { id: true, nama: true } },
+      },
     });
 
-    // Catat tindakan reset password ke AuditLog (UAT-6.1)
-    if (req.user && req.user.id) {
+    if (req.user?.id) {
       await prisma.auditLog.create({
         data: {
-          action: 'RESET_PASSWORD_USER',
+          action: 'CREATE_USER',
           entityType: 'User',
-          entityId: targetUser.id,
-          userId: req.user.id,
-          details: `Admin mereset password untuk akun ${targetUser.nama} (${targetUser.noHp})`,
+          entityId: newUser.id,
+          userId: Number(req.user.id),
+          details: `Admin mendaftarkan akun baru: ${newUser.nama} sebagai ${newUser.role} (${newUser.divisi?.nama || 'Lintas Divisi'})`,
         },
       });
     }
 
-    return res.status(200).json({
-      message: `Password untuk ${targetUser.nama} (${targetUser.noHp}) berhasil direset!`,
+    return res.status(201).json({
+      message: `Akun ${newUser.nama} (${newUser.role}) berhasil ditambahkan!`,
+      data: {
+        id: newUser.id,
+        nama: newUser.nama,
+        noHp: newUser.noHp,
+        email: newUser.email,
+        role: newUser.role,
+        divisiId: newUser.divisiId,
+        divisi: newUser.divisi,
+      },
     });
   } catch (error) {
-    console.error('Error saat reset password:', error);
-    return res.status(500).json({ message: 'Gagal mereset password pengguna.' });
+    console.error('Error register:', error);
+    return res.status(500).json({ message: 'Gagal mendaftarkan akun baru.' });
   }
 };
 
-// 4. Ambil Daftar Semua Akun untuk Tabel Matriks RBAC Admin
+// 3. Ambil Semua Daftar Akun Pegawai (Khusus Admin)
 const getUsers = async (req, res) => {
   try {
     const users = await prisma.user.findMany({
@@ -236,193 +165,154 @@ const getUsers = async (req, res) => {
         email: true,
         role: true,
         divisiId: true,
-        divisi: {
-          select: { id: true, nama: true },
-        },
+        divisi: { select: { id: true, nama: true } },
         createdAt: true,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { id: 'asc' },
     });
-
     return res.status(200).json({ data: users });
   } catch (error) {
-    console.error('Error mengambil daftar user:', error);
-    return res.status(500).json({ message: 'Gagal mengambil data pengguna.' });
+    console.error('Error getUsers:', error);
+    return res.status(500).json({ message: 'Gagal mengambil daftar akun pegawai.' });
   }
 };
 
-// 5. Ambil Daftar Semua Divisi
+// 4. Reset Kata Sandi Pegawai oleh Admin (UAT-1.3)
+const resetPassword = async (req, res) => {
+  try {
+    const targetUserId = Number(req.params.id);
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.trim().length < 6) {
+      return res.status(400).json({
+        message: 'Kata sandi baru minimal harus 6 karakter.',
+      });
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ message: 'Akun pegawai tidak ditemukan.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
+
+    await prisma.user.update({
+      where: { id: targetUserId },
+      data: { password: hashedPassword },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'RESET_PASSWORD',
+        entityType: 'User',
+        entityId: targetUser.id,
+        userId: Number(req.user.id),
+        details: `Admin mengatur ulang kata sandi untuk akun ${targetUser.nama} (${targetUser.role})`,
+      },
+    });
+
+    return res.status(200).json({
+      message: `Kata sandi untuk ${targetUser.nama} berhasil diperbarui!`,
+    });
+  } catch (error) {
+    console.error('Error resetPassword:', error);
+    return res.status(500).json({ message: 'Gagal mengatur ulang kata sandi.' });
+  }
+};
+
+// 5. Hapus Akun Pegawai dengan Proteksi Akun Admin Aktif (UAT-1.4)
+const deleteUser = async (req, res) => {
+  try {
+    const targetUserId = Number(req.params.id);
+    const currentAdminId = Number(req.user.id);
+
+    // Proteksi UAT-1.4: Admin dilarang menghapus akunnya sendiri yang sedang aktif
+    if (targetUserId === currentAdminId) {
+      return res.status(400).json({
+        message: 'Keamanan Sistem: Anda tidak dapat menghapus akun Admin yang sedang aktif digunakan!',
+      });
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ message: 'Akun pegawai tidak ditemukan.' });
+    }
+
+    if (targetUser.role === 'ADMIN') {
+      return res.status(400).json({
+        message: 'Keamanan Sistem: Akun dengan jabatan Admin Sistem utama dikunci dan tidak dapat dihapus.',
+      });
+    }
+
+    await prisma.user.delete({
+      where: { id: targetUserId },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'DELETE_USER',
+        entityType: 'User',
+        entityId: targetUserId,
+        userId: currentAdminId,
+        details: `Admin menghapus akun pegawai ${targetUser.nama} (${targetUser.role})`,
+      },
+    });
+
+    return res.status(200).json({
+      message: `Akun pegawai ${targetUser.nama} berhasil dihapus.`,
+    });
+  } catch (error) {
+    console.error('Error deleteUser:', error);
+    return res.status(400).json({
+      message: 'Akun ini tidak dapat dihapus karena masih tercatat pada riwayat tiket/tugas.',
+    });
+  }
+};
+
+// 6. Ambil Daftar Divisi
 const getDivisi = async (req, res) => {
   try {
-    await ensureDivisiSeeded();
     const divisi = await prisma.divisi.findMany({
       orderBy: { id: 'asc' },
     });
     return res.status(200).json({ data: divisi });
   } catch (error) {
-    console.error('Error mengambil daftar divisi:', error);
+    console.error('Error getDivisi:', error);
     return res.status(500).json({ message: 'Gagal mengambil daftar divisi.' });
   }
 };
 
-const createTelegramLink = async (req, res) => {
+// 7. Ambil Rekam Jejak Keamanan / Immutable Audit Trail (UAT-6.8)
+const getAuditLogs = async (req, res) => {
   try {
-    const botUsername = process.env.TELEGRAM_BOT_USERNAME;
-
-    if (!botUsername) {
-      return res.status(500).json({
-        message: 'TELEGRAM_BOT_USERNAME belum dikonfigurasi.',
-      });
-    }
-
-    const userId = Number(req.user?.id);
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({
-        message: 'Identitas pengguna tidak valid.',
-      });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        telegramChatId: true,
+    const logs = await prisma.auditLog.findMany({
+      include: {
+        user: {
+          select: { id: true, nama: true, role: true },
+        },
       },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
     });
-
-    if (!user) {
-      return res.status(404).json({
-        message: 'Pengguna tidak ditemukan.',
-      });
-    }
-
-    if (user.telegramChatId) {
-      return res.status(409).json({
-        message: 'Akun Telegram pengguna sudah terhubung.',
-      });
-    }
-
-    // Token acak 64 karakter, sesuai batas payload Telegram
-    const rawToken = crypto.randomBytes(32).toString('hex');
-
-    // Simpan hash token, bukan token aslinya
-    const tokenHash = crypto
-      .createHash('sha256')
-      .update(rawToken)
-      .digest('hex');
-
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-    // Hapus token lama yang belum digunakan, lalu buat token baru
-    await prisma.$transaction([
-      prisma.telegramLinkToken.deleteMany({
-        where: {
-          userId,
-          usedAt: null,
-        },
-      }),
-
-      prisma.telegramLinkToken.create({
-        data: {
-          tokenHash,
-          userId,
-          expiresAt,
-        },
-      }),
-    ]);
-
-    const cleanUsername = botUsername.replace(/^@/, '');
-
-    return res.status(200).json({
-      message: 'Tautan penghubung Telegram berhasil dibuat.',
-      link: `https://t.me/${cleanUsername}?start=${rawToken}`,
-      expiresIn: 600,
-    });
+    return res.status(200).json({ data: logs });
   } catch (error) {
-    console.error('Gagal membuat tautan Telegram:', error);
-
-    return res.status(500).json({
-      message: 'Gagal membuat tautan penghubung Telegram.',
-    });
-  }
-};
-
-const getTelegramStatus = async (req, res) => {
-  try {
-    const userId = Number(req.user?.id);
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({ message: 'Identitas pengguna tidak valid.' });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { telegramChatId: true },
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
-    }
-
-    return res.status(200).json({
-      linked: Boolean(user.telegramChatId),
-    });
-  } catch (error) {
-    console.error('Gagal membaca status Telegram:', error);
-    return res.status(500).json({ message: 'Gagal membaca status Telegram.' });
-  }
-};
-
-const unlinkTelegram = async (req, res) => {
-  try {
-    const userId = Number(req.user?.id);
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({ message: 'Identitas pengguna tidak valid.' });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, telegramChatId: true },
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
-    }
-
-    if (!user.telegramChatId) {
-      return res.status(200).json({
-        message: 'Akun ini belum terhubung ke Telegram.',
-        linked: false,
-      });
-    }
-
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: userId },
-        data: { telegramChatId: null },
-      }),
-      prisma.telegramLinkToken.deleteMany({
-        where: { userId },
-      }),
-    ]);
-
-    return res.status(200).json({
-      message: 'Telegram berhasil diputus dari akun ini. Nomor/akun Telegram itu bisa dihubungkan ke akun lain.',
-      linked: false,
-    });
-  } catch (error) {
-    console.error('Gagal memutus tautan Telegram:', error);
-    return res.status(500).json({ message: 'Gagal memutus tautan Telegram.' });
+    console.error('Error getAuditLogs:', error);
+    return res.status(500).json({ message: 'Gagal mengambil data Audit Trail.' });
   }
 };
 
 module.exports = {
-  register,
   login,
-  resetPassword,
+  register,
   getUsers,
+  resetPassword,
+  deleteUser,
   getDivisi,
-  createTelegramLink,
-  getTelegramStatus,
-  unlinkTelegram,
+  getAuditLogs,
 };
