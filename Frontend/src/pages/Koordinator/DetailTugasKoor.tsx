@@ -140,7 +140,7 @@ export default function PemrosesanInstruksi() {
                            }}
                          >
                            {/* Opsi Eksekutor Diri Sendiri (Hibrida) */}
-                           <option value="Saya Sendiri (Koordinator)" className="font-bold text-indigo-700">➡️ Kerjakan Sendiri (Koordinator)</option>
+                           <option value="Saya Sendiri (Koordinator)" className="font-bold text-indigo-700">Kerjakan Sendiri (Koordinator)</option>
                            <optgroup label="Delegasi ke Tim Teknisi">
                              <option value="Muhammad Hafidz (Teknisi Listrik)">Muhammad Hafidz (Teknisi Listrik)</option>
                              <option value="Budi Santoso (Teknisi AC)">Budi Santoso (Teknisi AC)</option>

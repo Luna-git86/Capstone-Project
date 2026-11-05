@@ -5,24 +5,24 @@ const JWT_SECRET =
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
+  let token = null;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (req.query && req.query.token) {
+    // Mendukung token via query string khusus untuk direct file download (PDF/Excel)
+    token = req.query.token;
+  }
 
   console.log('[AUTH DEBUG]', {
     path: req.originalUrl,
-    hasAuthorization: Boolean(authHeader),
-    startsWithBearer: authHeader?.startsWith('Bearer '),
+    hasToken: Boolean(token),
+    source: authHeader ? 'bearer_header' : req.query?.token ? 'query_param' : 'none',
   });
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({
-      message: 'Akses ditolak. Token tidak ditemukan.',
-    });
-  }
-
-  const token = authHeader.split(' ')[1];
 
   if (!token || token === 'null' || token === 'undefined') {
     return res.status(401).json({
-      message: 'Akses ditolak. Format token kosong.',
+      message: 'Akses ditolak. Token tidak ditemukan.',
     });
   }
 

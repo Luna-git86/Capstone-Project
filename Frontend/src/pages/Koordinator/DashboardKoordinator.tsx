@@ -1,3 +1,4 @@
+import { getAuthUserName, getAuthRole, getAuthDivisiNama } from '../../utils/authStorage';
 // Frontend/src/pages/Koordinator/DashboardKoordinator.tsx
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -18,7 +19,9 @@ const DashboardKoordinator: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
 
-  const userName = localStorage.getItem('userName') || 'Koordinator Unit';
+  const userName = getAuthUserName('Koordinator Unit');
+  const userRole = getAuthRole();
+  const userDivisi = getAuthDivisiNama();
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -49,7 +52,7 @@ const DashboardKoordinator: React.FC = () => {
             Ringkasan Dashboard Koordinator
           </h1>
           <p className="text-sm text-slate-500">
-            Selamat bertugas, <span className="font-semibold text-slate-700">{userName}</span>
+            Selamat bertugas, <span className="font-semibold text-slate-700">{userName}</span> ({userRole} • Divisi: <span className="font-semibold text-slate-700">{userDivisi}</span>)
           </p>
         </div>
 

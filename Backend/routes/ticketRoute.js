@@ -10,7 +10,7 @@ const {
   getAssignableStaff,
   getSops,
   createOrUpdateSop,
-  getTicketById, // <-- 1. TAMBAHKAN IMPOR INI
+  getTicketById,
 } = require('../controllers/ticketController');
 
 const {
@@ -64,7 +64,7 @@ router.get(
   getTickets
 );
 
-// <-- 2. TAMBAHKAN RUTE GET DETAIL TUGAS BERDASARKAN ID DI SINI -->
+// Lihat Detail Tugas Berdasarkan ID (Semua Role Termasuk Admin)
 router.get(
   '/:id',
   checkRole(['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']),

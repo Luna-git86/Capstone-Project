@@ -122,7 +122,7 @@ const LaporkanMasalah: React.FC = () => {
       {createdTicket && (
         <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-3">
           <h3 className="text-sm font-bold text-emerald-900">
-            ✅ Tiket Masalah #T-{String(createdTicket.id).padStart(3, '0')} Berhasil Diajukan!
+            Tiket Masalah #T-{String(createdTicket.id).padStart(3, '0')} Berhasil Diajukan!
           </h3>
           <p className="text-xs text-emerald-800">
             Tiket Anda telah masuk ke bagian <strong>{createdTicket.divisi?.nama}</strong> dengan status <strong>Menunggu Dibuatkan Tugas</strong> oleh Koordinator/Kepala Divisi.
