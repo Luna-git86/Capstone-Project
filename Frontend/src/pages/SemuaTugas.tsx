@@ -1,6 +1,6 @@
 // Frontend/src/pages/SemuaTugas.tsx
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 interface Ticket {
@@ -70,9 +70,9 @@ const SemuaTugas: React.FC = () => {
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
   const [staffList, setStaffList] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('SEMUA_AKTIF');
+  const [filterStatus, setFilterStatus] = useState('SEMUA');
 
-  // 1. Modal Buat Tugas dari Tiket Masalah
+  // 1. Modal Buat Tugas dari Tiket Masalah (UAT-3.3 & UAT-3.4)
   const [selectedTriage, setSelectedTriage] = useState<Ticket | null>(null);
   const [triageForm, setTriageForm] = useState({
     divisiId: '',
@@ -82,17 +82,17 @@ const SemuaTugas: React.FC = () => {
     catatanRevisi: '',
   });
 
-  // 2. Modal Lapor Selesai + Upload Foto Bukti (Staf)
+  // 2. Modal Lapor Selesai + Upload Foto Bukti oleh Staf (UAT-4.3 & UAT-4.4)
   const [reportTarget, setReportTarget] = useState<Ticket | null>(null);
   const [reportText, setReportText] = useState('');
   const [reportPhoto, setReportPhoto] = useState<string>('');
   const [submittingReport, setSubmittingReport] = useState(false);
 
-  // 3. Modal Evaluasi Foto & Laporan (Koordinator / Kadiv / Direktur)
+  // 3. Modal Evaluasi Foto & Laporan oleh Atasan (UAT-5.1 s/d UAT-5.7)
   const [evalTarget, setEvalTarget] = useState<Ticket | null>(null);
   const [evalNote, setEvalNote] = useState('');
 
-  // 4. Modal Lapor Kendala Biaya / Alat (Staf)
+  // 4. Modal Lapor Kendala Biaya / Alat oleh Staf (UAT-4.2)
   const [escalateTarget, setEscalateTarget] = useState<Ticket | null>(null);
   const [escalateNote, setEscalateNote] = useState('');
 
@@ -100,7 +100,6 @@ const SemuaTugas: React.FC = () => {
   const isAdmin = userRole === 'ADMIN';
   const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(userRole);
 
-  // Pemanggilan API dipisahkan agar tabel tugas TIDAK PERNAH gagal tampil jika endpoint pendukung gagal
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -163,6 +162,11 @@ const SemuaTugas: React.FC = () => {
     e.preventDefault();
     if (!selectedTriage) return;
 
+    if (!triageForm.deadline) {
+      alert('Silakan isi tanggal dan jam batas waktu pengerjaan terlebih dahulu.');
+      return;
+    }
+
     try {
       await api.put(`/tickets/${selectedTriage.id}/triage`, {
         divisiId: triageForm.divisiId ? Number(triageForm.divisiId) : null,
@@ -194,7 +198,7 @@ const SemuaTugas: React.FC = () => {
     e.preventDefault();
     if (!reportTarget) return;
     if (!reportPhoto) {
-      alert('Silakan pilih foto bukti penyelesaian tugas terlebih dahulu.');
+      alert('Wajib mengunggah foto bukti hasil pekerjaan terlebih dahulu!');
       return;
     }
 
@@ -230,9 +234,6 @@ const SemuaTugas: React.FC = () => {
       });
       setEvalTarget(null);
       setEvalNote('');
-      if (decision === 'SELESAI') {
-        alert('Tugas disetujui selesai dan telah dipindahkan ke menu Riwayat Selesai!');
-      }
       fetchData();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Gagal menyimpan hasil evaluasi.');
@@ -279,8 +280,8 @@ const SemuaTugas: React.FC = () => {
         };
       case 'SELESAI':
         return {
-          label: 'Selesai (Di Riwayat)',
-          cls: 'bg-emerald-100 text-emerald-700',
+          label: 'Selesai (Tervalidasi)',
+          cls: 'bg-emerald-100 text-emerald-700 border border-emerald-300',
         };
       default:
         return { label: status, cls: 'bg-slate-100 text-slate-700' };
@@ -303,18 +304,14 @@ const SemuaTugas: React.FC = () => {
     return `https://wa.me/${wa}?text=${msg}`;
   };
 
-  // Filter daftar tiket sesuai pilihan dropdown
   const filteredTickets = tickets.filter((t) => {
+    if (filterStatus === 'SEMUA') return true;
     if (filterStatus === 'SEMUA_AKTIF') {
       return t.status !== 'SELESAI' && t.status !== 'DITOLAK';
-    }
-    if (filterStatus === 'SEMUA_TERMASUK_SELESAI') {
-      return true;
     }
     return t.status === filterStatus;
   });
 
-  // Daftar staf untuk modal: utamakan staf di divisi tersebut, jika kosong tampilkan semua staf agar tidak macet
   const matchingStaff = staffList.filter(
     (s) => !triageForm.divisiId || String(s.divisiId) === String(triageForm.divisiId)
   );
@@ -325,14 +322,12 @@ const SemuaTugas: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
-            Daftar Tugas & Tiket Masalah
+            Semua Tugas & Tiket Masalah
           </h1>
           <p className="text-sm text-slate-500">
-            Menampilkan tiket masalah dan tugas yang berjalan. Tugas yang sudah selesai juga tersimpan di{' '}
-            <Link to="/riwayat" className="text-blue-600 font-semibold hover:underline">
-              Riwayat Selesai
-            </Link>
-            .
+            {isAdmin
+              ? 'Mode Pantau Admin (Read-Only) — Memantau seluruh daftar tiket, batas waktu pengerjaan, dan bukti foto penyelesaian.'
+              : 'Kelola tiket masalah menjadi tugas, laporkan penyelesaian dengan bukti foto, dan evaluasi hasil kerja.'}
           </p>
         </div>
 
@@ -341,14 +336,15 @@ const SemuaTugas: React.FC = () => {
           onChange={(e) => setFilterStatus(e.target.value)}
           className="px-3.5 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700"
         >
+          <option value="SEMUA">Semua Tiket & Tugas ({tickets.length})</option>
           <option value="SEMUA_AKTIF">
-            Tugas Aktif ({tickets.filter((t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK').length})
+            Hanya Tugas Aktif ({tickets.filter((t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK').length})
           </option>
           <option value="MENUNGGU_TRIASE">Tiket Masalah (Belum Dibuatkan Tugas)</option>
           <option value="DIPROSES">Sedang Dikerjakan</option>
           <option value="MENUNGGU_VALIDASI">Menunggu Evaluasi Foto</option>
           <option value="HOLD_ESKALASI">Tertahan (Kendala Biaya/Alat)</option>
-          <option value="SEMUA_TERMASUK_SELESAI">Tampilkan Semua (Termasuk Selesai) ({tickets.length})</option>
+          <option value="SELESAI">Selesai (Tervalidasi)</option>
         </select>
       </div>
 
@@ -373,7 +369,7 @@ const SemuaTugas: React.FC = () => {
             ) : filteredTickets.length === 0 ? (
               <tr>
                 <td colSpan={isAdmin ? 4 : 5} className="py-8 text-center text-slate-400">
-                  Belum ada tugas aktif pada filter ini. Pilih "Tampilkan Semua" di pojok kanan atas atau cek menu Riwayat Selesai.
+                  Belum ada data tiket atau tugas pada filter ini.
                 </td>
               </tr>
             ) : (
@@ -802,7 +798,7 @@ const SemuaTugas: React.FC = () => {
               </p>
             </div>
 
-            {isAtasan && (
+            {isAtasan && evalTarget.status !== 'SELESAI' && (
               <div className="space-y-3 pt-2 border-t border-slate-200">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
@@ -837,13 +833,13 @@ const SemuaTugas: React.FC = () => {
                     onClick={() => handleEvaluationDecision('SELESAI')}
                     className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
                   >
-                    ✅ Setujui & Pindahkan ke Riwayat
+                    ✅ Setujui & Nyatakan Selesai
                   </button>
                 </div>
               </div>
             )}
 
-            {!isAtasan && (
+            {(!isAtasan || evalTarget.status === 'SELESAI') && (
               <div className="flex justify-end">
                 <button
                   type="button"

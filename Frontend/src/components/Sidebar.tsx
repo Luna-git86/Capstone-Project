@@ -46,22 +46,17 @@ const Sidebar: React.FC = () => {
       allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
     },
     {
-      title: 'Daftar Tugas',
+      title: 'Semua Tugas',
       path: '/semua-tugas',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
-    // {
-    //   title: 'Riwayat Selesai',
-    //   path: '/riwayat',
-    //   allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
-    // },
     {
       title: 'Panduan SOP',
       path: '/dokumen-sop',
       allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
     {
-      title: 'Laporan Kinerja',
+      title: 'Laporan SLA',
       path: '/laporan-sla',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR'],
     },
