@@ -30,22 +30,17 @@ const getTicketOptions = async (req, res) => {
     }
 
     // 2. Tentukan target role pelaksana sesuai aturan hierarki:
-    // - DIREKTUR -> KADIV atau KOORDINATOR
+    // - DIREKTUR -> KADIV
     // - KADIV -> KOORDINATOR
     // - KOORDINATOR -> STAF
     // - Lainnya / Default -> STAF
     let allowedRoles = ['STAF'];
-    if (callerRole === 'KADIV') {
+    if (callerRole === 'DIREKTUR') {
+      allowedRoles = ['KADIV'];
+    } else if (callerRole === 'KADIV') {
       allowedRoles = ['KOORDINATOR'];
     } else if (callerRole === 'KOORDINATOR') {
       allowedRoles = ['STAF'];
-    } else if (callerRole === 'DIREKTUR') {
-      const requestedRole = req.query.targetRole || req.query.role;
-      if (requestedRole && ['KADIV', 'KOORDINATOR'].includes(requestedRole)) {
-        allowedRoles = [requestedRole];
-      } else {
-        allowedRoles = ['KADIV', 'KOORDINATOR'];
-      }
     }
 
     const wherePelaksana = {

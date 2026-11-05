@@ -1,3 +1,4 @@
+import { getAuthRole } from '../utils/authStorage';
 // Frontend/src/pages/DokumenSop.tsx
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
@@ -37,7 +38,7 @@ const DokumenSop: React.FC = () => {
   const [message, setMessage] = useState<string>('');
   const [error, setError] = useState<string>('');
 
-  const userRole = localStorage.getItem('userRole') || 'STAF';
+  const userRole = getAuthRole() || 'STAF';
   const canManageSop = ['DIREKTUR', 'KADIV'].includes(userRole);
 
   const fetchData = async () => {

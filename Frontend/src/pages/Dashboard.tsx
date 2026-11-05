@@ -1,3 +1,4 @@
+import { getAuthUserName, getAuthRole, getAuthDivisiNama } from '../utils/authStorage';
 // Frontend/src/pages/Dashboard.tsx
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
@@ -20,8 +21,9 @@ const Dashboard: React.FC = () => {
   const [selectedDivisi, setSelectedDivisi] = useState<string>('SEMUA');
   const [loading, setLoading] = useState<boolean>(true);
 
-  const userName = localStorage.getItem('userName') || 'Eksekutif';
-  const userRole = localStorage.getItem('userRole') || 'DIREKTUR';
+  const userName = getAuthUserName('Eksekutif');
+  const userRole = getAuthRole() || 'DIREKTUR';
+  const userDivisi = getAuthDivisiNama();
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -81,7 +83,7 @@ const Dashboard: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Dashboard Eksekutif</h1>
           <p className="text-sm text-slate-500">
-            Selamat datang, <span className="font-semibold text-slate-700">{userName}</span> ({userRole})
+            Selamat datang, <span className="font-semibold text-slate-700">{userName}</span> ({userRole} • <span className="font-semibold text-slate-700">{userDivisi}</span>)
           </p>
         </div>
 

@@ -152,8 +152,14 @@ function startTelegramBot() {
     }
   });
 
+  let lastPollingErrorLogTime = 0;
   bot.on('polling_error', (error) => {
-    console.error('[Telegram] Polling error:', error.message);
+    const now = Date.now();
+    // Hanya log peringatan sekali setiap 60 detik agar tidak membanjiri terminal saat offline / DNS belum terhubung
+    if (now - lastPollingErrorLogTime > 60000) {
+      lastPollingErrorLogTime = now;
+      console.warn(`[Telegram] Peringatan koneksi Telegram (${error.code || 'POLLING_ERROR'}): ${error.message}. Server tetap beroperasi normal.`);
+    }
   });
 
   console.log('[Telegram] Bot berhasil dimulai.');

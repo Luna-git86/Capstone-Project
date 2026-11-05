@@ -44,7 +44,7 @@ function planTicketNotificationEvents({ previous, current, actor }, options = {}
     events.push({
       type: prevAssignee
         ? EVENT_TASK_REASSIGNED
-        : (actor?.role === 'KADIV' ? EVENT_DIRECTIVE_ASSIGNED : EVENT_TASK_ASSIGNED),
+        : (['KADIV', 'DIREKTUR'].includes(actor?.role) ? EVENT_DIRECTIVE_ASSIGNED : EVENT_TASK_ASSIGNED),
       recipientId: nextAssignee,
       occurrenceToken: `from:${prevAssignee || 'none'}:to:${nextAssignee}`,
     });
@@ -99,7 +99,7 @@ function planTicketNotificationEvents({ previous, current, actor }, options = {}
 
 function buildNotificationMessage({ type, ticket, actor, timeZone }) {
   const headings = {
-    [EVENT_DIRECTIVE_ASSIGNED]: '[NOTIFIKASI ARAHAN DIVISI]',
+    [EVENT_DIRECTIVE_ASSIGNED]: actor?.role === 'DIREKTUR' ? '[NOTIFIKASI ARAHAN DIREKSI]' : '[NOTIFIKASI ARAHAN DIVISI]',
     [EVENT_TASK_ASSIGNED]: '[NOTIFIKASI TUGAS BARU]',
     [EVENT_TASK_REASSIGNED]: '[NOTIFIKASI PENUGASAN ULANG]',
     [EVENT_TASK_SUBMITTED]: '[NOTIFIKASI PEKERJAAN DIKIRIM]',
@@ -111,7 +111,9 @@ function buildNotificationMessage({ type, ticket, actor, timeZone }) {
   };
 
   const footers = {
-    [EVENT_DIRECTIVE_ASSIGNED]: 'Kepala Divisi telah menerbitkan arahan. Silakan buat tiket operasional untuk Staf.',
+    [EVENT_DIRECTIVE_ASSIGNED]: actor?.role === 'DIREKTUR'
+      ? 'Direktur telah menerbitkan arahan direksi. Silakan tindak lanjuti bersama unit kerja Anda.'
+      : 'Kepala Divisi telah menerbitkan arahan. Silakan buat tiket operasional untuk Staf.',
     [EVENT_TASK_ASSIGNED]: 'Silakan buka aplikasi untuk melihat detail dan mengerjakan tugas.',
     [EVENT_TASK_REASSIGNED]: 'Tugas ini dialihkan kepada Anda. Silakan buka aplikasi untuk mengerjakannya.',
     [EVENT_TASK_SUBMITTED]: 'Pekerjaan telah dikirim untuk pemeriksaan. Silakan buka aplikasi untuk meninjau.',
@@ -146,7 +148,7 @@ function buildNotificationMessage({ type, ticket, actor, timeZone }) {
 }
 
 async function dispatchTicketNotifications({ previous, current, actor }, deps = {}) {
-  const planned = planTicketNotificationEvents({ previous, current });
+  const planned = planTicketNotificationEvents({ previous, current, actor }, deps);
   const notifyTicketEvent =
     deps.notifyTicketEvent || require('./telegramService').notifyTicketEvent;
   const timeZone = deps.timeZone || getTimeZone();

@@ -1,9 +1,13 @@
 // Frontend/src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { getAuthToken, getAuthRole } from './utils/authStorage';
 import Layout from './components/Layout';
 
 import DashboardAdmin from './pages/DashboardAdmin';
+import MonitoringNotifikasi from './pages/Admin/MonitoringNotifikasi';
+import PengaturanAdmin from './pages/Admin/PengaturanAdmin';
 import SemuaTugas from './pages/SemuaTugas';
+import SemuaTugasLengkap from './pages/SemuaTugasLengkap';
 import TambahTugas from './pages/TambahTugas';
 import LaporkanMasalah from './pages/LaporkanMasalah';
 import DokumenSOP from './pages/DokumenSop';
@@ -13,6 +17,7 @@ import Login from './pages/Login';
 import LaporanSLA from './pages/LaporanSLA';
 import Dashboard from './pages/Dashboard';
 import DetailTugas from './pages/DetailTugas';
+import DetailTugasList from './pages/DetailTugasList';
 
 // Rute import Staff
 import DashboardStaff from './pages/Staf/DashboardStaff';
@@ -48,7 +53,7 @@ export const getDashboardByRole = (role: string | null) => {
 
 // 1. Komponen Penjaga Login (Wajib punya Token)
 const ProtectedRoute = () => {
-  const token = localStorage.getItem('token');
+  const token = getAuthToken();
   if (!token) {
     return <Navigate to="/login" replace />;
   }
@@ -57,8 +62,8 @@ const ProtectedRoute = () => {
 
 // 2. Komponen Penjaga Role (RBAC)
 const RoleProtectedRoute = ({ allowedRoles }: { allowedRoles: string[] }) => {
-  const token = localStorage.getItem('token');
-  const role = localStorage.getItem('userRole');
+  const token = getAuthToken();
+  const role = getAuthRole();
 
   if (!token || !role) {
     return <Navigate to="/login" replace />;
@@ -89,6 +94,8 @@ function App() {
             {/* 1. Kelola Akun Pegawai (Khusus Admin) */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN']} />}>
               <Route path="/dashboard-admin" element={<DashboardAdmin />} />
+              <Route path="/monitoring-notifikasi" element={<MonitoringNotifikasi />} />
+              <Route path="/pengaturan-admin" element={<PengaturanAdmin />} />
             </Route>
 
             {/* 2. Beranda Eksekutif & Analitik (Khusus Direktur) */}
@@ -137,7 +144,9 @@ function App() {
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
               <Route path="/semua-tugas" element={<SemuaTugas />} />
               <Route path="/semua-tugas-staff" element={<SemuaTugas />} />
+              <Route path="/daftar-semua-tugas" element={<SemuaTugasLengkap />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
+              <Route path="/detail-tugas" element={<DetailTugasList />} />
               <Route path="/dokumen-sop" element={<DokumenSOP />} />
               <Route path="/detail-tugas/:id" element={<DetailTugas />} />
 

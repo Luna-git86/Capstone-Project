@@ -123,12 +123,16 @@ const login = async (req, res) => {
 
     const cleanPhoneKey = normalizePhone(rawKey);
     const cleanEmailKey = rawKey.toLowerCase();
+    const plus62Key = cleanPhoneKey.startsWith('0') ? '+62' + cleanPhoneKey.slice(1) : cleanPhoneKey;
+    const prefix62Key = cleanPhoneKey.startsWith('0') ? '62' + cleanPhoneKey.slice(1) : cleanPhoneKey;
 
     const user = await prisma.user.findFirst({
       where: {
         OR: [
           { noHp: rawKey },
           { noHp: cleanPhoneKey },
+          { noHp: plus62Key },
+          { noHp: prefix62Key },
           { email: cleanEmailKey },
         ],
       },

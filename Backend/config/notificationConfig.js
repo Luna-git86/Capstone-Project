@@ -1,22 +1,20 @@
-function positiveNumber(value, fallback) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
+// Backend/config/notificationConfig.js
+const systemConfigStore = require('./systemConfigStore');
 
 const DEFAULT_CRON_SCHEDULE = '*/15 * * * *';
 const DEFAULT_REMINDER_HOURS = 24;
 const DEFAULT_TIME_ZONE = 'Asia/Makassar';
 
 function getReminderHours() {
-  return positiveNumber(process.env.SLA_REMINDER_HOURS, DEFAULT_REMINDER_HOURS);
+  return systemConfigStore.getReminderHours();
 }
 
 function getTimeZone() {
-  return process.env.SLA_TIME_ZONE || DEFAULT_TIME_ZONE;
+  return systemConfigStore.getTimeZone();
 }
 
 function getCronExpression() {
-  return process.env.SLA_CRON_SCHEDULE || DEFAULT_CRON_SCHEDULE;
+  return systemConfigStore.getCronExpression();
 }
 
 const DEFAULT_ENABLED_TYPES = {
@@ -32,11 +30,12 @@ const DEFAULT_ENABLED_TYPES = {
 };
 
 function isNotificationTypeEnabled(type) {
+  // Jika ada env eksplisit yang menonaktifkan, hormati env
   const envKey = `NOTIFY_${String(type || '').toUpperCase()}_ENABLED`;
   const raw = process.env[envKey];
   if (raw === '0' || String(raw).toLowerCase() === 'false') return false;
-  if (raw === '1' || String(raw).toLowerCase() === 'true') return true;
-  return DEFAULT_ENABLED_TYPES[type] !== false;
+
+  return systemConfigStore.isNotificationTypeEnabled(type);
 }
 
 module.exports = {

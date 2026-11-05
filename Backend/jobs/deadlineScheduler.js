@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { getCronExpression, getTimeZone } = require('../config/notificationConfig');
 const { checkDeadlines } = require('../services/deadlineCheckService');
+const { retryFailedNotifications } = require('../services/telegramService');
 
 const TASK_NAME = 'ticket-deadline-check';
 
@@ -15,6 +16,13 @@ async function runCycle(runCheck) {
     await runCheck();
   } catch (error) {
     console.error('[Deadline Cron] Error siklus tidak menghentikan jadwal berikutnya:', error.message);
+  }
+
+  // Modul 5: Coba ulang notifikasi Telegram yang sempat gagal (attempts < 3)
+  try {
+    await retryFailedNotifications();
+  } catch (retryError) {
+    console.error('[Notification Retry] Error siklus retry gagal:', retryError.message);
   }
 }
 

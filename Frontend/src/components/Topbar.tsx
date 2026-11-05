@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
+import { getAuthRole, getAuthUserName, getAuthDivisiNama, isTelegramLinked } from '../utils/authStorage';
 
 const Topbar: React.FC = () => {
-  const userName = localStorage.getItem('userName') || 'Pengguna RSIA';
-  const userRole = localStorage.getItem('userRole') || 'STAF';
+  const userName = getAuthUserName('Pengguna RSIA');
+  const userRole = getAuthRole() || 'STAF';
+  const userDivisi = getAuthDivisiNama();
   const [telegramLinked, setTelegramLinked] = useState(
-    localStorage.getItem('telegramLinked') === '1'
+    isTelegramLinked()
   );
   const [linking, setLinking] = useState(false);
   const [linkMessage, setLinkMessage] = useState('');
@@ -31,7 +33,7 @@ const Topbar: React.FC = () => {
       const response = await api.get('/auth/telegram/status');
       const linked = Boolean(response.data?.linked);
       setTelegramLinked(linked);
-      localStorage.setItem('telegramLinked', linked ? '1' : '0');
+      sessionStorage.setItem('telegramLinked', linked ? '1' : '0');
       if (linked) {
         setLinkMessage('Telegram sudah terhubung dengan akun ini.');
       }
@@ -55,7 +57,7 @@ const Topbar: React.FC = () => {
     try {
       await api.delete('/auth/telegram/link');
       setTelegramLinked(false);
-      localStorage.setItem('telegramLinked', '0');
+      sessionStorage.setItem('telegramLinked', '0');
       setLinkMessage('Telegram sudah diputus. Login sebagai Staf, lalu klik Hubungkan Telegram.');
     } catch (error: any) {
       setLinkMessage(error.response?.data?.message || 'Gagal memutus tautan Telegram.');
@@ -81,7 +83,7 @@ const Topbar: React.FC = () => {
       const message = error.response?.data?.message;
       if (status === 409) {
         setTelegramLinked(true);
-        localStorage.setItem('telegramLinked', '1');
+        sessionStorage.setItem('telegramLinked', '1');
         setLinkMessage('Akun ini sudah terhubung ke Telegram.');
       } else {
         setLinkMessage(message || 'Gagal membuat tautan Telegram. Pastikan backend dan bot berjalan.');
@@ -140,9 +142,16 @@ const Topbar: React.FC = () => {
           <p className="text-sm font-semibold text-slate-800 leading-tight">
             {userName}
           </p>
-          <p className="text-xs font-medium text-blue-600 uppercase tracking-wider">
-            {userRole}
-          </p>
+          <div className="flex items-center justify-end gap-1.5 mt-0.5">
+            <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 uppercase">
+              {userRole}
+            </span>
+            {userRole !== 'ADMIN' && (
+              <span className="text-[11px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                {userDivisi}
+              </span>
+            )}
+          </div>
         </div>
         <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center shadow-sm">
           {getInitials(userName)}

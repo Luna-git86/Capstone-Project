@@ -1,5 +1,6 @@
 const prisma = require('../db');
 const { isNotificationTypeEnabled } = require('../config/notificationConfig');
+const systemConfigStore = require('../config/systemConfigStore');
 const { buildDedupeKey } = require('./ticketNotificationService');
 
 const TELEGRAM_API = 'https://api.telegram.org';
@@ -97,6 +98,9 @@ async function notifyTicketEvent(
   }
 
   try {
+    if (!systemConfigStore.isTelegramEnabled()) {
+      throw new Error('Koneksi Telegram dinonaktifkan sementara oleh administrator.');
+    }
     if (!chatId) throw new Error('Telegram penerima belum terhubung.');
     await sendMessage(chatId, message);
     await db.notificationLog.update({
@@ -141,8 +145,73 @@ async function notifyDeadlineEvent({ ticket, recipient, type, message }, deps = 
   );
 }
 
+async function retryFailedNotifications(deps = {}) {
+  if (!systemConfigStore.isTelegramEnabled()) {
+    return [];
+  }
+  const db = deps.prisma || prisma;
+  const sendMessage = deps.sendTelegramMessage || sendTelegramMessage;
+  const maxAttempts = deps.maxAttempts || systemConfigStore.getMaxRetryAttempts();
+
+  const failedLogs = await db.notificationLog.findMany({
+    where: {
+      status: 'FAILED',
+      attempts: { lt: maxAttempts },
+    },
+    include: {
+      recipient: { select: { id: true, nama: true, telegramChatId: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+    take: 10,
+  });
+
+  const results = [];
+  for (const log of failedLogs) {
+    const chatId =
+      log.recipient?.telegramChatId ||
+      (log.telegramChatId && log.telegramChatId !== 'UNLINKED'
+        ? log.telegramChatId
+        : null);
+
+    if (!chatId) {
+      continue;
+    }
+
+    await db.notificationLog.update({
+      where: { id: log.id },
+      data: { attempts: { increment: 1 } },
+    });
+
+    try {
+      await sendMessage(chatId, log.message);
+      await db.notificationLog.update({
+        where: { id: log.id },
+        data: {
+          status: 'SENT',
+          sentAt: new Date(),
+          errorMessage: null,
+          telegramChatId: chatId,
+        },
+      });
+      results.push({ id: log.id, sent: true });
+    } catch (err) {
+      await db.notificationLog.update({
+        where: { id: log.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: String(err.message || err).slice(0, 500),
+        },
+      });
+      results.push({ id: log.id, sent: false, error: err.message });
+    }
+  }
+
+  return results;
+}
+
 module.exports = {
   sendTelegramMessage,
   notifyTicketEvent,
   notifyDeadlineEvent,
+  retryFailedNotifications,
 };

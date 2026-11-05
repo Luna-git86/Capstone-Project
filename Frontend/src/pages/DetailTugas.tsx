@@ -1,3 +1,4 @@
+import { getAuthRole } from '../utils/authStorage';
 // Frontend/src/pages/DetailTugas.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -73,9 +74,10 @@ export default function DetailTugas() {
   const [loading, setLoading] = useState(true);
 
   // Ambil Role User
-  const userRole = localStorage.getItem('userRole') || 'STAF';
+  const userRole = getAuthRole() || 'STAF';
   const isKadivDir = ['KADIV', 'DIREKTUR'].includes(userRole);
   const isKoor = userRole === 'KOORDINATOR';
+  const isKadiv = userRole === 'KADIV';
   const isAtasan = isKoor || isKadivDir;
   const isStaf = userRole === 'STAF';
 
@@ -276,7 +278,7 @@ export default function DetailTugas() {
         <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">
-              🔗 Ditugaskan Berdasarkan Arahan Induk
+              Ditugaskan Berdasarkan Arahan Induk
             </span>
             <p className="text-sm font-bold text-slate-800 mt-0.5">
               #T-{String(ticket.parentTicket.id).padStart(3, '0')} — {ticket.parentTicket.judul}
@@ -306,12 +308,12 @@ export default function DetailTugas() {
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div>
                 <p className="text-[11px] font-semibold text-slate-400 uppercase">Lokasi / Area</p>
-                <p className="font-bold text-slate-800 text-sm mt-0.5">📍 {ticket.lokasi || 'Tidak ditentukan'}</p>
+                <p className="font-bold text-slate-800 text-sm mt-0.5">{ticket.lokasi || 'Tidak ditentukan'}</p>
               </div>
               <div>
                 <p className="text-[11px] font-semibold text-slate-400 uppercase">Batas Waktu (SLA)</p>
                 <p className={`font-bold text-sm mt-0.5 ${ticket.deadline && new Date(ticket.deadline) < new Date() && ticket.status !== 'SELESAI' ? 'text-rose-600' : 'text-slate-800'}`}>
-                  ⏰ {ticket.deadline ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'full', timeStyle: 'short' }).format(new Date(ticket.deadline)) : 'Belum diatur'}
+                  {ticket.deadline ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'full', timeStyle: 'short' }).format(new Date(ticket.deadline)) : 'Belum diatur'}
                 </p>
               </div>
             </div>
@@ -327,7 +329,7 @@ export default function DetailTugas() {
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
                 <h3 className="text-sm font-bold text-indigo-800 uppercase tracking-wider">
-                  📋 Tiket Operasional Lapangan ({ticket.childTickets.length})
+                  Tiket Operasional Lapangan ({ticket.childTickets.length})
                 </h3>
                 <span className="text-xs text-slate-500 font-medium">
                   {ticket.childTickets.filter(c => c.status === 'SELESAI').length} dari {ticket.childTickets.length} Selesai
@@ -427,7 +429,7 @@ export default function DetailTugas() {
           {isKoor && (
             <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-5 rounded-xl border border-indigo-200 shadow-sm space-y-3">
               <h3 className="text-sm font-bold text-indigo-900">
-                🚀 Tindak Lanjut Koordinator
+                Tindak Lanjut Koordinator
               </h3>
               <p className="text-xs text-indigo-700 leading-relaxed">
                 Terbitkan tugas operasional kepada Staf pelaksana berdasarkan tugas atau arahan ini.
@@ -474,7 +476,7 @@ export default function DetailTugas() {
 
               <div className="mt-4 pt-4 border-t border-slate-100">
                  <details className="group">
-                    <summary className="text-xs font-bold text-amber-600 cursor-pointer list-none hover:underline">⚠️ Lapor Kendala Alat/Biaya</summary>
+                    <summary className="text-xs font-bold text-amber-600 cursor-pointer list-none hover:underline">Lapor Kendala Alat/Biaya</summary>
                     <form onSubmit={handleLaporKendala} className="mt-3 space-y-2">
                       <textarea rows={2} value={kendalaText} onChange={(e) => setKendalaText(e.target.value)} className="w-full p-2 border border-amber-200 bg-amber-50 rounded text-xs" placeholder="Kenapa tugas tidak bisa diselesaikan?" required />
                       <button type="submit" disabled={isSubmitting} className="w-full py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded">Ajukan Eskalasi Kendala</button>
@@ -484,14 +486,18 @@ export default function DetailTugas() {
             </div>
           )}
 
-          {/* B. PANEL KOORDINATOR (DELEGASI TUGAS / TRIASE) */}
-          {isKoor && ticket.status === 'MENUNGGU_TRIASE' && (
+          {/* B. PANEL KOORDINATOR & KADIV (DELEGASI TUGAS / TRIASE / DELEGASI ULANG) */}
+          {(isKoor || isKadiv) && (ticket.status === 'MENUNGGU_TRIASE' || ticket.status === 'DIPROSES' || ticket.status === 'HOLD_ESKALASI') && (
             <div className="bg-white p-5 rounded-xl border-2 border-blue-200 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-800 mb-2">Tindakan Koordinator</h3>
+              <h3 className="text-sm font-bold text-slate-800 mb-2">
+                {isKadiv ? 'Pendelegasian Tugas (Kepala Divisi)' : 'Pendelegasian Tugas (Koordinator)'}
+              </h3>
               
               {!showDelegasiForm ? (
                 <button onClick={() => setShowDelegasiForm(true)} className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded shadow-sm">
-                  Buat Tugas / Tunjuk Teknisi
+                  {ticket.status === 'MENUNGGU_TRIASE'
+                    ? 'Buat Tugas / Tunjuk Pelaksana'
+                    : (isKadiv ? 'Delegasikan ke Koordinator' : 'Delegasikan Ulang / Ganti Pelaksana')}
                 </button>
               ) : (
                 <form onSubmit={handleDelegasiSubmit} className="space-y-3 mt-3 border-t border-slate-100 pt-3">
@@ -503,9 +509,11 @@ export default function DetailTugas() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Pilih Staf</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      {isKadiv ? 'Pilih Koordinator' : 'Pilih Staf Pelaksana'}
+                    </label>
                     <select value={triageForm.pelaksanaId} onChange={(e) => setTriageForm({ ...triageForm, pelaksanaId: e.target.value })} required className="w-full px-3 py-2 border border-slate-300 rounded text-xs">
-                      <option value="">-- Pilih Teknisi --</option>
+                      <option value="">{isKadiv ? '-- Pilih Koordinator --' : '-- Pilih Staf --'}</option>
                       {staffList.filter((s) => !triageForm.divisiId || String(s.divisiId) === String(triageForm.divisiId)).map((s) => (<option key={s.id} value={String(s.id)}>{s.nama}</option>))}
                     </select>
                   </div>
@@ -528,7 +536,9 @@ export default function DetailTugas() {
                   
                   <div className="flex justify-end gap-2 pt-2">
                     <button type="button" onClick={() => setShowDelegasiForm(false)} className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 rounded">Batal</button>
-                    <button type="submit" disabled={isSubmitting} className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm">{isSubmitting ? 'Menyimpan...' : 'Terbitkan Tugas'}</button>
+                    <button type="submit" disabled={isSubmitting} className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm">
+                      {isSubmitting ? 'Menyimpan...' : (ticket.status === 'MENUNGGU_TRIASE' ? 'Terbitkan Tugas' : 'Simpan Delegasi')}
+                    </button>
                   </div>
                 </form>
               )}
@@ -551,10 +561,10 @@ export default function DetailTugas() {
               
               <div className="flex flex-col gap-2">
                 <button onClick={() => handleEvaluasi('SELESAI')} disabled={isSubmitting} className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded shadow">
-                  ✅ Setujui & Tutup Tugas
+                  Setujui & Tutup Tugas
                 </button>
                 <button onClick={() => handleEvaluasi('DIPROSES')} disabled={isSubmitting} className="w-full py-2 bg-white border border-rose-300 text-rose-600 hover:bg-rose-50 font-bold text-sm rounded">
-                  🔄 Tolak (Minta Staf Revisi)
+                  Tolak (Minta Staf Revisi)
                 </button>
               </div>
             </div>
