@@ -70,7 +70,10 @@ const SemuaTugas: React.FC = () => {
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
   const [staffList, setStaffList] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('SEMUA_AKTIF');
+
+  // STATE UNTUK TAB & FILTER BARU
+  const [activeTab, setActiveTab] = useState<'AKTIF' | 'RIWAYAT'>('AKTIF');
+  const [filterStatus, setFilterStatus] = useState('SEMUA');
 
   // 1. Modal Buat Tugas dari Tiket Masalah
   const [selectedTriage, setSelectedTriage] = useState<Ticket | null>(null);
@@ -99,8 +102,9 @@ const SemuaTugas: React.FC = () => {
   const userRole = localStorage.getItem('userRole') || 'STAF';
   const isAdmin = userRole === 'ADMIN';
   const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(userRole);
+  const isStaff = !isAdmin && !isAtasan;
 
-  // Pemanggilan API dipisahkan agar tabel tugas TIDAK PERNAH gagal tampil jika endpoint pendukung gagal
+  // Pemanggilan API
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -258,30 +262,17 @@ const SemuaTugas: React.FC = () => {
   const getStatusBadge = (status: Ticket['status']) => {
     switch (status) {
       case 'MENUNGGU_TRIASE':
-        return {
-          label: 'Tiket Masalah (Menunggu Dibuatkan Tugas)',
-          cls: 'bg-amber-100 text-amber-800 border border-amber-300',
-        };
+        return { label: 'Tiket Masalah', cls: 'bg-amber-100 text-amber-800 border border-amber-300' };
       case 'DIPROSES':
-        return {
-          label: 'Sedang Dikerjakan',
-          cls: 'bg-blue-100 text-blue-700',
-        };
+        return { label: 'Sedang Dikerjakan', cls: 'bg-blue-100 text-blue-700' };
       case 'MENUNGGU_VALIDASI':
-        return {
-          label: 'Menunggu Evaluasi Foto & Hasil',
-          cls: 'bg-purple-100 text-purple-800 border border-purple-300',
-        };
+        return { label: 'Menunggu Evaluasi', cls: 'bg-purple-100 text-purple-800 border border-purple-300' };
       case 'HOLD_ESKALASI':
-        return {
-          label: 'Tertahan (Kendala Biaya / Alat)',
-          cls: 'bg-rose-100 text-rose-700 border border-rose-300',
-        };
+        return { label: 'Tertahan (Kendala)', cls: 'bg-rose-100 text-rose-700 border border-rose-300' };
       case 'SELESAI':
-        return {
-          label: 'Selesai (Di Riwayat)',
-          cls: 'bg-emerald-100 text-emerald-700',
-        };
+        return { label: 'Selesai', cls: 'bg-emerald-100 text-emerald-700' };
+      case 'DITOLAK':
+        return { label: 'Ditolak / Dibatalkan', cls: 'bg-slate-200 text-slate-700' };
       default:
         return { label: status, cls: 'bg-slate-100 text-slate-700' };
     }
@@ -303,18 +294,17 @@ const SemuaTugas: React.FC = () => {
     return `https://wa.me/${wa}?text=${msg}`;
   };
 
-  // Filter daftar tiket sesuai pilihan dropdown
+  // Filter daftar tiket menggunakan Logika Tab & Dropdown
   const filteredTickets = tickets.filter((t) => {
-    if (filterStatus === 'SEMUA_AKTIF') {
-      return t.status !== 'SELESAI' && t.status !== 'DITOLAK';
-    }
-    if (filterStatus === 'SEMUA_TERMASUK_SELESAI') {
-      return true;
-    }
-    return t.status === filterStatus;
+    const isCompletedOrRejected = ['SELESAI', 'DITOLAK'].includes(t.status);
+    
+    if (activeTab === 'AKTIF' && isCompletedOrRejected) return false;
+    if (activeTab === 'RIWAYAT' && !isCompletedOrRejected) return false;
+    if (filterStatus !== 'SEMUA' && t.status !== filterStatus) return false;
+    
+    return true;
   });
 
-  // Daftar staf untuk modal: utamakan staf di divisi tersebut, jika kosong tampilkan semua staf agar tidak macet
   const matchingStaff = staffList.filter(
     (s) => !triageForm.divisiId || String(s.divisiId) === String(triageForm.divisiId)
   );
@@ -322,257 +312,295 @@ const SemuaTugas: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6">
+      
+      {/* HEADER UTAMA & TOMBOL TAMBAH TUGAS */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
             Daftar Tugas & Tiket Masalah
           </h1>
-          <p className="text-sm text-slate-500">
-            Menampilkan tiket masalah dan tugas yang berjalan. Tugas yang sudah selesai juga tersimpan di{' '}
-            <Link to="/riwayat" className="text-blue-600 font-semibold hover:underline">
-              Riwayat Selesai
-            </Link>
-            .
+          <p className="text-sm text-slate-500 mt-1">
+            Menampilkan tiket masalah dan tugas yang berjalan. Kelola tugas dan laporkan penyelesaian.
           </p>
         </div>
 
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3.5 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700"
-        >
-          <option value="SEMUA_AKTIF">
-            Tugas Aktif ({tickets.filter((t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK').length})
-          </option>
-          <option value="MENUNGGU_TRIASE">Tiket Masalah (Belum Dibuatkan Tugas)</option>
-          <option value="DIPROSES">Sedang Dikerjakan</option>
-          <option value="MENUNGGU_VALIDASI">Menunggu Evaluasi Foto</option>
-          <option value="HOLD_ESKALASI">Tertahan (Kendala Biaya/Alat)</option>
-          <option value="SEMUA_TERMASUK_SELESAI">Tampilkan Semua (Termasuk Selesai) ({tickets.length})</option>
-        </select>
+        {/* Hanya muncul untuk Atasan (Kadiv/Direktur/Koor) */}
+        {isAtasan && (
+          <button
+            onClick={() => navigate('/tambah-tugas')}
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg shadow-sm flex items-center gap-2 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+            Tambah Tugas
+          </button>
+        )}
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase bg-slate-50">
-              <th className="py-3.5 px-4">Tiket & Deskripsi</th>
-              <th className="py-3.5 px-4">Lokasi & Batas Waktu (Jam)</th>
-              <th className="py-3.5 px-4">Divisi & Petugas</th>
-              <th className="py-3.5 px-4">Status & Bukti Kerja</th>
-              {!isAdmin && <th className="py-3.5 px-4 text-right">Tindakan</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-sm">
-            {loading ? (
-              <tr>
-                <td colSpan={isAdmin ? 4 : 5} className="py-8 text-center text-slate-500">
-                  Memuat daftar tugas...
-                </td>
-              </tr>
-            ) : filteredTickets.length === 0 ? (
-              <tr>
-                <td colSpan={isAdmin ? 4 : 5} className="py-8 text-center text-slate-400">
-                  Belum ada tugas aktif pada filter ini. Pilih "Tampilkan Semua" di pojok kanan atas atau cek menu Riwayat Selesai.
-                </td>
-              </tr>
-            ) : (
-              filteredTickets.map((t) => {
-                const badge = getStatusBadge(t.status);
-                const isOverdue =
-                  t.deadline &&
-                  t.status !== 'SELESAI' &&
-                  new Date(t.deadline) < new Date();
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        
+        {/* DESAIN TAB MENU PENGGANTI DROPDOWN UTAMA */}
+        <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-b border-slate-200 bg-white gap-4">
+          <div className="flex bg-slate-50 p-1 rounded-lg w-full sm:w-auto border border-slate-100">
+             <button 
+               onClick={() => { setActiveTab('AKTIF'); setFilterStatus('SEMUA'); }}
+               className={`flex-1 sm:flex-none px-6 py-2 text-sm font-bold rounded-md transition-colors ${activeTab === 'AKTIF' ? 'bg-white text-blue-700 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+             >
+               Tugas Aktif
+             </button>
+             <button 
+               onClick={() => { setActiveTab('RIWAYAT'); setFilterStatus('SEMUA'); }}
+               className={`flex-1 sm:flex-none px-6 py-2 text-sm font-bold rounded-md transition-colors ${activeTab === 'RIWAYAT' ? 'bg-white text-blue-700 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+             >
+               Riwayat Tugas
+             </button>
+          </div>
+          
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="w-full sm:w-auto px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700"
+          >
+            <option value="SEMUA">Semua Status pada Kategori ini</option>
+            {activeTab === 'AKTIF' && (
+              <>
+                <option value="MENUNGGU_TRIASE">Belum Dibuatkan Tugas</option>
+                <option value="DIPROSES">Sedang Dikerjakan</option>
+                <option value="MENUNGGU_VALIDASI">Menunggu Evaluasi Foto</option>
+                <option value="HOLD_ESKALASI">Tertahan Kendala</option>
+              </>
+            )}
+            {activeTab === 'RIWAYAT' && (
+              <>
+                 <option value="SELESAI">Selesai (Tervalidasi)</option>
+                 <option value="DITOLAK">Ditolak / Dibatalkan</option>
+              </>
+            )}
+          </select>
+        </div>
 
-                return (
-                  <tr key={t.id} className="hover:bg-slate-50 align-top">
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-blue-600 text-xs">
-                          #T-{String(t.id).padStart(3, '0')}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 text-[10px] font-bold rounded ${
-                            t.prioritas === 'HIGH'
-                              ? 'bg-rose-100 text-rose-700'
-                              : t.prioritas === 'MEDIUM'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-blue-100 text-blue-700'
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[950px]">
+            <thead>
+              <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase bg-slate-50">
+                <th className="py-3.5 px-4">Tiket & Deskripsi</th>
+                <th className="py-3.5 px-4">Lokasi & Batas Waktu (Jam)</th>
+                <th className="py-3.5 px-4">Divisi & Petugas</th>
+                <th className="py-3.5 px-4">Status & Bukti Kerja</th>
+                <th className="py-3.5 px-4 text-right w-36">Tindakan</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-500">
+                    Memuat daftar tugas...
+                  </td>
+                </tr>
+              ) : filteredTickets.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-400">
+                    Belum ada tugas pada kategori ini.
+                  </td>
+                </tr>
+              ) : (
+                filteredTickets.map((t) => {
+                  const badge = getStatusBadge(t.status);
+                  const isOverdue =
+                    t.deadline &&
+                    t.status !== 'SELESAI' &&
+                    new Date(t.deadline) < new Date();
+
+                  return (
+                    <tr key={t.id} className="hover:bg-slate-50 align-top">
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-blue-600 text-xs">
+                            #T-{String(t.id).padStart(3, '0')}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded ${
+                              t.prioritas === 'HIGH'
+                                ? 'bg-rose-100 text-rose-700'
+                                : t.prioritas === 'MEDIUM'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}
+                          >
+                            {t.prioritas}
+                          </span>
+                        </div>
+                        <p className="font-bold text-slate-800 mt-1">{t.judul}</p>
+                        <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">{t.deskripsi}</p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Pengaju: <strong>{t.pembuat?.nama || '-'}</strong> ({t.pembuat?.role || '-'})
+                        </p>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-xs space-y-1">
+                        <p className="font-semibold text-slate-800">
+                          📍 {t.lokasi || '-'}
+                        </p>
+                        <p
+                          className={`font-medium ${
+                            isOverdue ? 'text-rose-600 font-bold' : 'text-slate-600'
                           }`}
                         >
-                          {t.prioritas}
-                        </span>
-                      </div>
-                      <p className="font-bold text-slate-800 mt-1">{t.judul}</p>
-                      <p className="text-xs text-slate-600 mt-0.5">{t.deskripsi}</p>
-                      <p className="text-[11px] text-slate-400 mt-1">
-                        Pengaju: <strong>{t.pembuat?.nama || '-'}</strong> ({t.pembuat?.role || '-'})
-                      </p>
-                    </td>
-
-                    <td className="py-3.5 px-4 text-xs space-y-1">
-                      <p className="font-semibold text-slate-800">
-                        📍 {t.lokasi || '-'}
-                      </p>
-                      <p
-                        className={`font-medium ${
-                          isOverdue ? 'text-rose-600 font-bold' : 'text-slate-600'
-                        }`}
-                      >
-                        ⏰ Batas Waktu: {formatDateTime(t.deadline)}
-                      </p>
-                      {isOverdue && (
-                        <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-700 rounded">
-                          Melewati Batas Waktu!
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-4 text-xs space-y-1">
-                      <p className="font-bold text-slate-800">
-                        Divisi: {t.divisi?.nama || '-'}
-                      </p>
-                      <p className="text-slate-600">
-                        Pemberi Tugas:{' '}
-                        <span className="font-semibold text-indigo-700">
-                          {t.penanggungJawab?.nama || 'Menunggu Koordinator/Kadiv'}
-                        </span>
-                      </p>
-                      <p className="text-slate-600">
-                        Pelaksana:{' '}
-                        <span className="font-semibold text-emerald-700">
-                          {t.pelaksana?.nama || 'Belum Ditunjuk'}
-                        </span>
-                      </p>
-                    </td>
-
-                    <td className="py-3.5 px-4 space-y-1.5">
-                      <span
-                        className={`inline-block px-2.5 py-1 text-xs font-bold rounded ${badge.cls}`}
-                      >
-                        {badge.label}
-                      </span>
-
-                      {t.laporanPenyelesaian && (
-                        <p className="text-xs text-slate-700 bg-slate-100 p-2 rounded border border-slate-200">
-                          <strong>Laporan Staf:</strong> {t.laporanPenyelesaian}
+                          ⏰ Batas Waktu: {formatDateTime(t.deadline)}
                         </p>
-                      )}
-
-                      {t.fotoBukti && (
-                        <div>
-                          <img
-                            src={t.fotoBukti}
-                            alt="Bukti Penyelesaian"
-                            className="w-20 h-16 object-cover rounded border border-slate-300 cursor-pointer hover:opacity-90"
-                            onClick={() => {
-                              setEvalTarget(t);
-                              setEvalNote(t.catatanRevisi || '');
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      {t.catatanRevisi && (
-                        <p className="text-xs text-rose-700 bg-rose-50 p-2 rounded border border-rose-200">
-                          <strong>Catatan Evaluasi / Kendala:</strong> {t.catatanRevisi}
-                        </p>
-                      )}
-                    </td>
-
-                    {!isAdmin && (
-                      <td className="py-3.5 px-4 text-right space-y-1.5">
-                        {isAtasan && t.status !== 'SELESAI' && (
-                          <div className="flex flex-col items-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedTriage(t);
-                                setTriageForm({
-                                  divisiId: t.divisi?.id ? String(t.divisi.id) : '',
-                                  prioritas: t.prioritas,
-                                  pelaksanaId: t.pelaksana?.id
-                                    ? String(t.pelaksana.id)
-                                    : '',
-                                  deadline: toDateTimeLocalInput(t.deadline),
-                                  catatanRevisi: t.catatanRevisi || '',
-                                });
-                              }}
-                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-md shadow-sm"
-                            >
-                              📋 {t.status === 'MENUNGGU_TRIASE' ? 'Buat Tugas dari Tiket Ini' : 'Atur Ulang Tugas & Jam'}
-                            </button>
-
-                            {t.status === 'MENUNGGU_TRIASE' && (
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/tambah-tugas?ticketId=${t.id}`)}
-                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded border border-slate-300"
-                              >
-                                ↗ Buka di Form Buat Tugas
-                              </button>
-                            )}
-
-                            {t.status === 'MENUNGGU_VALIDASI' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEvalTarget(t);
-                                  setEvalNote(t.catatanRevisi || '');
-                                }}
-                                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-md shadow-sm"
-                              >
-                                🔍 Evaluasi Foto & Hasil
-                              </button>
-                            )}
-
-                            {t.pelaksana?.noHp && (
-                              <a
-                                href={getWhatsAppLink(t)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md"
-                              >
-                                📲 Kirim WA Staf
-                              </a>
-                            )}
-                          </div>
-                        )}
-
-                        {(t.status === 'DIPROSES' || t.status === 'HOLD_ESKALASI') && (
-                          <div className="flex flex-col items-end gap-1.5 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setReportTarget(t);
-                                setReportText(t.laporanPenyelesaian || '');
-                                setReportPhoto(t.fotoBukti || '');
-                              }}
-                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-md shadow-sm"
-                            >
-                              📷 Lapor Selesai (Kirim Foto)
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEscalateTarget(t);
-                                setEscalateNote(t.catatanRevisi || '');
-                              }}
-                              className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-semibold rounded-md"
-                            >
-                              ⚠️ Lapor Kendala / Biaya
-                            </button>
-                          </div>
+                        {isOverdue && (
+                          <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-700 rounded">
+                            Melewati Batas Waktu!
+                          </span>
                         )}
                       </td>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+
+                      <td className="py-3.5 px-4 text-xs space-y-1">
+                        <p className="font-bold text-slate-800">
+                          Divisi: {t.divisi?.nama || '-'}
+                        </p>
+                        <p className="text-slate-600">
+                          Pemberi Tugas:{' '}
+                          <span className="font-semibold text-indigo-700">
+                            {t.penanggungJawab?.nama || '-'}
+                          </span>
+                        </p>
+                        <p className="text-slate-600">
+                          Pelaksana:{' '}
+                          <span className="font-semibold text-emerald-700">
+                            {t.pelaksana?.nama || 'Belum Ditunjuk'}
+                          </span>
+                        </p>
+                      </td>
+
+                      <td className="py-3.5 px-4 space-y-1.5">
+                        <span
+                          className={`inline-block px-2.5 py-1 text-[11px] font-bold tracking-wide rounded uppercase ${badge.cls}`}
+                        >
+                          {badge.label}
+                        </span>
+
+                        {t.laporanPenyelesaian && (
+                          <p className="text-xs text-slate-700 bg-slate-100 p-2 rounded border border-slate-200 mt-1 line-clamp-1">
+                            <strong>Laporan:</strong> {t.laporanPenyelesaian}
+                          </p>
+                        )}
+
+                        {t.fotoBukti && (
+                          <div className="mt-1">
+                            <img
+                              src={t.fotoBukti}
+                              alt="Bukti Penyelesaian"
+                              className="w-20 h-16 object-cover rounded border border-slate-300 cursor-pointer hover:opacity-90"
+                              onClick={() => {
+                                setEvalTarget(t);
+                                setEvalNote(t.catatanRevisi || '');
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        {t.catatanRevisi && (
+                          <p className="text-xs text-rose-700 bg-rose-50 p-2 rounded border border-rose-200 mt-1">
+                            <strong>Kendala/Revisi:</strong> {t.catatanRevisi}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right space-y-1.5 align-top">
+                         {/* TOMBOL DETAIL UNTUK SEMUA ROLE */}
+                         <button 
+                           onClick={() => navigate(`/detail-tugas/${t.id}`)}
+                           className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold rounded-md shadow-sm w-full transition-colors block text-center mb-1"
+                         >
+                           Lihat Detail
+                         </button>
+                         
+                         {/* TOMBOL AKSI ATASAN & STAF (Sembunyikan dari ADMIN) */}
+                         {!isAdmin && (
+                           <>
+                              {isAtasan && activeTab === 'AKTIF' && (
+                                <div className="flex flex-col items-end gap-1.5">
+                                  {t.status !== 'SELESAI' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedTriage(t);
+                                        setTriageForm({
+                                          divisiId: t.divisi?.id ? String(t.divisi.id) : '',
+                                          prioritas: t.prioritas,
+                                          pelaksanaId: t.pelaksana?.id ? String(t.pelaksana.id) : '',
+                                          deadline: toDateTimeLocalInput(t.deadline),
+                                          catatanRevisi: t.catatanRevisi || '',
+                                        });
+                                      }}
+                                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-md shadow-sm w-full"
+                                    >
+                                      {t.status === 'MENUNGGU_TRIASE' ? 'Buat Tugas' : 'Atur Ulang Jam'}
+                                    </button>
+                                  )}
+
+                                  {t.status === 'MENUNGGU_VALIDASI' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEvalTarget(t);
+                                        setEvalNote(t.catatanRevisi || '');
+                                      }}
+                                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-md shadow-sm w-full"
+                                    >
+                                      Evaluasi Hasil
+                                    </button>
+                                  )}
+
+                                  {t.pelaksana?.noHp && t.status !== 'SELESAI' && (
+                                    <a
+                                      href={getWhatsAppLink(t)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md w-full text-center block"
+                                    >
+                                      Kirim WA Staf
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+
+                              {isStaff && activeTab === 'AKTIF' && (t.status === 'DIPROSES' || t.status === 'HOLD_ESKALASI') && (
+                                <div className="flex flex-col items-end gap-1.5 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReportTarget(t);
+                                      setReportText(t.laporanPenyelesaian || '');
+                                      setReportPhoto(t.fotoBukti || '');
+                                    }}
+                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-md shadow-sm w-full"
+                                  >
+                                    Lapor Selesai
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEscalateTarget(t);
+                                      setEscalateNote(t.catatanRevisi || '');
+                                    }}
+                                    className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-semibold rounded-md w-full"
+                                  >
+                                    Lapor Kendala
+                                  </button>
+                                </div>
+                              )}
+                           </>
+                         )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* MODAL 1: Buat Tugas dari Tiket Masalah & Atur Jam */}

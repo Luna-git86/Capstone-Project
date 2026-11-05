@@ -35,21 +35,12 @@ const Sidebar: React.FC = () => {
       path: getDashboardPath(userRole),
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
-    {
-      title: 'Laporkan Masalah',
-      path: '/laporkan-masalah',
-      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
-    },
-    {
-      title: 'Buat Tugas',
-      path: '/tambah-tugas',
-      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
-    },
-    {
-      title: 'Daftar Tugas',
-      path: '/semua-tugas',
-      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
-    },
+    // {
+    //   title: 'Buat Tugas',
+    //   path: '/tambah-tugas',
+    //   allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
+    // },
+
     // {
     //   title: 'Riwayat Selesai',
     //   path: '/riwayat',
@@ -60,7 +51,26 @@ const Sidebar: React.FC = () => {
       path: '/dokumen-sop',
       allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
-    {
+
+    //rute koordinator
+        {
+      title: 'Laporan Masuk',
+      path: '/menu-laporan',
+      allowedRoles: ['KOORDINATOR'],
+    },
+
+    //rute public untuk semua role
+        {
+      title: 'Daftar Tugas',
+      path: '/semua-tugas',
+      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+    },
+        {
+      title: 'Laporkan Masalah',
+      path: '/laporkan-masalah',
+      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+    },
+        {
       title: 'Laporan Kinerja',
       path: '/laporan-sla',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR'],
