@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { getDashboardByRole } from '../App';
+import { setAuthSession } from '../utils/authStorage';
 
 const Login: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -15,10 +16,7 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('userDivisiId');
+    sessionStorage.clear();
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,18 +32,23 @@ const Login: React.FC = () => {
       const response = await api.post('/auth/login', formData);
       const { token, user } = response.data;
 
-      localStorage.setItem('token', token);
-      localStorage.setItem('userRole', user.role);
-      localStorage.setItem('userName', user.nama || user.noHp);
-      if (user.divisiId) {
-        localStorage.setItem('userDivisiId', String(user.divisiId));
-      }
+      setAuthSession({
+        token,
+        userId: user.id,
+        userRole: user.role,
+        userName: user.nama || user.noHp,
+        telegramLinked: user.telegramLinked,
+        userDivisiId: user.divisiId,
+        userDivisiNama: user.namaDivisi || null,
+      });
 
       const targetDashboard = getDashboardByRole(user.role);
       navigate(targetDashboard, { replace: true });
     } catch (err: any) {
       setError(
-        err.response?.data?.message || 'Gagal login. Periksa kembali Nomor HP dan password Anda.'
+        !err.response
+          ? 'Tidak dapat terhubung ke server backend. Pastikan server Backend (port 3000) dan database PostgreSQL sudah berjalan.'
+          : (err.response?.data?.message || 'Gagal login. Periksa kembali Nomor HP dan password Anda.')
       );
     } finally {
       setLoading(false);

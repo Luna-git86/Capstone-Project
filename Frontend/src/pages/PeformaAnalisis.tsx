@@ -95,7 +95,7 @@ export default function PeformaAnalisis() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={dataPerforma} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={2} dataKey="value" stroke="none">
-                  {dataPerforma.map((entry, index) => (
+                  {dataPerforma.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>

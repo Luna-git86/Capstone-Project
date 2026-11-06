@@ -1,21 +1,28 @@
 // Backend/controllers/ticketController.js
 const prisma = require('../db');
-const { notifyTicketStatus } = require('../services/telegramService');
+const { dispatchTicketNotifications } = require('../services/ticketNotificationService');
 
-// 1. Buat Tiket Masalah Baru ATAU Buat Tugas (Termasuk dari Tiket Masalah yang Sudah Ada)
+// 1. Pengajuan Laporan Masalah (Semua Pegawai Operasional) & Pembuatan Tugas (Koordinator s/d Direktur)
 const createTicket = async (req, res) => {
   try {
     const role = req.user.role;
     const pembuatId = Number(req.user.id);
+    const userDivisiId = req.user.divisiId ? Number(req.user.divisiId) : null;
 
+    // Admin hanya boleh memantau tugas dan mengonfigurasi akun
     if (role === 'ADMIN') {
       return res.status(403).json({
-        message: 'Admin hanya memiliki akses untuk memantau tugas dan mengelola akun.',
+        message: 'Admin hanya memiliki akses untuk melihat tugas dan mengelola akun.',
       });
     }
 
+    // Jika membuat tugas berdasarkan tiket laporan masalah yang sudah ada
+    if (req.body.ticketId) {
+      req.params = { id: req.body.ticketId };
+      return triageTicket(req, res);
+    }
+
     const {
-      ticketId, // Jika Koordinator/Kadiv/Direktur membuat tugas berdasarkan tiket yang sudah ada
       judul,
       lokasi,
       deskripsi,
@@ -23,124 +30,42 @@ const createTicket = async (req, res) => {
       divisiId,
       pelaksanaId,
       deadline,
-      catatanRevisi,
-      tipe,
+      tipe, // 'LAPORAN_MASALAH' atau 'BUAT_TUGAS'
+      parentTicketId, // Hubungan relasi arahan induk (Kadiv -> Koordinator -> Staf)
     } = req.body;
 
-    const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(role);
-    const isBuatTugas = tipe === 'BUAT_TUGAS';
-
-    if (isBuatTugas && !isAtasan) {
-      return res.status(403).json({
-        message: 'Hanya Koordinator, Kepala Divisi, dan Direktur yang dapat membuat tugas.',
-      });
-    }
-
-    // JIKA MEMBUAT TUGAS BERDASARKAN TIKET LAPORAN MASALAH YANG SUDAH ADA
-    if (ticketId) {
-      if (!isAtasan) {
-        return res.status(403).json({
-          message: 'Hanya Koordinator, Kepala Divisi, dan Direktur yang dapat menindaklanjuti tiket menjadi tugas.',
-        });
-      }
-
-      const existingTicket = await prisma.ticket.findUnique({
-        where: { id: Number(ticketId) },
-        include: {
-          pembuat: { select: { id: true, nama: true, telegramChatId: true } },
-        },
-      });
-
-      if (!existingTicket) {
-        return res.status(404).json({ message: 'Tiket laporan masalah tidak ditemukan.' });
-      }
-
-      let parsedDeadline = existingTicket.deadline;
-      if (deadline) {
-        const d = new Date(deadline);
-        if (!Number.isNaN(d.getTime())) {
-          parsedDeadline = d;
-        }
-      }
-
-      if (!parsedDeadline) {
-        return res.status(400).json({
-          message: 'Batas waktu (tanggal dan jam) wajib diisi saat membuat tugas.',
-        });
-      }
-
-      const updatedTicket = await prisma.ticket.update({
-        where: { id: Number(ticketId) },
-        data: {
-          judul: judul ? judul.trim() : existingTicket.judul,
-          lokasi: lokasi !== undefined ? String(lokasi).trim() : existingTicket.lokasi,
-          deskripsi: deskripsi ? deskripsi.trim() : existingTicket.deskripsi,
-          prioritas: prioritas || existingTicket.prioritas,
-          divisiId: divisiId ? Number(divisiId) : existingTicket.divisiId,
-          pelaksanaId: pelaksanaId ? Number(pelaksanaId) : existingTicket.pelaksanaId,
-          penanggungJawabId: pembuatId,
-          deadline: parsedDeadline,
-          status: 'DIPROSES',
-          catatanRevisi:
-            catatanRevisi !== undefined ? catatanRevisi : existingTicket.catatanRevisi,
-        },
-        include: {
-          pembuat: { select: { id: true, nama: true, noHp: true, role: true } },
-          penanggungJawab: { select: { id: true, nama: true, noHp: true, role: true } },
-          divisi: { select: { id: true, nama: true } },
-          pelaksana: {
-            select: { id: true, nama: true, noHp: true, role: true, telegramChatId: true },
-          },
-        },
-      });
-
-      await prisma.auditLog.create({
-        data: {
-          action: 'CONVERT_TICKET_TO_TASK',
-          entityType: 'Ticket',
-          entityId: updatedTicket.id,
-          userId: pembuatId,
-          details: `${role} membuat tugas dari tiket #T-${String(updatedTicket.id).padStart(3, '0')} untuk ${updatedTicket.pelaksana?.nama || '-'}`,
-        },
-      });
-
-      try {
-        await notifyTicketStatus({
-          ticketId: updatedTicket.id,
-          recipient: existingTicket.pembuat,
-          ticketTitle: updatedTicket.judul,
-          status: 'DIPROSES',
-          deadline: updatedTicket.deadline,
-        });
-      } catch (e) {
-        console.error('[Telegram] Gagal mengirim notifikasi:', e.message);
-      }
-
-      return res.status(200).json({
-        message: `Tiket #T-${String(updatedTicket.id).padStart(3, '0')} berhasil dijadikan tugas untuk ${updatedTicket.pelaksana?.nama || 'Staf'}!`,
-        data: updatedTicket,
-      });
-    }
-
-    // JIKA MEMBUAT TIKET MASALAH BARU ATAU TUGAS BARU DARI NOL
     if (!judul || !judul.trim() || !deskripsi || !deskripsi.trim()) {
       return res.status(400).json({
         message: 'Judul dan deskripsi wajib diisi.',
       });
     }
 
-    // Ambil user dari DB jika divisiId tidak dikirim
-    const dbUser = await prisma.user.findUnique({ where: { id: pembuatId } });
-    const rawDivisiId = divisiId || dbUser?.divisiId;
-
-    if (!rawDivisiId) {
+    if (!divisiId) {
       return res.status(400).json({
         message: 'Silakan pilih Divisi / Bagian Tujuan.',
       });
     }
 
-    const selectedDivisiId = Number(rawDivisiId);
+    const selectedDivisiId = Number(divisiId);
+    const divisi = await prisma.divisi.findUnique({
+      where: { id: selectedDivisiId },
+    });
 
+    if (!divisi) {
+      return res.status(400).json({ message: 'Divisi tujuan tidak ditemukan.' });
+    }
+
+    const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(role);
+    const isBuatTugas = tipe === 'BUAT_TUGAS';
+
+    // Jika melalui menu Buat Tugas, wajib memiliki role Koordinator, Kadiv, atau Direktur
+    if (isBuatTugas && !isAtasan) {
+      return res.status(403).json({
+        message: 'Hanya Koordinator, Kepala Divisi, dan Direktur yang berwenang membuat tugas.',
+      });
+    }
+
+    // Saat membuat tugas langsung, batas waktu (tanggal & jam) wajib diisi
     let selectedDeadline = null;
     if (isBuatTugas && (!deadline || String(deadline).trim() === '')) {
       return res.status(400).json({
@@ -148,29 +73,127 @@ const createTicket = async (req, res) => {
       });
     }
 
-    if (deadline) {
-      const parsed = new Date(deadline);
-      if (Number.isNaN(parsed.getTime())) {
-        return res.status(400).json({ message: 'Format batas waktu tidak valid.' });
+    if (deadline !== undefined && deadline !== null && deadline !== '') {
+      const parsedDeadline = new Date(deadline);
+      if (Number.isNaN(parsedDeadline.getTime())) {
+        return res.status(400).json({ message: 'Format tanggal dan jam batas waktu tidak valid.' });
       }
-      selectedDeadline = parsed;
+      selectedDeadline = parsedDeadline;
+    }
+
+    // Validasi Relasi Arahan Induk (parentTicketId)
+    let selectedParentTicketId = null;
+    if (parentTicketId !== undefined && parentTicketId !== null && parentTicketId !== '') {
+      selectedParentTicketId = Number(parentTicketId);
+      if (!Number.isInteger(selectedParentTicketId) || selectedParentTicketId <= 0) {
+        return res.status(400).json({ message: 'ID arahan induk tidak valid.' });
+      }
+      const parentTicket = await prisma.ticket.findUnique({
+        where: { id: selectedParentTicketId },
+        include: { divisi: true },
+      });
+      if (!parentTicket) {
+        return res.status(404).json({ message: 'Arahan induk tidak ditemukan.' });
+      }
+      // Tiket arahan harus berada dalam divisi yang sama (kecuali pembuat adalah Direktur)
+      if (role !== 'DIREKTUR' && userDivisiId && parentTicket.divisiId !== userDivisiId) {
+        return res.status(403).json({
+          message: 'Tiket arahan induk tidak berada dalam divisi Anda.',
+        });
+      }
     }
 
     let selectedPelaksanaId = null;
     let penanggungJawabId = null;
 
-    if (isAtasan && pelaksanaId) {
+    if (isBuatTugas) {
+      penanggungJawabId = pembuatId;
+
+      if (!pelaksanaId) {
+        return res.status(400).json({
+          message: 'Penerima tugas / pelaksana wajib dipilih saat membuat tugas.',
+        });
+      }
+
       selectedPelaksanaId = Number(pelaksanaId);
-      penanggungJawabId = pembuatId;
-    } else if (isBuatTugas) {
-      penanggungJawabId = pembuatId;
+      const pelaksana = await prisma.user.findUnique({
+        where: { id: selectedPelaksanaId },
+      });
+      if (!pelaksana) {
+        return res.status(400).json({ message: 'Penerima tugas / pelaksana tidak ditemukan.' });
+      }
+
+      // ATURAN HIERARKI BISNIS 1: KADIV
+      if (role === 'KADIV') {
+        // Kadiv tidak boleh menugaskan Staf secara langsung
+        if (pelaksana.role === 'STAF') {
+          return res.status(400).json({
+            message: 'Kepala Divisi tidak dapat menugaskan Staf secara langsung. Terbitkan tugas/arahan kepada Koordinator.',
+          });
+        }
+        if (pelaksana.role !== 'KOORDINATOR') {
+          return res.status(400).json({
+            message: 'Kepala Divisi hanya berwenang menerbitkan tugas/arahan kepada Koordinator.',
+          });
+        }
+        // Koordinator penerima harus berada dalam divisi tujuan yang dipilih
+        if (pelaksana.divisiId && pelaksana.divisiId !== selectedDivisiId) {
+          return res.status(400).json({
+            message: 'Koordinator penerima harus berada dalam Divisi Tujuan yang dipilih.',
+          });
+        }
+      }
+
+      // ATURAN HIERARKI BISNIS 2: KOORDINATOR
+      if (role === 'KOORDINATOR') {
+        // Pelaksana tidak boleh sama dengan pembuat/penanggung jawab
+        if (selectedPelaksanaId === pembuatId) {
+          return res.status(400).json({
+            message: 'Pelaksana tugas tidak boleh sama dengan penanggung jawab / pembuat tugas.',
+          });
+        }
+        // Koordinator menugaskan STAF
+        if (pelaksana.role !== 'STAF') {
+          return res.status(400).json({
+            message: 'Koordinator hanya berwenang menugaskan Staf sebagai pelaksana operasional.',
+          });
+        }
+        // Staf penerima harus berada di divisi yang sama dengan Koordinator
+        if (userDivisiId && pelaksana.divisiId !== userDivisiId) {
+          return res.status(400).json({
+            message: 'Koordinator hanya dapat menugaskan Staf di dalam divisi yang sama.',
+          });
+        }
+        // Koordinator hanya berwenang menerbitkan tugas di divisinya sendiri
+        if (userDivisiId && selectedDivisiId !== userDivisiId) {
+          return res.status(400).json({
+            message: 'Koordinator hanya berwenang menerbitkan tugas operasional dalam divisinya sendiri.',
+          });
+        }
+      }
+
+      // ATURAN HIERARKI BISNIS 3: DIREKTUR
+      if (role === 'DIREKTUR') {
+        if (pelaksana.role === 'STAF') {
+          return res.status(400).json({
+            message: 'Direktur tidak menerbitkan tugas operasional langsung kepada Staf. Terbitkan arahan strategis kepada Kepala Divisi (Kadiv).',
+          });
+        }
+        if (pelaksana.role !== 'KADIV') {
+          return res.status(400).json({
+            message: 'Direktur hanya menerbitkan arahan strategis kepada Kepala Divisi (Kadiv).',
+          });
+        }
+      }
     }
 
     const validPrioritas = ['LOW', 'MEDIUM', 'HIGH'];
     const selectedPrioritas =
       prioritas && validPrioritas.includes(prioritas) ? prioritas : 'MEDIUM';
 
-    const initialStatus = selectedPelaksanaId ? 'DIPROSES' : 'MENUNGGU_TRIASE';
+    // Laporan masalah berstatus MENUNGGU_TRIASE, sedangkan pembuatan tugas yang menunjuk staf langsung DIPROSES
+    const initialStatus =
+      isBuatTugas && selectedPelaksanaId ? 'DIPROSES' : 'MENUNGGU_TRIASE';
 
     const newTicket = await prisma.ticket.create({
       data: {
@@ -184,32 +207,61 @@ const createTicket = async (req, res) => {
         divisiId: selectedDivisiId,
         pelaksanaId: selectedPelaksanaId,
         deadline: selectedDeadline,
+        parentTicketId: selectedParentTicketId,
       },
       include: {
         pembuat: { select: { id: true, nama: true, noHp: true, role: true } },
         penanggungJawab: { select: { id: true, nama: true, noHp: true, role: true } },
         divisi: { select: { id: true, nama: true } },
         pelaksana: {
-          select: { id: true, nama: true, noHp: true, role: true, telegramChatId: true },
+          select: { id: true, nama: true, noHp: true, telegramChatId: true, role: true },
+        },
+        parentTicket: {
+          select: { id: true, judul: true, status: true, prioritas: true, pembuatId: true },
+        },
+        childTickets: {
+          select: { id: true, judul: true, status: true, pelaksanaId: true },
         },
       },
     });
 
+    let detailsLog = `${role} ${isBuatTugas ? 'membuat tugas' : 'melaporkan masalah'} #T-${String(newTicket.id).padStart(3, '0')} (${newTicket.judul}) ke Divisi ${newTicket.divisi?.nama}`;
+    if (selectedParentTicketId) {
+      detailsLog += ` [Berdasarkan Arahan Induk #T-${String(selectedParentTicketId).padStart(3, '0')}]`;
+    }
+
     await prisma.auditLog.create({
       data: {
-        action: isBuatTugas ? 'CREATE_TASK' : 'REPORT_ISSUE',
+        action: isBuatTugas
+          ? role === 'KADIV'
+            ? 'CREATE_DIRECTIVE'
+            : 'CREATE_TASK'
+          : 'REPORT_ISSUE',
         entityType: 'Ticket',
         entityId: newTicket.id,
         userId: pembuatId,
-        details: `${role} membuat ${isBuatTugas ? 'tugas' : 'tiket masalah'} #T-${String(newTicket.id).padStart(3, '0')} (${newTicket.judul})`,
+        details: detailsLog,
       },
     });
 
+    if (isBuatTugas && selectedPelaksanaId) {
+      try {
+        await dispatchTicketNotifications({
+          previous: null,
+          current: newTicket,
+          actor: newTicket.pembuat || { id: pembuatId, role, nama: req.user.nama },
+        });
+      } catch (notificationError) {
+        console.error('[Telegram] Notifikasi tugas baru gagal:', notificationError.message);
+      }
+    }
+
     return res.status(201).json({
-      message:
-        initialStatus === 'DIPROSES'
-          ? 'Tugas berhasil diterbitkan dan ditugaskan ke staf!'
-          : 'Tiket laporan masalah berhasil diajukan!',
+      message: isBuatTugas
+        ? role === 'KADIV'
+          ? 'Arahan divisi berhasil diterbitkan kepada Koordinator!'
+          : 'Tugas operasional berhasil dibuat dan ditugaskan kepada Staf!'
+        : `Tiket laporan masalah berhasil diajukan ke bagian ${newTicket.divisi?.nama} untuk segera dibuatkan tugas!`,
       data: newTicket,
     });
   } catch (error) {
@@ -220,53 +272,49 @@ const createTicket = async (req, res) => {
   }
 };
 
-// 2. Ambil Daftar Tugas (Memastikan Data Selalu Muncul di Semua Role)
+// 2. Ambil Daftar Tiket & Tugas
 const getTickets = async (req, res) => {
   try {
-    const userId = Number(req.user.id);
-    const role = req.user.role;
-
-    // Ambil data user langsung dari database agar tidak gagal jika token JWT tidak menyimpan divisiId
-    const currentUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, role: true, divisiId: true },
-    });
-
-    const userDivisiId = currentUser?.divisiId || req.user.divisiId || null;
+    const { role, divisiId, id: userId } = req.user;
     let filter = {};
 
-    if (['ADMIN', 'DIREKTUR'].includes(role)) {
-      // Admin dan Direktur melihat seluruh tiket tanpa terkecuali
-      filter = {};
-    } else if (['KADIV', 'KOORDINATOR'].includes(role)) {
-      // Kadiv dan Koordinator melihat:
-      // 1. Semua tiket di divisinya
-      // 2. Semua tiket yang berstatus MENUNGGU_TRIASE (agar bisa langsung dibuatkan tugas)
-      // 3. Tiket yang mereka buat atau awasi sendiri
+    // Kontrol Visibilitas Berdasarkan Role
+    if (role === 'KADIV') {
+      // Kadiv melihat seluruh tugas divisinya serta tugas/arahan yang dia buat ke divisi lain
       const orConditions = [
-        { status: 'MENUNGGU_TRIASE' },
-        { pembuatId: userId },
-        { penanggungJawabId: userId },
-        { pelaksanaId: userId },
+        { pembuatId: Number(userId) },
       ];
-      if (userDivisiId) {
-        orConditions.push({ divisiId: Number(userDivisiId) });
+      if (divisiId) {
+        orConditions.push({ divisiId: Number(divisiId) });
       }
       filter = { OR: orConditions };
-    } else {
-      // Role STAF melihat:
-      // 1. Tugas yang ditugaskan kepadanya (pelaksanaId)
-      // 2. Tiket masalah yang ia laporkan sendiri (pembuatId)
-      // 3. Tiket di divisinya (jika memiliki divisiId)
+    } else if (role === 'KOORDINATOR') {
+      // Koordinator melihat tugas yang dibuatnya, ditugaskan kepadanya, atau dia penanggung jawabnya;
+      // serta tiket laporan masalah masuk (MENUNGGU_TRIASE) atau tugas divisi yang pelaksananya Staf.
+      // Arahan Direksi ke Kadiv tidak akan tampil sampai Kadiv mendelegasikannya ke Koordinator.
       const orConditions = [
-        { pembuatId: userId },
-        { pelaksanaId: userId },
+        { pembuatId: Number(userId) },
+        { pelaksanaId: Number(userId) },
+        { penanggungJawabId: Number(userId) },
       ];
-      if (userDivisiId) {
-        orConditions.push({ divisiId: Number(userDivisiId) });
+      if (divisiId) {
+        orConditions.push({ divisiId: Number(divisiId), status: 'MENUNGGU_TRIASE' });
+        orConditions.push({
+          divisiId: Number(divisiId),
+          pelaksana: { role: 'STAF' },
+        });
       }
       filter = { OR: orConditions };
+    } else if (role === 'STAF') {
+      // Staf hanya melihat tugas yang ditugaskan kepadanya atau yang dia laporkan
+      filter = {
+        OR: [
+          { pelaksanaId: Number(userId) },
+          { pembuatId: Number(userId) },
+        ],
+      };
     }
+    // DIREKTUR dan ADMIN: filter = {} (Melihat seluruh data rumah sakit)
 
     const tickets = await prisma.ticket.findMany({
       where: filter,
@@ -289,6 +337,28 @@ const getTickets = async (req, res) => {
             telegramChatId: true,
           },
         },
+        parentTicket: {
+          select: {
+            id: true,
+            judul: true,
+            status: true,
+            prioritas: true,
+            deadline: true,
+            pembuat: { select: { id: true, nama: true, role: true } },
+          },
+        },
+        childTickets: {
+          select: {
+            id: true,
+            judul: true,
+            status: true,
+            prioritas: true,
+            deadline: true,
+            completedAt: true,
+            pelaksana: { select: { id: true, nama: true, role: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -302,11 +372,13 @@ const getTickets = async (req, res) => {
   }
 };
 
-// 3. Buat Tugas dari Tiket Masalah / Disposisi oleh Koordinator, Kadiv, Direktur
+// 3. Mengubah Laporan Masalah Menjadi Tugas (Oleh Koordinator / Kadiv / Direktur)
 const triageTicket = async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { prioritas, divisiId, pelaksanaId, deadline, status, catatanRevisi } = req.body;
+    const role = req.user.role;
+    const userDivisiId = req.user.divisiId ? Number(req.user.divisiId) : null;
 
     const currentTicket = await prisma.ticket.findUnique({
       where: { id },
@@ -317,6 +389,21 @@ const triageTicket = async (req, res) => {
 
     if (!currentTicket) {
       return res.status(404).json({ message: 'Tiket tidak ditemukan.' });
+    }
+
+    // Kadiv tidak boleh mengakses tiket di luar divisinya
+    if (role === 'KADIV' && userDivisiId && currentTicket.divisiId && currentTicket.divisiId !== userDivisiId) {
+      return res.status(403).json({ message: 'Anda tidak memiliki hak akses untuk men-triase tiket dari divisi lain.' });
+    }
+
+    // Koordinator hanya berwenang men-triase tiket dalam divisinya sendiri
+    if (role === 'KOORDINATOR') {
+      if (userDivisiId && currentTicket.divisiId && currentTicket.divisiId !== userDivisiId) {
+        return res.status(403).json({ message: 'Koordinator hanya berwenang men-triase tiket dalam divisinya sendiri.' });
+      }
+      if (divisiId && Number(divisiId) !== userDivisiId) {
+        return res.status(403).json({ message: 'Koordinator tidak dapat memindahkan tiket ke divisi lain.' });
+      }
     }
 
     let selectedDeadline = currentTicket.deadline;
@@ -330,8 +417,48 @@ const triageTicket = async (req, res) => {
 
     if (!selectedDeadline) {
       return res.status(400).json({
-        message: 'Batas waktu (tanggal dan jam) wajib diisi saat membuat tugas.',
+        message: 'Silakan tetapkan batas waktu (tanggal dan jam) pengerjaan tugas.',
       });
+    }
+
+    // Validasi pelaksana pada proses triase
+    if (pelaksanaId) {
+      const pelaksana = await prisma.user.findUnique({
+        where: { id: Number(pelaksanaId) },
+      });
+      if (!pelaksana) {
+        return res.status(400).json({ message: 'Pelaksana yang ditunjuk tidak ditemukan.' });
+      }
+
+      if (role === 'DIREKTUR' && pelaksana.role !== 'KADIV') {
+        return res.status(400).json({
+          message: 'Direktur hanya menerbitkan arahan strategis kepada Kepala Divisi (Kadiv).',
+        });
+      }
+
+      if (role === 'KADIV' && pelaksana.role === 'STAF') {
+        return res.status(400).json({
+          message: 'Kepala Divisi tidak dapat menugaskan Staf secara langsung. Tunjuk Koordinator.',
+        });
+      }
+
+      if (role === 'KOORDINATOR') {
+        if (pelaksana.role !== 'STAF') {
+          return res.status(400).json({
+            message: 'Koordinator hanya berwenang menugaskan Staf sebagai pelaksana.',
+          });
+        }
+        if (userDivisiId && pelaksana.divisiId !== userDivisiId) {
+          return res.status(400).json({
+            message: 'Koordinator hanya dapat menugaskan Staf dalam divisinya sendiri.',
+          });
+        }
+        if (Number(pelaksanaId) === Number(req.user.id)) {
+          return res.status(400).json({
+            message: 'Pelaksana tugas tidak boleh sama dengan penanggung jawab triase.',
+          });
+        }
+      }
     }
 
     const nextStatus = status || (pelaksanaId ? 'DIPROSES' : currentTicket.status);
@@ -357,7 +484,10 @@ const triageTicket = async (req, res) => {
         penanggungJawab: { select: { id: true, nama: true, noHp: true, role: true } },
         divisi: { select: { id: true, nama: true } },
         pelaksana: {
-          select: { id: true, nama: true, noHp: true, role: true, telegramChatId: true },
+          select: { id: true, nama: true, noHp: true, telegramChatId: true, role: true },
+        },
+        parentTicket: {
+          select: { id: true, judul: true, status: true },
         },
       },
     });
@@ -368,22 +498,18 @@ const triageTicket = async (req, res) => {
         entityType: 'Ticket',
         entityId: updatedTicket.id,
         userId: Number(req.user.id),
-        details: `${req.user.role} membuat tugas dari tiket #T-${String(updatedTicket.id).padStart(3, '0')} untuk ${updatedTicket.pelaksana?.nama || '-'}`,
+        details: `${req.user.role} membuatkan tugas dari tiket #T-${String(updatedTicket.id).padStart(3, '0')} untuk ${updatedTicket.pelaksana?.nama || '-'} dengan batas waktu ${selectedDeadline.toISOString()}`,
       },
     });
 
-    if (currentTicket.status !== nextStatus) {
-      try {
-        await notifyTicketStatus({
-          ticketId: updatedTicket.id,
-          recipient: currentTicket.pembuat,
-          ticketTitle: updatedTicket.judul,
-          status: nextStatus,
-          deadline: updatedTicket.deadline,
-        });
-      } catch (notificationError) {
-        console.error('[Telegram] Notifikasi gagal:', notificationError.message);
-      }
+    try {
+      await dispatchTicketNotifications({
+        previous: currentTicket,
+        current: updatedTicket,
+        actor: updatedTicket.penanggungJawab || { id: req.user.id, role: req.user.role },
+      });
+    } catch (notificationError) {
+      console.error('[Telegram] Notifikasi penugasan gagal:', notificationError.message);
     }
 
     return res.status(200).json({
@@ -396,7 +522,7 @@ const triageTicket = async (req, res) => {
   }
 };
 
-// 4. Pelaporan Penyelesaian (+ Foto Bukti) & Evaluasi Atasan
+// 4. Pelaporan Penyelesaian Tugas (+ Foto Bukti) oleh Staf & Evaluasi oleh Atasan
 const updateTicketStatus = async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -405,7 +531,7 @@ const updateTicketStatus = async (req, res) => {
 
     if (role === 'ADMIN') {
       return res.status(403).json({
-        message: 'Admin hanya dapat memantau tugas dan tidak dapat mengubah status.',
+        message: 'Admin hanya dapat melihat tugas dan tidak dapat mengubah status.',
       });
     }
 
@@ -422,9 +548,10 @@ const updateTicketStatus = async (req, res) => {
       return res.status(400).json({ message: 'Status tidak valid.' });
     }
 
+    // Hanya Atasan (Koordinator, Kadiv, Direktur) yang boleh mengesahkan status menjadi SELESAI (Evaluasi Lulus)
     if (status === 'SELESAI' && !['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(role)) {
       return res.status(403).json({
-        message: 'Penyelesaian tugas harus melalui pelaporan bukti foto dan disetujui oleh Koordinator/Kadiv/Direktur.',
+        message: 'Penyelesaian tugas harus melalui pelaporan bukti foto dan dievaluasi oleh Koordinator/Kadiv/Direktur.',
       });
     }
 
@@ -434,6 +561,12 @@ const updateTicketStatus = async (req, res) => {
         pembuat: {
           select: { id: true, nama: true, telegramChatId: true },
         },
+        penanggungJawab: {
+          select: { id: true, nama: true, telegramChatId: true },
+        },
+        pelaksana: {
+          select: { id: true, nama: true, telegramChatId: true },
+        },
       },
     });
 
@@ -441,30 +574,93 @@ const updateTicketStatus = async (req, res) => {
       return res.status(404).json({ message: 'Tugas tidak ditemukan.' });
     }
 
-    if (status === 'MENUNGGU_VALIDASI' && !fotoBukti && !currentTicket.fotoBukti) {
+    const userId = Number(req.user.id);
+    const userDivisiId = req.user.divisiId ? Number(req.user.divisiId) : null;
+
+    // 1. Validasi Pemisahan Pelaksana dan Pemeriksa (Segregation of Duties)
+    if (status === 'SELESAI' && currentTicket.pelaksanaId && userId === currentTicket.pelaksanaId) {
       return res.status(400).json({
-        message: 'Wajib mengunggah foto bukti penyelesaian tugas untuk dievaluasi atasan.',
+        message: 'Pelaksana tugas tidak dapat memverifikasi atau mengevaluasi pekerjaannya sendiri.',
       });
     }
 
+    // 2. Validasi Isolasi Divisi & Kepemilikan Tugas Berdasarkan Role
+    if (role === 'KADIV') {
+      if (userDivisiId && currentTicket.divisiId && currentTicket.divisiId !== userDivisiId) {
+        return res.status(403).json({ message: 'Anda tidak memiliki hak akses untuk mengubah tiket dari divisi lain.' });
+      }
+    } else if (role === 'KOORDINATOR') {
+      const isTerkait =
+        currentTicket.pembuatId === userId ||
+        currentTicket.penanggungJawabId === userId ||
+        currentTicket.pelaksanaId === userId ||
+        (userDivisiId && currentTicket.divisiId === userDivisiId);
+      if (!isTerkait) {
+        return res.status(403).json({ message: 'Koordinator tidak memiliki hak akses untuk mengubah tiket dari divisi lain.' });
+      }
+    } else if (role === 'STAF') {
+      // Staf HANYA berhak memperbarui tugas yang ditugaskan kepadanya
+      if (currentTicket.pelaksanaId !== userId) {
+        return res.status(403).json({
+          message: 'Anda hanya memiliki wewenang untuk memperbarui tugas yang ditugaskan kepada Anda.',
+        });
+      }
+      // Staf HANYA berwenang mengirim laporan selesai (MENUNGGU_VALIDASI), kendala (HOLD_ESKALASI), atau progres (DIPROSES)
+      if (!['MENUNGGU_VALIDASI', 'HOLD_ESKALASI', 'DIPROSES'].includes(status)) {
+        return res.status(403).json({
+          message: `Staf tidak memiliki wewenang untuk mengubah status tiket menjadi ${status}.`,
+        });
+      }
+    }
+
+    // Saat staf mengirim laporan selesai (MENUNGGU_VALIDASI), wajib menyertakan foto bukti
+    if (status === 'MENUNGGU_VALIDASI') {
+      if (!fotoBukti && !currentTicket.fotoBukti) {
+        return res.status(400).json({
+          message: 'Foto bukti pengerjaan wajib diunggah sebelum mengirimkan laporan penyelesaian!',
+        });
+      }
+      if (!laporanPenyelesaian || !String(laporanPenyelesaian).trim()) {
+        return res.status(400).json({
+          message: 'Keterangan laporan penyelesaian wajib diisi.',
+        });
+      }
+    }
+
+    const dataToUpdate = {
+      status,
+      catatanRevisi:
+        catatanRevisi !== undefined ? catatanRevisi : currentTicket.catatanRevisi,
+      laporanPenyelesaian:
+        laporanPenyelesaian !== undefined
+          ? laporanPenyelesaian
+          : currentTicket.laporanPenyelesaian,
+      fotoBukti:
+        fotoBukti !== undefined ? fotoBukti : currentTicket.fotoBukti,
+      completedAt:
+        status === 'SELESAI'
+          ? currentTicket.completedAt || new Date()
+          : status === 'DIPROSES'
+          ? null
+          : currentTicket.completedAt,
+    };
+
     const updatedTicket = await prisma.ticket.update({
       where: { id },
-      data: {
-        status,
-        laporanPenyelesaian:
-          laporanPenyelesaian !== undefined
-            ? laporanPenyelesaian
-            : currentTicket.laporanPenyelesaian,
-        fotoBukti:
-          fotoBukti !== undefined ? fotoBukti : currentTicket.fotoBukti,
-        catatanRevisi:
-          catatanRevisi !== undefined ? catatanRevisi : currentTicket.catatanRevisi,
-        completedAt:
-          status === 'SELESAI'
-            ? currentTicket.completedAt || new Date()
-            : status === 'DIPROSES'
-            ? null
-            : currentTicket.completedAt,
+      data: dataToUpdate,
+      include: {
+        pembuat: { select: { id: true, nama: true, noHp: true, role: true } },
+        penanggungJawab: { select: { id: true, nama: true, noHp: true, role: true } },
+        divisi: { select: { id: true, nama: true } },
+        pelaksana: {
+          select: { id: true, nama: true, noHp: true, telegramChatId: true, role: true },
+        },
+        parentTicket: {
+          select: { id: true, judul: true, status: true },
+        },
+        childTickets: {
+          select: { id: true, judul: true, status: true },
+        },
       },
     });
 
@@ -475,6 +671,8 @@ const updateTicketStatus = async (req, res) => {
             ? 'SUBMIT_COMPLETION_REPORT'
             : status === 'SELESAI'
             ? 'APPROVE_EVALUATION'
+            : status === 'HOLD_ESKALASI'
+            ? 'ESCALATE_TASK'
             : 'UPDATE_STATUS',
         entityType: 'Ticket',
         entityId: updatedTicket.id,
@@ -483,26 +681,24 @@ const updateTicketStatus = async (req, res) => {
       },
     });
 
-    if (currentTicket.status !== status) {
-      try {
-        await notifyTicketStatus({
-          ticketId: updatedTicket.id,
-          recipient: currentTicket.pembuat,
-          ticketTitle: updatedTicket.judul,
-          status,
-          deadline: updatedTicket.deadline,
-        });
-      } catch (notificationError) {
-        console.error('[Telegram] Notifikasi gagal:', notificationError.message);
-      }
+    try {
+      await dispatchTicketNotifications({
+        previous: currentTicket,
+        current: updatedTicket,
+        actor: req.user.role === 'STAF' ? updatedTicket.pelaksana : updatedTicket.penanggungJawab,
+      });
+    } catch (notificationError) {
+      console.error('[Telegram] Notifikasi pembaruan status gagal:', notificationError.message);
     }
 
     return res.status(200).json({
       message:
         status === 'MENUNGGU_VALIDASI'
-          ? 'Laporan penyelesaian dan foto bukti berhasil dikirim untuk dievaluasi!'
+          ? 'Laporan penyelesaian dan foto bukti berhasil dikirim untuk dievaluasi atasan!'
           : status === 'SELESAI'
-          ? 'Evaluasi disetujui! Tugas dinyatakan Selesai.'
+          ? 'Evaluasi disetujui! Tugas resmi dinyatakan Selesai.'
+          : status === 'HOLD_ESKALASI'
+          ? 'Tugas berhasil dieskalasi ke pimpinan untuk penanganan lebih lanjut.'
           : `Status tugas diperbarui menjadi ${status.replace('_', ' ')}!`,
       data: updatedTicket,
     });
@@ -517,8 +713,22 @@ const updateTicketStatus = async (req, res) => {
 // 5. Ambil Daftar Staf untuk Pilihan Pelaksana
 const getAssignableStaff = async (req, res) => {
   try {
+    const callerRole = req.user?.role;
+    const userDivisiId = req.user?.divisiId ? Number(req.user.divisiId) : null;
+
+    let where = { role: 'STAF' };
+    if (callerRole === 'DIREKTUR') {
+      where.role = 'KADIV';
+    } else if (callerRole === 'KADIV') {
+      where.role = 'KOORDINATOR';
+      if (userDivisiId) where.divisiId = userDivisiId;
+    } else if (callerRole === 'KOORDINATOR') {
+      where.role = 'STAF';
+      if (userDivisiId) where.divisiId = userDivisiId;
+    }
+
     const staffList = await prisma.user.findMany({
-      where: { role: 'STAF' },
+      where,
       select: {
         id: true,
         nama: true,
@@ -531,7 +741,7 @@ const getAssignableStaff = async (req, res) => {
     });
     return res.status(200).json({ data: staffList });
   } catch (error) {
-    return res.status(500).json({ message: 'Gagal mengambil daftar staf.' });
+    return res.status(500).json({ message: 'Gagal mengambil daftar pelaksana.' });
   }
 };
 
@@ -587,6 +797,78 @@ const createOrUpdateSop = async (req, res) => {
   }
 };
 
+// 7. Ambil Detail Tiket Berdasarkan ID (Termasuk Hirarki Parent-Child)
+const getTicketById = async (req, res) => {
+  try {
+    const ticketId = parseInt(req.params.id);
+    const role = req.user?.role;
+    const userDivisiId = req.user?.divisiId ? Number(req.user.divisiId) : null;
+    const userId = Number(req.user?.id);
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: {
+        pembuat: { select: { id: true, nama: true, noHp: true, role: true } },
+        penanggungJawab: { select: { id: true, nama: true, noHp: true, role: true } },
+        divisi: { select: { id: true, nama: true } },
+        pelaksana: { select: { id: true, nama: true, noHp: true, role: true, telegramChatId: true } },
+        parentTicket: {
+          select: {
+            id: true,
+            judul: true,
+            status: true,
+            prioritas: true,
+            deadline: true,
+            pembuat: { select: { id: true, nama: true, role: true } },
+          },
+        },
+        childTickets: {
+          select: {
+            id: true,
+            judul: true,
+            status: true,
+            prioritas: true,
+            deadline: true,
+            completedAt: true,
+            pelaksana: { select: { id: true, nama: true, role: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ message: 'Tugas tidak ditemukan' });
+    }
+
+    // Pemeriksaan Akses Hak Role & Isolasi Divisi
+    if (role === 'KADIV') {
+      const isPembuat = ticket.pembuatId === userId;
+      const isDivisiSama = userDivisiId && ticket.divisiId === userDivisiId;
+      if (!isPembuat && !isDivisiSama) {
+        return res.status(403).json({ message: 'Anda tidak memiliki hak akses untuk melihat tiket dari divisi lain.' });
+      }
+    } else if (role === 'KOORDINATOR') {
+      const isPembuat = ticket.pembuatId === userId;
+      const isPelaksana = ticket.pelaksanaId === userId;
+      const isPenanggungJawab = ticket.penanggungJawabId === userId;
+      const isDivisiSama = userDivisiId && ticket.divisiId === userDivisiId;
+      if (!isPembuat && !isPelaksana && !isPenanggungJawab && !isDivisiSama) {
+        return res.status(403).json({ message: 'Anda tidak memiliki hak akses untuk melihat tiket dari divisi lain.' });
+      }
+    } else if (role === 'STAF') {
+      if (ticket.pelaksanaId !== userId && ticket.pembuatId !== userId) {
+        return res.status(403).json({ message: 'Anda tidak memiliki hak akses untuk melihat tiket ini.' });
+      }
+    }
+
+    return res.status(200).json({ data: ticket });
+  } catch (error) {
+    console.error('Error getTicketById:', error);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+};
+
 module.exports = {
   createTicket,
   getTickets,
@@ -595,4 +877,5 @@ module.exports = {
   getAssignableStaff,
   getSops,
   createOrUpdateSop,
+  getTicketById,
 };

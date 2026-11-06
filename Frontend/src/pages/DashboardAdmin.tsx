@@ -1,3 +1,4 @@
+import { getAuthUserName, getAuthRole } from '../utils/authStorage';
 // Frontend/src/pages/DashboardAdmin.tsx
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
@@ -39,7 +40,8 @@ const DashboardAdmin: React.FC = () => {
   const [newPassword, setNewPassword] = useState<string>('');
   const [resetLoading, setResetLoading] = useState<boolean>(false);
 
-  const userName = localStorage.getItem('userName') || 'Admin Sistem IT';
+  const userName = getAuthUserName('Admin Sistem IT');
+  const userRole = getAuthRole() || 'ADMIN';
 
   const fetchDivisi = async () => {
     try {
@@ -85,7 +87,7 @@ const DashboardAdmin: React.FC = () => {
     setError('');
     setSuccess('');
 
-    if (formData.role !== 'DIREKTUR' && !formData.divisiId) {
+    if (!['DIREKTUR', 'ADMIN'].includes(formData.role) && !formData.divisiId) {
       setError('Silakan pilih Unit Divisi terlebih dahulu.');
       return;
     }
@@ -99,7 +101,7 @@ const DashboardAdmin: React.FC = () => {
         email: formData.email || null,
         password: formData.password,
         role: formData.role,
-        divisiId: formData.role === 'DIREKTUR' ? null : Number(formData.divisiId),
+        divisiId: ['DIREKTUR', 'ADMIN'].includes(formData.role) ? null : Number(formData.divisiId),
       };
 
       const response = await api.post('/auth/register', payload);
@@ -159,7 +161,7 @@ const DashboardAdmin: React.FC = () => {
           Dashboard Admin — Manajemen Akun & Matriks RBAC
         </h1>
         <p className="text-sm text-slate-500">
-          Selamat bertugas, <span className="font-semibold text-slate-700">{userName}</span> — Panel pendaftaran nomor HP/WhatsApp pegawai, pemetaan hak akses, dan reset password
+          Selamat bertugas, <span className="font-semibold text-slate-700">{userName}</span> ({userRole}) — Panel manajemen akun & matriks wewenang
         </p>
       </div>
 
@@ -188,7 +190,7 @@ const DashboardAdmin: React.FC = () => {
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit">
           <h2 className="text-lg font-bold text-slate-800 mb-1">Tambah Akun Baru</h2>
           <p className="text-xs text-slate-500 mb-4">
-            Daftarkan pegawai menggunakan Nomor HP aktif untuk login dan notifikasi WhatsApp
+            Daftarkan pegawai menggunakan Nomor HP aktif untuk login akun
           </p>
 
           {error && (
@@ -281,7 +283,7 @@ const DashboardAdmin: React.FC = () => {
               </select>
             </div>
 
-            {formData.role !== 'DIREKTUR' && (
+            {!['DIREKTUR', 'ADMIN'].includes(formData.role) && (
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                   Unit Divisi
@@ -377,7 +379,7 @@ const DashboardAdmin: React.FC = () => {
                         </span>
                       </td>
                       <td className="py-3 px-3 text-slate-600">
-                        {item.divisi?.nama || 'Lintas Divisi (Eksekutif)'}
+                        {item.divisi?.nama || (item.role === 'ADMIN' ? 'Sistem IT / Global' : 'Lintas Divisi (Eksekutif)')}
                       </td>
                       <td className="py-3 px-3 text-right">
                         <button

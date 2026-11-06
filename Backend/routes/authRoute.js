@@ -1,23 +1,33 @@
 // Backend/routes/authRoute.js
 const express = require('express');
 const router = express.Router();
-const authController = require('../controllers/authController');
-const { verifyToken, checkRole } = require('../middlewares/authMiddleware');
 
-// Rute Publik: Login & Daftar Divisi
-router.post('/login', authController.login);
-router.get('/divisi', authController.getDivisi);
+const {
+  login,
+  register,
+  getUsers,
+  resetPassword,
+  deleteUser,
+  getDivisi,
+  getAuditLogs,
+} = require('../controllers/authController');
 
-// Membuat tautan penghubung akun Telegram
-router.post(
-  '/telegram/link-token',
+const {
   verifyToken,
-  authController.createTelegramLink
-);
+  checkRole,
+} = require('../middlewares/authMiddleware');
 
-// Rute Eksklusif Admin Sistem (UAT-1.1): Manajemen Akun, Register & Reset Password
-router.get('/users', verifyToken, checkRole(['ADMIN']), authController.getUsers);
-router.post('/register', verifyToken, checkRole(['ADMIN']), authController.register);
-router.put('/users/:id/reset-password', verifyToken, checkRole(['ADMIN']), authController.resetPassword);
+// Rute Publik
+router.post('/login', login);
+router.get('/divisi', getDivisi);
+
+// Rute Khusus Admin Sistem (Modul 1 & Modul 6 UAT)
+router.get('/users', verifyToken, checkRole(['ADMIN']), getUsers);
+router.post('/register', verifyToken, checkRole(['ADMIN']), register);
+router.post('/users', verifyToken, checkRole(['ADMIN']), register);
+router.put('/users/:id/reset-password', verifyToken, checkRole(['ADMIN']), resetPassword);
+router.patch('/users/:id/reset-password', verifyToken, checkRole(['ADMIN']), resetPassword);
+router.delete('/users/:id', verifyToken, checkRole(['ADMIN']), deleteUser);
+router.get('/audit-logs', verifyToken, checkRole(['ADMIN']), getAuditLogs);
 
 module.exports = router;

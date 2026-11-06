@@ -1,3 +1,4 @@
+import { getAuthUserName, getAuthRole, getAuthDivisiNama } from '../../utils/authStorage';
 // Frontend/src/pages/Kadiv/DashboardKadiv.tsx
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -18,7 +19,9 @@ const DashboardKadiv: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const userName = localStorage.getItem('userName') || 'Kepala Divisi';
+  const userName = getAuthUserName('Kepala Divisi');
+  const userRole = getAuthRole();
+  const userDivisi = getAuthDivisiNama();
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -63,7 +66,7 @@ const DashboardKadiv: React.FC = () => {
             Dashboard Manajerial (Kepala Divisi)
           </h1>
           <p className="text-sm text-slate-500">
-            Selamat bertugas, <span className="font-semibold text-slate-700">{userName}</span> — Panel Evaluasi, Triase & Pendelegasian Tugas
+            Selamat bertugas, <span className="font-semibold text-slate-700">{userName}</span> ({userRole} • Divisi: <span className="font-semibold text-slate-700">{userDivisi}</span>) — Panel Evaluasi, Triase & Pendelegasian Tugas
           </p>
         </div>
         <Link
