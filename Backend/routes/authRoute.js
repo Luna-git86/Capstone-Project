@@ -10,6 +10,9 @@ const {
   deleteUser,
   getDivisi,
   getAuditLogs,
+  createTelegramLink,
+  getTelegramStatus,
+  unlinkTelegram,
 } = require('../controllers/authController');
 
 const {
@@ -20,6 +23,11 @@ const {
 // Rute Publik
 router.post('/login', login);
 router.get('/divisi', getDivisi);
+
+// Rute Tautan Telegram (Semua Pengguna Terotentikasi)
+router.post('/telegram/link-token', verifyToken, createTelegramLink);
+router.get('/telegram/status', verifyToken, getTelegramStatus);
+router.delete('/telegram/link', verifyToken, unlinkTelegram);
 
 // Rute Khusus Admin Sistem (Modul 1 & Modul 6 UAT)
 router.get('/users', verifyToken, checkRole(['ADMIN']), getUsers);

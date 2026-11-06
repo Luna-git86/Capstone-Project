@@ -1,9 +1,10 @@
 // Backend/controllers/authController.js
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const prisma = require('../db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'rahasia_negara_api_2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'kunci_rahasia_rsia_2026';
 
 // 1. Login Pengguna (UAT-1.1, UAT-1.5 s/d UAT-1.8, UAT-1.12)
 const login = async (req, res) => {
@@ -307,6 +308,158 @@ const getAuditLogs = async (req, res) => {
   }
 };
 
+// 8. Tautan Penghubung Telegram (User Linking)
+const createTelegramLink = async (req, res) => {
+  try {
+    const botUsername = process.env.TELEGRAM_BOT_USERNAME;
+
+    if (!botUsername) {
+      return res.status(500).json({
+        message: 'TELEGRAM_BOT_USERNAME belum dikonfigurasi di file environment.',
+      });
+    }
+
+    const userId = Number(req.user?.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({
+        message: 'Identitas pengguna tidak valid.',
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        telegramChatId: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: 'Pengguna tidak ditemukan.',
+      });
+    }
+
+    if (user.telegramChatId) {
+      return res.status(409).json({
+        message: 'Akun Telegram pengguna sudah terhubung.',
+      });
+    }
+
+    // Token acak 64 karakter (32 bytes hex), sesuai batas parameter /start Telegram
+    const rawToken = crypto.randomBytes(32).toString('hex');
+
+    // Simpan hash SHA-256 token, bukan token aslinya di DB
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 menit
+
+    // Hapus token lama milik user yang belum digunakan, lalu buat token baru
+    await prisma.$transaction([
+      prisma.telegramLinkToken.deleteMany({
+        where: {
+          userId,
+          usedAt: null,
+        },
+      }),
+      prisma.telegramLinkToken.create({
+        data: {
+          tokenHash,
+          userId,
+          expiresAt,
+        },
+      }),
+    ]);
+
+    const cleanUsername = botUsername.replace(/^@/, '');
+
+    return res.status(200).json({
+      message: 'Tautan penghubung Telegram berhasil dibuat.',
+      link: `https://t.me/${cleanUsername}?start=${rawToken}`,
+      expiresIn: 600,
+    });
+  } catch (error) {
+    console.error('Gagal membuat tautan Telegram:', error);
+    return res.status(500).json({
+      message: 'Gagal membuat tautan penghubung Telegram.',
+    });
+  }
+};
+
+// 9. Cek Status Tautan Telegram Pengguna
+const getTelegramStatus = async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ message: 'Identitas pengguna tidak valid.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { telegramChatId: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+    }
+
+    return res.status(200).json({
+      linked: Boolean(user.telegramChatId),
+    });
+  } catch (error) {
+    console.error('Gagal membaca status Telegram:', error);
+    return res.status(500).json({ message: 'Gagal membaca status Telegram.' });
+  }
+};
+
+// 10. Putuskan Tautan Telegram Pengguna
+const unlinkTelegram = async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ message: 'Identitas pengguna tidak valid.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, telegramChatId: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
+    }
+
+    if (!user.telegramChatId) {
+      return res.status(200).json({
+        message: 'Akun ini belum terhubung ke Telegram.',
+        linked: false,
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: { telegramChatId: null },
+      }),
+      prisma.telegramLinkToken.deleteMany({
+        where: { userId },
+      }),
+    ]);
+
+    return res.status(200).json({
+      message: 'Telegram berhasil diputus dari akun ini. Nomor/akun Telegram itu bisa dihubungkan ke akun lain.',
+      linked: false,
+    });
+  } catch (error) {
+    console.error('Gagal memutus tautan Telegram:', error);
+    return res.status(500).json({ message: 'Gagal memutus tautan Telegram.' });
+  }
+};
+
 module.exports = {
   login,
   register,
@@ -315,4 +468,7 @@ module.exports = {
   deleteUser,
   getDivisi,
   getAuditLogs,
+  createTelegramLink,
+  getTelegramStatus,
+  unlinkTelegram,
 };
