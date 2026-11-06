@@ -47,29 +47,12 @@ const Sidebar: React.FC = () => {
       path: '/menu-laporan',
       allowedRoles: ['KOORDINATOR'],
     },
-    {
-      title: 'Tugas Saya',
-      path: '/semua-tugas-staff',
-      allowedRoles: ['STAF'],
-    },
-    {
-      title: 'Laporkan Masalah',
-      path: '/laporkan-masalah',
-      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
-    },
-    {
-      title: 'Buat Tugas',
-      path: '/tambah-tugas',
-      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
-    },
+
+     //Rute untuk semua role
+
     {
       title: 'Daftar Tugas',
       path: '/semua-tugas',
-      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
-    },
-    {
-      title: 'Riwayat Selesai',
-      path: '/riwayat',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
     {
@@ -82,6 +65,14 @@ const Sidebar: React.FC = () => {
       path: '/laporan-sla',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR'],
     },
+        {
+      title: 'Laporkan Masalah',
+      path: '/laporkan-masalah',
+      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+    },
+
+    //Rute Khusus Admin
+
     {
       title: 'Log Notifikasi',
       path: '/monitoring-notifikasi',
