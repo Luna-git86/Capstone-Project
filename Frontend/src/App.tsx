@@ -3,9 +3,13 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import DashboardAdmin from './pages/DashboardAdmin';
+import MonitoringNotifikasi from './pages/Admin/MonitoringNotifikasi';
+import PengaturanAdmin from './pages/Admin/PengaturanAdmin';
 import DashboardStaff from './pages/Staf/DashboardStaff';
 import SemuaTugas from './pages/SemuaTugas';
+import SemuaTugasLengkap from './pages/SemuaTugasLengkap';
 import DetailTugas from './pages/DetailTugas';
+import DetailTugasList from './pages/DetailTugasList';
 import TambahTugas from './pages/TambahTugas';
 import LaporkanMasalah from './pages/LaporkanMasalah';
 import DokumenSOP from './pages/DokumenSop';
@@ -76,9 +80,11 @@ function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
-            {/* 1. Kelola Akun Pegawai (Khusus Admin Sistem) */}
+            {/* 1. Kelola Akun, Monitoring Notifikasi & Pengaturan (Khusus Admin Sistem) */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN']} />}>
               <Route path="/dashboard-admin" element={<DashboardAdmin />} />
+              <Route path="/monitoring-notifikasi" element={<MonitoringNotifikasi />} />
+              <Route path="/pengaturan-admin" element={<PengaturanAdmin />} />
             </Route>
 
             {/* 2. Beranda Eksekutif & Analitik (Khusus Direktur) */}
@@ -109,30 +115,32 @@ function App() {
               <Route path="/dashboard-staff" element={<DashboardStaff />} />
             </Route>
 
-            {/* 6. Menu Buat Tugas dengan Batas Waktu Jam (Khusus Koordinator, Kadiv, Direktur - UAT Modul 3) */}
+            {/* 6. Menu Buat Tugas dengan Batas Waktu Jam (Khusus Koordinator, Kadiv, Direktur) */}
             <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR']} />}>
               <Route path="/tambah-tugas" element={<TambahTugas />} />
             </Route>
 
-            {/* 7. Menu Laporkan Masalah (Admin Diblokir Sesuai UAT-2.6) */}
+            {/* 7. Menu Laporkan Masalah (Admin Diblokir) */}
             <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
               <Route path="/laporkan-masalah" element={<LaporkanMasalah />} />
             </Route>
 
-            {/* 8. Laporan Kinerja / SLA (Staf Diblokir Sesuai UAT-6.6) */}
+            {/* 8. Laporan Kinerja / SLA (Staf Diblokir) */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR']} />}>
               <Route path="/laporan-sla" element={<LaporanSLA />} />
             </Route>
 
-            {/* 9. Panduan SOP (Admin Diblokir Sesuai UAT-6.4) */}
+            {/* 9. Panduan SOP (Admin Diblokir) */}
             <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
               <Route path="/dokumen-sop" element={<DokumenSOP />} />
               <Route path="/persetujuan-sop" element={<Navigate to="/dokumen-sop" replace />} />
             </Route>
 
-            {/* 10. Rute Umum Lintas Role (Semua Tugas & Detail Tugas) */}
+            {/* 10. Rute Umum Lintas Role */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
               <Route path="/semua-tugas" element={<SemuaTugas />} />
+              <Route path="/semua-tugas-lengkap" element={<SemuaTugasLengkap />} />
+              <Route path="/detail-tugas" element={<DetailTugasList />} />
               <Route path="/detail-tugas/:id" element={<DetailTugas />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
             </Route>

@@ -10,6 +10,7 @@ const {
   getAssignableStaff,
   getSops,
   createOrUpdateSop,
+  getTicketById,
 } = require('../controllers/ticketController');
 
 const {
@@ -61,6 +62,13 @@ router.get(
   '/',
   checkRole(['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']),
   getTickets
+);
+
+// Lihat Detail Tugas Berdasarkan ID (Semua Role Termasuk Admin)
+router.get(
+  '/:id',
+  checkRole(['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']),
+  getTicketById
 );
 
 // Buat Tugas dari Tiket Masalah / Disposisi (Direktur, Kadiv, Koordinator)
