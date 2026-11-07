@@ -146,7 +146,7 @@ function App() {
               <Route path="/semua-tugas-staff" element={<SemuaTugas />} />
               <Route path="/daftar-semua-tugas" element={<SemuaTugasLengkap />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
-              <Route path="/detail-tugas" element={<DetailTugasList />} />
+              <Route path="/detail-tugas-list" element={<DetailTugasList />} />
               <Route path="/dokumen-sop" element={<DokumenSOP />} />
               <Route path="/detail-tugas/:id" element={<DetailTugas />} />
 
