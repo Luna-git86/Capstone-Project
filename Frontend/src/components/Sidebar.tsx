@@ -70,6 +70,11 @@ const Sidebar: React.FC = () => {
       path: '/laporkan-masalah',
       allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
+    {
+      title: 'Laporan Saya',
+      path: '/riwayat-laporan',
+      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+    },
 
     //Rute Khusus Admin
 

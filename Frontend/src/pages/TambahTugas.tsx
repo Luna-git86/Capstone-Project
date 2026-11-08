@@ -1,5 +1,5 @@
 // Frontend/src/pages/TambahTugas.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { getAuthRole, getAuthDivisiId, getAuthUserId } from '../utils/authStorage';
@@ -32,8 +32,34 @@ interface IncomingTicket {
   pelaksana?: { id?: number; nama: string; role: string } | null;
 }
 
+// Fungsi kompresi gambar di browser
+const compressImageToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 800;
+        const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7)); // Kualitas 70%
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 const TambahTugas: React.FC = () => {
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [searchParams] = useSearchParams();
   const preselectedTicketId = searchParams.get('ticketId') || '';
   const parentId = searchParams.get('parentId');
@@ -59,9 +85,14 @@ const TambahTugas: React.FC = () => {
     deskripsi: '',
     prioritas: 'MEDIUM',
     divisiId: userDivisiId,
-    pelaksanaIds: [] as string[], // Menggunakan Array untuk multi-select
+    pelaksanaIds: [] as string[], 
     deadline: '',
+    fotoBukti: '', // State baru untuk menyimpan lampiran instruksi
   });
+
+  // STATE DRAG & DROP FOTO
+  const [isDragging, setIsDragging] = useState(false);
+  const [previewName, setPreviewName] = useState('');
 
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -79,9 +110,7 @@ const TambahTugas: React.FC = () => {
     const loadInitialData = async () => {
       try {
         const ticketRes = await api.get('/tickets');
-        const allTickets: IncomingTicket[] = Array.isArray(ticketRes.data)
-          ? ticketRes.data
-          : ticketRes.data?.data || [];
+        const allTickets: IncomingTicket[] = Array.isArray(ticketRes.data) ? ticketRes.data : ticketRes.data?.data || [];
           
         const delegatableTickets = allTickets.filter((t) => {
           if (t.status === 'MENUNGGU_TRIASE') return true;
@@ -159,9 +188,11 @@ const TambahTugas: React.FC = () => {
         deskripsi: found.deskripsi,
         prioritas: found.prioritas || 'MEDIUM',
         divisiId: found.divisi?.id ? String(found.divisi.id) : prev.divisiId,
-        pelaksanaIds: [], // Reset pilihan staf
+        pelaksanaIds: [], 
         deadline: found.deadline ? toDateTimeLocalInput(found.deadline) : prev.deadline,
+        fotoBukti: '', // reset foto jika pilih dari list
       }));
+      setPreviewName('');
     }
   };
 
@@ -189,7 +220,53 @@ const TambahTugas: React.FC = () => {
     setFormData({ ...formData, [name]: value });
   };
 
-  // HANDLER CHECKBOX MULTI-SELECT PELAKSANA
+  // --- HANDLERS UNTUK DRAG & DROP FOTO INSTRUKSI ---
+  const handleFileProcess = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('Mohon unggah file gambar (JPG/PNG).');
+      return;
+    }
+    try {
+      const base64Str = await compressImageToBase64(file);
+      setFormData(prev => ({ ...prev, fotoBukti: base64Str }));
+      setPreviewName(file.name);
+    } catch (err) {
+      alert('Gagal memproses gambar instruksi.');
+    }
+  };
+
+  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFileProcess(e.target.files[0]);
+    }
+  };
+
+  const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const onDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileProcess(e.dataTransfer.files[0]);
+      e.dataTransfer.clearData();
+    }
+  };
+
+  const hapusFoto = () => {
+    setFormData(prev => ({ ...prev, fotoBukti: '' }));
+    setPreviewName('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+  // ----------------------------------------------------
+
   const togglePelaksana = (staffId: string) => {
     setFormData((prev) => {
       const isSelected = prev.pelaksanaIds.includes(staffId);
@@ -208,7 +285,6 @@ const TambahTugas: React.FC = () => {
     }));
   };
 
-  // MULTIPLE SUBMIT HANDLER (PARALEL)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.pelaksanaIds.length === 0) {
@@ -220,7 +296,6 @@ const TambahTugas: React.FC = () => {
     setSubmitting(true);
 
     try {
-      // Eksekusi Promise.all untuk membuat tiket secara masal (Bulk Create di sisi Frontend)
       const promises = formData.pelaksanaIds.map((pelaksanaId) => {
         const payload: any = {
           tipe: 'BUAT_TUGAS',
@@ -232,6 +307,7 @@ const TambahTugas: React.FC = () => {
           divisiId: Number(formData.divisiId),
           pelaksanaId: Number(pelaksanaId),
           deadline: new Date(formData.deadline).toISOString(),
+          fotoBukti: formData.fotoBukti || null, // Mengirimkan lampiran foto instruksi
         };
 
         if (parentId) {
@@ -252,7 +328,9 @@ const TambahTugas: React.FC = () => {
         deskripsi: '',
         pelaksanaIds: [],
         deadline: '',
+        fotoBukti: '',
       }));
+      setPreviewName('');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Terjadi kesalahan saat menerbitkan sebagian atau seluruh tugas.');
     } finally {
@@ -260,7 +338,6 @@ const TambahTugas: React.FC = () => {
     }
   };
 
-  // Filter List Staf
   const filteredStaff = allStaffList.filter((s) => !formData.divisiId || String(s.divisiId) === String(formData.divisiId));
   const staffToDisplay = pelaksanaList.length > 0 ? pelaksanaList : (filteredStaff.length > 0 ? filteredStaff : allStaffList);
 
@@ -374,15 +451,55 @@ const TambahTugas: React.FC = () => {
           <textarea name="deskripsi" rows={3} value={formData.deskripsi} onChange={handleChange} required placeholder="Tuliskan standar hasil kerja yang Anda harapkan..." className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 bg-slate-50 focus:border-blue-600 leading-relaxed" />
         </div>
 
-        {/* =======================================
-            SECTION MULTI-DELEGASI STAF 
-            ======================================= */}
+        {/* ZONA UPLOAD FOTO REFERENSI/INSTRUKSI (DRAG & DROP) */}
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+            Lampiran Foto Referensi / Instruksi (Opsional)
+          </label>
+          
+          <div 
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-all ${
+              isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-slate-400'
+            }`}
+          >
+            {formData.fotoBukti ? (
+              <div className="w-full">
+                <img src={formData.fotoBukti} alt="Preview Bukti" className="h-40 mx-auto object-cover rounded-lg border border-slate-200 shadow-sm mb-3" />
+                <p className="text-xs font-bold text-slate-700 mb-2 truncate px-4">{previewName}</p>
+                <button type="button" onClick={hapusFoto} className="px-3 py-1 bg-rose-100 text-rose-700 text-[10px] font-bold uppercase rounded-lg hover:bg-rose-200 transition">
+                  Hapus & Ganti Foto
+                </button>
+              </div>
+            ) : (
+              <>
+                <svg className={`w-10 h-10 mb-3 ${isDragging ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                <p className="text-sm font-bold text-slate-700 mb-1">Tarik & Lepas foto referensi ke sini</p>
+                <p className="text-xs text-slate-500 mb-4">atau klik tombol di bawah untuk memilih file JPG/PNG</p>
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-white border border-slate-300 shadow-sm text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50">
+                  Jelajahi File
+                </button>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={onFileInputChange} 
+                  accept="image/png, image/jpeg, image/jpg" 
+                  className="hidden" 
+                />
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* SECTION MULTI-DELEGASI STAF */}
         <div className="border-t border-slate-200 pt-6">
           <h3 className="text-sm font-bold text-slate-800 mb-4">Pemilihan Tim Pelaksana (Bisa Pilih Banyak)</h3>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Filter Divisi & Daftar Staf Available */}
             <div className="lg:col-span-1 space-y-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Filter Divisi</label>
@@ -423,7 +540,6 @@ const TambahTugas: React.FC = () => {
               </div>
             </div>
 
-            {/* Area Staf Terpilih */}
             <div className="lg:col-span-2">
               <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 h-full">
                 <div className="flex items-center justify-between mb-4">

@@ -23,13 +23,14 @@ interface TicketDetail {
   status: 'MENUNGGU_TRIASE' | 'DIPROSES' | 'MENUNGGU_VALIDASI' | 'HOLD_ESKALASI' | 'SELESAI' | 'DITOLAK';
   deadline: string | null;
   laporanPenyelesaian: string | null;
-  fotoBukti: string | null;
+  fotoInstruksi?: string | null; // Foto referensi saat tugas dibuat
+  fotoBukti: string | null;      // Foto hasil saat tugas diselesaikan
   catatanRevisi: string | null;
   pembuat?: { id: number; nama: string; role: string };
   penanggungJawab?: { id: number; nama: string; role: string };
   pelaksana?: { id: number; nama: string; noHp?: string; role: string };
   divisi?: { id: number; nama: string };
-  logs?: TicketLog[]; // Array riwayat log aktivitas dari backend
+  logs?: TicketLog[];
   parentTicket?: {
     id: number;
     judul: string;
@@ -241,12 +242,9 @@ export default function DetailTugas() {
   const badge = getStatusBadge(ticket.status);
   const isOverdue = ticket.deadline && new Date(ticket.deadline) < new Date() && ticket.status !== 'SELESAI';
   
-  // Kalkulasi Progress Sub-Tugas (Khusus Arahan Induk)
   const totalChild = ticket.childTickets?.length || 0;
   const completedChild = ticket.childTickets?.filter(c => c.status === 'SELESAI').length || 0;
   const progressPercent = totalChild === 0 ? 0 : Math.round((completedChild / totalChild) * 100);
-  
-  // Kalkulasi Total Revisi
   const jumlahRevisi = ticket.logs ? ticket.logs.filter(log => log.statusBaru === 'DIPROSES' && log.statusSebelumnya === 'MENUNGGU_VALIDASI').length : 0;
 
   return (
@@ -275,7 +273,6 @@ export default function DetailTugas() {
         </div>
       </div>
 
-      {/* BANNER ARAHAN INDUK */}
       {ticket.parentTicket && (
         <div className="p-4 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-sm">
           <div>
@@ -297,7 +294,7 @@ export default function DetailTugas() {
         {/* KOLOM KIRI (KONTEN UTAMA) */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           
-          {/* Detail Informasi */}
+          {/* INFORMASI INSTRUKSI (Menampilkan Foto Referensi/Instruksi Awal) */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-5 border-b border-slate-100 pb-3">Informasi Instruksi</h3>
             
@@ -322,9 +319,23 @@ export default function DetailTugas() {
               </div>
             </div>
 
-            <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Deskripsi Pekerjaan</p>
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-              {ticket.deskripsi}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Deskripsi Pekerjaan / Keluhan</p>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap h-full min-h-[120px]">
+                  {ticket.deskripsi}
+                </div>
+              </div>
+              
+              {/* Tempat memunculkan foto referensi dari form pembuat */}
+              {ticket.fotoInstruksi && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Foto Referensi / Bukti Masalah Awal</p>
+                  <a href={ticket.fotoInstruksi} target="_blank" rel="noreferrer">
+                    <img src={ticket.fotoInstruksi} alt="Referensi Instruksi" className="w-full h-32 md:h-full object-cover rounded-xl border border-slate-200 shadow-sm hover:object-contain transition-all" />
+                  </a>
+                </div>
+              )}
             </div>
           </div>
 
@@ -366,7 +377,7 @@ export default function DetailTugas() {
             </div>
           )}
 
-          {/* BUKTI HASIL KERJA */}
+          {/* BUKTI HASIL KERJA (DARI STAF) */}
           {(ticket.fotoBukti || ticket.laporanPenyelesaian) && (
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
               <h3 className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-5 border-b border-slate-100 pb-3">Laporan Hasil Pekerjaan</h3>
@@ -374,8 +385,10 @@ export default function DetailTugas() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {ticket.fotoBukti && (
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Foto Dokumentasi</p>
-                    <img src={ticket.fotoBukti} alt="Bukti" className="w-full h-48 object-cover rounded-xl border border-slate-200 shadow-sm hover:object-contain transition-all" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Foto Dokumentasi Selesai</p>
+                    <a href={ticket.fotoBukti} target="_blank" rel="noreferrer">
+                      <img src={ticket.fotoBukti} alt="Bukti Selesai" className="w-full h-48 object-cover rounded-xl border border-slate-200 shadow-sm hover:object-contain transition-all" />
+                    </a>
                   </div>
                 )}
                 {ticket.laporanPenyelesaian && (
@@ -469,7 +482,7 @@ export default function DetailTugas() {
                 target="_blank" rel="noreferrer"
                 className="mt-5 w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2"
               >
-                <span>Hubungi staf terkait</span>
+                <span>Tanya Progres via WhatsApp</span>
               </a>
             )}
           </div>

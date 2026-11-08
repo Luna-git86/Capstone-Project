@@ -18,6 +18,7 @@ import LaporanSLA from './pages/LaporanSLA';
 import Dashboard from './pages/Dashboard';
 import DetailTugas from './pages/DetailTugas';
 import DetailTugasList from './pages/DetailTugasList';
+import RiwayatLaporan from './pages/RiwayatLaporan';
 
 // Rute import Staff
 import DashboardStaff from './pages/Staf/DashboardStaff';
@@ -149,7 +150,7 @@ function App() {
               <Route path="/detail-tugas-list" element={<DetailTugasList />} />
               <Route path="/dokumen-sop" element={<DokumenSOP />} />
               <Route path="/detail-tugas/:id" element={<DetailTugas />} />
-
+              <Route path="/riwayat-laporan" element={<RiwayatLaporan />} />
             </Route>
           </Route>
         </Route>
