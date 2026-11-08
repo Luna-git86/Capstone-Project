@@ -38,21 +38,35 @@ const SemuaTugasLengkap: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('SEMUA');
 
-  const fetchTickets = async () => {
+  const fetchTickets = async (isBackground = false) => {
     try {
-      setLoading(true);
+      // Hanya aktifkan animasi loading jika ini muat awal (bukan di latar belakang)
+      if (!isBackground) setLoading(true);
+      
       const res = await api.get('/tickets');
       const data: Ticket[] = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      
+      // React akan memperbarui Virtual DOM secara otomatis tanpa berkedip
       setTickets(data);
     } catch (err) {
       console.error('Gagal mengambil semua tugas', err);
     } finally {
-      setLoading(false);
+      // Matikan animasi loading hanya jika ini muat awal
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTickets();
+    // 1. Ambil data pertama kali saat halaman dibuka (dengan loading)
+    fetchTickets(false);
+
+    // 2. Setup Polling: Jalankan Fetch API setiap 10 detik di latar belakang
+    const intervalId = setInterval(() => {
+      fetchTickets(true);
+    }, 10000); // 10 detik
+
+    // 3. Cleanup: Bersihkan interval saat komponen dilepas agar tidak memory leak
+    return () => clearInterval(intervalId);
   }, []);
 
   const counts = useMemo(() => {

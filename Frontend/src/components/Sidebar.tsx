@@ -36,6 +36,7 @@ const Sidebar: React.FC = () => {
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
     },
     {
+<<<<<<< HEAD
       title: 'Laporkan Masalah',
       path: '/laporkan-masalah',
       allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
@@ -45,6 +46,20 @@ const Sidebar: React.FC = () => {
       path: '/tambah-tugas',
       allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
     },
+=======
+      title: 'Daftar Eskalasi',
+      path: '/daftar-eskalasi-kadiv',
+      allowedRoles: ['KADIV'],
+    },
+    {
+      title: 'Menu Laporan',
+      path: '/menu-laporan',
+      allowedRoles: ['KOORDINATOR'],
+    },
+
+     //Rute untuk semua role
+
+>>>>>>> 852a56308fb9d34a865bb7a7bdcd0e3af0f7bdd2
     {
       title: 'Semua Tugas',
       path: '/semua-tugas',
@@ -60,6 +75,32 @@ const Sidebar: React.FC = () => {
       path: '/laporan-sla',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR'],
     },
+<<<<<<< HEAD
+=======
+        {
+      title: 'Laporkan Masalah',
+      path: '/laporkan-masalah',
+      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+    },
+    {
+      title: 'Laporan Saya',
+      path: '/riwayat-laporan',
+      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
+    },
+
+    //Rute Khusus Admin
+
+    {
+      title: 'Log Notifikasi',
+      path: '/monitoring-notifikasi',
+      allowedRoles: ['ADMIN'],
+    },
+    {
+      title: 'Pengaturan Sistem',
+      path: '/pengaturan-admin',
+      allowedRoles: ['ADMIN'],
+    },
+>>>>>>> 852a56308fb9d34a865bb7a7bdcd0e3af0f7bdd2
   ];
 
   const visibleMenus = menuItems.filter((item) =>

@@ -17,6 +17,17 @@ import RiwayatTugas from './pages/RiwayatTugas';
 import PeformaAnalisis from './pages/PeformaAnalisis';
 import Login from './pages/Login';
 import LaporanSLA from './pages/LaporanSLA';
+<<<<<<< HEAD
+=======
+import Dashboard from './pages/Dashboard';
+import DetailTugas from './pages/DetailTugas';
+import DetailTugasList from './pages/DetailTugasList';
+import RiwayatLaporan from './pages/RiwayatLaporan';
+
+// Rute import Staff
+import DashboardStaff from './pages/Staf/DashboardStaff';
+
+>>>>>>> 852a56308fb9d34a865bb7a7bdcd0e3af0f7bdd2
 
 // Rute import Koordinator
 import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
@@ -139,10 +150,20 @@ function App() {
             {/* 10. Rute Umum Lintas Role */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
               <Route path="/semua-tugas" element={<SemuaTugas />} />
+<<<<<<< HEAD
               <Route path="/semua-tugas-lengkap" element={<SemuaTugasLengkap />} />
               <Route path="/detail-tugas" element={<DetailTugasList />} />
               <Route path="/detail-tugas/:id" element={<DetailTugas />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
+=======
+              <Route path="/semua-tugas-staff" element={<SemuaTugas />} />
+              <Route path="/daftar-semua-tugas" element={<SemuaTugasLengkap />} />
+              <Route path="/riwayat" element={<RiwayatTugas />} />
+              <Route path="/detail-tugas-list" element={<DetailTugasList />} />
+              <Route path="/dokumen-sop" element={<DokumenSOP />} />
+              <Route path="/detail-tugas/:id" element={<DetailTugas />} />
+              <Route path="/riwayat-laporan" element={<RiwayatLaporan />} />
+>>>>>>> 852a56308fb9d34a865bb7a7bdcd0e3af0f7bdd2
             </Route>
           </Route>
         </Route>

@@ -100,14 +100,21 @@ const SemuaTugas: React.FC = () => {
   const isAdmin = userRole === 'ADMIN';
   const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(userRole);
 
-  const fetchData = async () => {
+  const fetchData = async (isBackground = false) => {
     try {
-      setLoading(true);
+      // Hanya tampilkan loading screen jika ini adalah pertama kali halaman dimuat
+      if (isBackground === false) setLoading(true);
+      
       const ticketRes = await api.get('/tickets');
       const rawTickets: Ticket[] = Array.isArray(ticketRes.data)
         ? ticketRes.data
         : ticketRes.data?.data || [];
+<<<<<<< HEAD
 
+=======
+      
+      // React (Virtual DOM) akan otomatis memperbarui tampilan jika ada perbedaan data tiket
+>>>>>>> 852a56308fb9d34a865bb7a7bdcd0e3af0f7bdd2
       setTickets(rawTickets);
 
       try {
@@ -131,12 +138,21 @@ const SemuaTugas: React.FC = () => {
     } catch (err) {
       console.error('Gagal memuat daftar tugas:', err);
     } finally {
-      setLoading(false);
+      if (isBackground === false) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    // 1. Ambil data pertama kali saat halaman dibuka (dengan layar loading)
+    fetchData(false);
+
+    // 2. Setup Polling: Jalankan Fetch API setiap 10 detik di latar belakang (tanpa loading)
+    const intervalId = setInterval(() => {
+      fetchData(true);
+    }, 10000); // 10000 ms = 10 detik
+
+    // 3. Cleanup: Hentikan interval jika pengguna berpindah ke halaman lain agar memori tidak bocor (Memory Leak)
+    return () => clearInterval(intervalId);
   }, []);
 
   const formatDateTime = (dateStr: string | null) => {
