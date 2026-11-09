@@ -1,17 +1,19 @@
 // Backend/seed.js
-const prisma = require('./db');
-const bcrypt = require('bcrypt');
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+
+const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Memulai proses seeding data master RSIA Qurrata A\'yun...');
+  console.log("Memulai proses seeding data master RSIA Qurrata A'yun...");
 
   const daftarDivisi = [
-    'Pelayanan Medis',
-    'Penunjang Medis',
-    'Keperawatan & Kebidanan',
-    'Umum & IT',
-    'Administrasi & Keuangan',
-    'HRD & Marketing',
+    'Divisi Umum & Rumah Tangga',
+    'Divisi IT & SIMRS',
+    'Divisi Sarana & Prasarana (IPS-RS)',
+    'Divisi Pelayanan Medis & Keperawatan',
+    'Divisi Penunjang Medis',
+    'Divisi Administrasi & Keuangan',
   ];
 
   const divisiMap = {};
@@ -24,73 +26,72 @@ async function main() {
     divisiMap[nama] = div.id;
   }
 
-  const hashedPassword = await bcrypt.hash('password123', 10);
+  const defaultPassword = await bcrypt.hash('password123', 10);
 
-  // 5 Akun Utama dengan Nomor HP Resmi untuk Pengujian UAT
-  const akunUji = [
+  const defaultUsers = [
     {
       nama: 'Admin Sistem IT',
       noHp: '081100000001',
       email: 'admin@rsia.com',
+      password: defaultPassword,
       role: 'ADMIN',
-      divisiId: divisiMap['Umum & IT'],
+      divisiId: divisiMap['Divisi IT & SIMRS'],
     },
     {
       nama: 'dr. Direktur RSIA',
       noHp: '081100000002',
       email: 'direktur@rsia.com',
+      password: defaultPassword,
       role: 'DIREKTUR',
       divisiId: null,
     },
     {
       nama: 'Kepala Divisi Umum & IT',
       noHp: '081100000003',
-      email: 'kadiv.it@rsia.com',
+      email: 'kadiv@rsia.com',
+      password: defaultPassword,
       role: 'KADIV',
-      divisiId: divisiMap['Umum & IT'],
+      divisiId: divisiMap['Divisi IT & SIMRS'],
     },
     {
-      nama: 'Koordinator Unit Penunjang',
+      nama: 'Koordinator Lapangan IT',
       noHp: '081100000004',
-      email: 'koor.penunjang@rsia.com',
+      email: 'koordinator@rsia.com',
+      password: defaultPassword,
       role: 'KOORDINATOR',
-      divisiId: divisiMap['Penunjang Medis'],
+      divisiId: divisiMap['Divisi IT & SIMRS'],
     },
     {
-      nama: 'Staf Teknisi IT',
+      nama: 'Staf Teknis Pelaksana',
       noHp: '081100000005',
-      email: 'staf.it@rsia.com',
+      email: 'staf@rsia.com',
+      password: defaultPassword,
       role: 'STAF',
-      divisiId: divisiMap['Umum & IT'],
+      divisiId: divisiMap['Divisi IT & SIMRS'],
     },
   ];
 
-  for (const akun of akunUji) {
+  for (const u of defaultUsers) {
     await prisma.user.upsert({
-      where: { noHp: akun.noHp },
+      where: { noHp: u.noHp },
       update: {
-        nama: akun.nama,
-        email: akun.email,
-        role: akun.role,
-        divisiId: akun.divisiId,
+        nama: u.nama,
+        email: u.email,
+        password: u.password,
+        role: u.role,
+        divisiId: u.divisiId,
       },
-      create: {
-        nama: akun.nama,
-        noHp: akun.noHp,
-        email: akun.email,
-        password: hashedPassword,
-        role: akun.role,
-        divisiId: akun.divisiId,
-      },
+      create: u,
     });
   }
 
-  console.log('Seeding selesai! Gunakan No HP (081100000001 s/d 081100000005) dan password "password123".');
+  console.log('✅ Seeding selesai! Seluruh Divisi dan 5 Akun Jabatan siap digunakan.');
+  console.log('   Password default semua akun: password123');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('❌ Gagal melakukan seeding:', e);
     process.exit(1);
   })
   .finally(async () => {

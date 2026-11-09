@@ -25,3 +25,14 @@ __pycache__/
 # Mac/Windows system files
 .DS_Store
 Thumbs.db
+
+# Pengamanan Dataset & File Database Lokal (Temuan D)
+data/
+data/raw/
+data/interim/
+data/processed/
+*.csv
+*.xlsx
+*.sql
+*.dump
+*.sqlite

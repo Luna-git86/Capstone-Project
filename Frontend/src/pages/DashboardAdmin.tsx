@@ -1,4 +1,3 @@
-import { getAuthUserName, getAuthRole } from '../utils/authStorage';
 // Frontend/src/pages/DashboardAdmin.tsx
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
@@ -12,13 +11,28 @@ interface UserItem {
   id: number;
   nama: string;
   noHp: string;
-  email?: string | null;
-  role: 'ADMIN' | 'DIREKTUR' | 'KADIV' | 'KOORDINATOR' | 'STAF';
+  email: string | null;
+  role: string;
+  divisiId: number | null;
   divisi?: { id: number; nama: string } | null;
+}
+
+interface AuditLogItem {
+  id: number;
+  action: string;
+  entityType: string;
+  entityId: number;
+  details: string;
   createdAt: string;
+  user?: { id: number; nama: string; role: string };
 }
 
 const DashboardAdmin: React.FC = () => {
+  const [users, setUsers] = useState<UserItem[]>([]);
+  const [divisiList, setDivisiList] = useState<Divisi[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
   const [formData, setFormData] = useState({
     nama: '',
     noHp: '',
@@ -28,98 +42,70 @@ const DashboardAdmin: React.FC = () => {
     divisiId: '',
   });
 
-  const [divisiList, setDivisiList] = useState<Divisi[]>([]);
-  const [usersList, setUsersList] = useState<UserItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [message, setMessage] = useState<string>('');
   const [error, setError] = useState<string>('');
-  const [success, setSuccess] = useState<string>('');
 
-  // State untuk Modal Reset Password
+  // State Modal Reset Password (UAT-1.3)
   const [resetTarget, setResetTarget] = useState<UserItem | null>(null);
   const [newPassword, setNewPassword] = useState<string>('');
-  const [resetLoading, setResetLoading] = useState<boolean>(false);
+  const [resetting, setResetting] = useState<boolean>(false);
 
-  const userName = getAuthUserName('Admin Sistem IT');
-  const userRole = getAuthRole() || 'ADMIN';
+  const currentUserName = localStorage.getItem('userName') || '';
 
-  const fetchDivisi = async () => {
-    try {
-      const res = await api.get('/auth/divisi');
-      const divData: Divisi[] = res.data.data || res.data || [];
-      setDivisiList(divData);
-      if (divData.length > 0) {
-        setFormData((prev) => ({
-          ...prev,
-          divisiId: prev.divisiId || String(divData[0].id),
-        }));
-      }
-    } catch (err) {
-      console.error('Gagal memuat daftar divisi:', err);
-    }
-  };
-
-  const fetchUsers = async () => {
+  const fetchAdminData = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/auth/users');
-      setUsersList(res.data.data || res.data || []);
+      const [userRes, divRes, logRes] = await Promise.all([
+        api.get('/auth/users'),
+        api.get('/auth/divisi'),
+        api.get('/auth/audit-logs'),
+      ]);
+      setUsers(userRes.data.data || []);
+      setDivisiList(divRes.data.data || []);
+      setAuditLogs(logRes.data.data || []);
     } catch (err) {
-      console.error('Gagal memuat daftar pengguna:', err);
+      console.error('Gagal memuat data Admin:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDivisi();
-    fetchUsers();
+    fetchAdminData();
   }, []);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    setMessage('');
     setError('');
-    setSuccess('');
-
-    if (!['DIREKTUR', 'ADMIN'].includes(formData.role) && !formData.divisiId) {
-      setError('Silakan pilih Unit Divisi terlebih dahulu.');
-      return;
-    }
-
     setSubmitting(true);
 
     try {
-      const payload = {
+      const res = await api.post('/auth/register', {
         nama: formData.nama,
         noHp: formData.noHp,
         email: formData.email || null,
         password: formData.password,
         role: formData.role,
-        divisiId: ['DIREKTUR', 'ADMIN'].includes(formData.role) ? null : Number(formData.divisiId),
-      };
+        divisiId:
+          formData.role === 'DIREKTUR' || !formData.divisiId
+            ? null
+            : Number(formData.divisiId),
+      });
 
-      const response = await api.post('/auth/register', payload);
-      setSuccess(response.data.message || 'Akun baru berhasil disimpan!');
-
-      setFormData((prev) => ({
-        ...prev,
+      setMessage(res.data.message || 'Akun pegawai berhasil ditambahkan!');
+      setFormData({
         nama: '',
         noHp: '',
         email: '',
         password: '',
-      }));
-
-      fetchUsers();
+        role: 'STAF',
+        divisiId: '',
+      });
+      fetchAdminData();
     } catch (err: any) {
-      setError(
-        err.response?.data?.message || 'Gagal menyimpan akun baru. Periksa kembali input Anda.'
-      );
+      setError(err.response?.data?.message || 'Gagal mendaftarkan akun baru.');
     } finally {
       setSubmitting(false);
     }
@@ -128,273 +114,283 @@ const DashboardAdmin: React.FC = () => {
   const handleResetPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetTarget) return;
-
-    setResetLoading(true);
+    setResetting(true);
+    setMessage('');
     setError('');
-    setSuccess('');
 
     try {
       const res = await api.put(`/auth/users/${resetTarget.id}/reset-password`, {
         newPassword,
       });
-      setSuccess(res.data.message || 'Password berhasil direset!');
+      setMessage(res.data.message || 'Kata sandi berhasil diperbarui!');
       setResetTarget(null);
       setNewPassword('');
+      fetchAdminData();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Gagal mereset password.');
+      setError(err.response?.data?.message || 'Gagal mengatur ulang kata sandi.');
     } finally {
-      setResetLoading(false);
+      setResetting(false);
     }
   };
 
-  const totalManajerial = usersList.filter(
-    (u) => u.role === 'DIREKTUR' || u.role === 'KADIV'
-  ).length;
-  const totalOperasional = usersList.filter(
-    (u) => u.role === 'KOORDINATOR' || u.role === 'STAF'
-  ).length;
+  const handleDeleteUser = async (target: UserItem) => {
+    if (
+      !window.confirm(
+        `Apakah Anda yakin ingin menghapus akun ${target.nama} (${target.role})?`
+      )
+    ) {
+      return;
+    }
+
+    setMessage('');
+    setError('');
+    try {
+      const res = await api.delete(`/auth/users/${target.id}`);
+      setMessage(res.data.message || `Akun ${target.nama} berhasil dihapus.`);
+      fetchAdminData();
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message ||
+          'Gagal menghapus akun. Akun mungkin masih terhubung dengan riwayat tugas.'
+      );
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">
-          Dashboard Admin — Manajemen Akun & Matriks RBAC
+          Kelola Akun Pegawai & Matriks RBAC
         </h1>
         <p className="text-sm text-slate-500">
-          Selamat bertugas, <span className="font-semibold text-slate-700">{userName}</span> ({userRole}) — Panel manajemen akun & matriks wewenang
+          Pusat pendaftaran akun pegawai, pengaturan ulang kata sandi, dan pemantauan Rekam Jejak Keamanan (Audit Trail) RSIA Qurrata A'yun.
         </p>
       </div>
 
+      {/* Ringkasan Statistik Sistem */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Total Akun Terdaftar</p>
-          <p className="text-3xl font-bold text-slate-800 mt-2">{usersList.length}</p>
-          <p className="text-xs text-blue-600 mt-1 font-medium">Seluruh entitas aktif</p>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase">
+            Total Akun Terdaftar
+          </p>
+          <p className="text-2xl font-bold text-slate-800 mt-1">{users.length}</p>
         </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Level Eksekutif & Manajerial</p>
-          <p className="text-3xl font-bold text-indigo-600 mt-2">{totalManajerial}</p>
-          <p className="text-xs text-slate-500 mt-1">Direktur & Kepala Divisi (Kadiv)</p>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase">
+            Total Divisi Rumah Sakit
+          </p>
+          <p className="text-2xl font-bold text-blue-600 mt-1">
+            {divisiList.length}
+          </p>
         </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Level Operasional Lapangan</p>
-          <p className="text-3xl font-bold text-emerald-600 mt-2">{totalOperasional}</p>
-          <p className="text-xs text-slate-500 mt-1">Koordinator & Staf Pelaksana</p>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase">
+            Rekam Jejak Tercatat (Audit Log)
+          </p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">
+            {auditLogs.length}
+          </p>
         </div>
       </div>
 
+      {message && (
+        <div className="p-4 text-sm font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl">
+          {message}
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 text-sm font-medium text-rose-800 bg-rose-50 border border-rose-200 rounded-xl">
+          {error}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Form Tambah Akun Baru */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit">
-          <h2 className="text-lg font-bold text-slate-800 mb-1">Tambah Akun Baru</h2>
-          <p className="text-xs text-slate-500 mb-4">
-            Daftarkan pegawai menggunakan Nomor HP aktif untuk login akun
-          </p>
+        {/* Form Pendaftaran Akun Baru (UAT-1.2) */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit space-y-4">
+          <h2 className="text-lg font-bold text-slate-800">
+            Tambah Akun Pegawai Baru
+          </h2>
 
-          {error && (
-            <div className="mb-4 p-3 text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="mb-4 p-3 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg">
-              {success}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleCreateUser} className="space-y-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                Nama Lengkap & Gelar
+                Nama Lengkap & Gelar *
               </label>
               <input
                 type="text"
-                name="nama"
+                required
                 value={formData.nama}
-                onChange={handleChange}
-                required
-                placeholder="Contoh: Hafidz Naufal"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                onChange={(e) =>
+                  setFormData({ ...formData, nama: e.target.value })
+                }
+                placeholder="Contoh: Budi Santoso, A.Md.T."
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                Nomor HP / WhatsApp (Untuk Login)
+                Nomor HP / WhatsApp (Untuk Login) *
               </label>
               <input
-                type="tel"
-                name="noHp"
+                type="text"
+                required
                 value={formData.noHp}
-                onChange={handleChange}
-                required
-                placeholder="Contoh: 081347675143"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                onChange={(e) =>
+                  setFormData({ ...formData, noHp: e.target.value })
+                }
+                placeholder="Contoh: 081234567890"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                Email (Opsional)
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="nama@rsia.com"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                Password Awal
+                Kata Sandi Awal *
               </label>
               <input
                 type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
                 required
+                minLength={6}
+                value={formData.password}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
                 placeholder="Minimal 6 karakter"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                Jabatan / Role (Matriks RBAC)
-              </label>
-              <select
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="STAF">Staf Pelaksana (STAF)</option>
-                <option value="KOORDINATOR">Koordinator Unit (KOORDINATOR)</option>
-                <option value="KADIV">Kepala Divisi (KADIV)</option>
-                <option value="DIREKTUR">Direktur (DIREKTUR)</option>
-                <option value="ADMIN">Admin Sistem IT (ADMIN)</option>
-              </select>
-            </div>
-
-            {!['DIREKTUR', 'ADMIN'].includes(formData.role) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Unit Divisi
+                  Jabatan (Role) *
                 </label>
                 <select
-                  name="divisiId"
-                  value={formData.divisiId}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  value={formData.role}
+                  onChange={(e) =>
+                    setFormData({ ...formData, role: e.target.value })
+                  }
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold"
                 >
-                  <option value="" disabled>
-                    -- Pilih Unit Divisi --
-                  </option>
-                  {divisiList.map((div) => (
-                    <option key={div.id} value={String(div.id)}>
-                      {div.nama}
+                  <option value="STAF">STAF</option>
+                  <option value="KOORDINATOR">KOORDINATOR</option>
+                  <option value="KADIV">KEPALA DIVISI</option>
+                  <option value="DIREKTUR">DIREKTUR</option>
+                  <option value="ADMIN">ADMIN SISTEM</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                  Divisi Unit Kerja
+                </label>
+                <select
+                  value={formData.divisiId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, divisiId: e.target.value })
+                  }
+                  disabled={formData.role === 'DIREKTUR'}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm"
+                >
+                  <option value="">-- Lintas Divisi --</option>
+                  {divisiList.map((d) => (
+                    <option key={d.id} value={String(d.id)}>
+                      {d.nama}
                     </option>
                   ))}
                 </select>
               </div>
-            )}
+            </div>
 
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-semibold rounded-lg shadow-sm transition"
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-bold rounded-lg shadow-sm transition"
             >
-              {submitting ? 'Menyimpan...' : 'Simpan Akun'}
+              {submitting ? 'Menyimpan...' : 'Simpan Akun Pegawai'}
             </button>
           </form>
         </div>
 
-        {/* Tabel Daftar Akun & Pemetaan Role */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <div className="mb-4">
-            <h2 className="text-lg font-bold text-slate-800">
-              Daftar Pengguna & Pemetaan Hak Akses
-            </h2>
-            <p className="text-xs text-slate-500">
-              Data real-time seluruh pegawai terdaftar • Gunakan tombol Reset Password jika pegawai lupa kata sandi
-            </p>
-          </div>
+        {/* Tabel Daftar Akun Pegawai (UAT-1.3 & UAT-1.4) */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <h2 className="text-lg font-bold text-slate-800">
+            Daftar Akun Pegawai & Pengaturan Akses
+          </h2>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase">
+                <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase bg-slate-50">
                   <th className="py-3 px-3">Nama Pegawai</th>
-                  <th className="py-3 px-3">No. HP / WhatsApp</th>
-                  <th className="py-3 px-3">Role Otorisasi</th>
-                  <th className="py-3 px-3">Divisi</th>
-                  <th className="py-3 px-3 text-right">Aksi Keamanan</th>
+                  <th className="py-3 px-3">Nomor HP</th>
+                  <th className="py-3 px-3">Jabatan & Divisi</th>
+                  <th className="py-3 px-3 text-right">Tindakan Admin</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
+              <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="py-6 text-center text-slate-500">
+                    <td colSpan={4} className="py-6 text-center text-slate-400">
                       Memuat daftar akun...
                     </td>
                   </tr>
-                ) : usersList.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-slate-400">
-                      Belum ada akun terdaftar.
-                    </td>
-                  </tr>
                 ) : (
-                  usersList.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50">
-                      <td className="py-3 px-3 font-medium text-slate-800">
-                        {item.nama}
-                      </td>
-                      <td className="py-3 px-3 font-mono text-slate-700 font-semibold">
-                        {item.noHp}
-                      </td>
-                      <td className="py-3 px-3">
-                        <span
-                          className={`px-2.5 py-0.5 text-xs font-bold rounded ${
-                            item.role === 'ADMIN'
-                              ? 'bg-slate-800 text-white'
-                              : item.role === 'DIREKTUR'
-                              ? 'bg-purple-100 text-purple-700'
-                              : item.role === 'KADIV'
-                              ? 'bg-indigo-100 text-indigo-700'
-                              : item.role === 'KOORDINATOR'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-emerald-100 text-emerald-700'
-                          }`}
-                        >
-                          {item.role}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-slate-600">
-                        {item.divisi?.nama || (item.role === 'ADMIN' ? 'Sistem IT / Global' : 'Lintas Divisi (Eksekutif)')}
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setResetTarget(item);
-                            setNewPassword('');
-                          }}
-                          className="px-2.5 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md transition"
-                        >
-                          Reset Password
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  users.map((u) => {
+                    const isSelfOrAdmin =
+                      u.role === 'ADMIN' || u.nama === currentUserName;
+
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-50">
+                        <td className="py-3 px-3 font-bold text-slate-800">
+                          {u.nama}
+                        </td>
+                        <td className="py-3 px-3 font-mono text-xs text-slate-600">
+                          {u.noHp}
+                        </td>
+                        <td className="py-3 px-3 text-xs">
+                          <span className="px-2 py-0.5 font-bold bg-blue-100 text-blue-800 rounded">
+                            {u.role}
+                          </span>
+                          <span className="ml-2 text-slate-500">
+                            {u.divisi?.nama || 'Lintas Divisi'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setResetTarget(u);
+                              setNewPassword('');
+                            }}
+                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-semibold rounded-md"
+                          >
+                            Reset Password
+                          </button>
+
+                          {/* Proteksi UAT-1.4: Akun Admin yang sedang aktif terkunci dari penghapusan */}
+                          {isSelfOrAdmin ? (
+                            <span
+                              title="Akun Admin utama dilindungi agar sistem tidak kehilangan akses"
+                              className="ml-2 px-2.5 py-1 bg-slate-100 text-slate-400 text-xs font-semibold rounded-md border border-slate-200 cursor-not-allowed"
+                            >
+                              🔒 Akun Aktif (Terkunci)
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(u)}
+                              className="ml-2 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-md"
+                            >
+                              Hapus
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -402,34 +398,80 @@ const DashboardAdmin: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal Reset Password oleh Admin */}
+      {/* Tabel Rekam Jejak Keamanan / Immutable Audit Trail (UAT-6.8) */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">
+              Audit Trail Log
+            </h2>
+            <p className="text-xs text-slate-500">
+              Seluruh aktivitas pengguna tercatat otomatis dan bersifat Read-Only (tidak dapat diubah atau dihapus).
+            </p>
+          </div>
+          <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-full">
+            🔒 Read-Only Log
+          </span>
+        </div>
+
+        <div className="overflow-x-auto max-h-80">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 font-semibold text-slate-500 uppercase bg-slate-50">
+                <th className="py-2.5 px-3">Waktu Kejadian</th>
+                <th className="py-2.5 px-3">Pelaku & Jabatan</th>
+                <th className="py-2.5 px-3">Aksi</th>
+                <th className="py-2.5 px-3">Rincian Aktivitas</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {auditLogs.map((log) => (
+                <tr key={log.id} className="hover:bg-slate-50">
+                  <td className="py-2.5 px-3 font-mono text-slate-500 whitespace-nowrap">
+                    {new Date(log.createdAt).toLocaleString('id-ID')}
+                  </td>
+                  <td className="py-2.5 px-3 font-semibold text-slate-800">
+                    {log.user?.nama || `User #${log.user?.id || '-'}`}{' '}
+                    <span className="text-[10px] text-blue-600">
+                      ({log.user?.role || '-'})
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <span className="px-2 py-0.5 font-mono font-bold bg-slate-100 text-slate-700 rounded">
+                      {log.action}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3 text-slate-600">{log.details}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal Reset Password (UAT-1.3) */}
       {resetTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
             <h3 className="text-lg font-bold text-slate-800">
-              Reset Password Pegawai
+              Reset Kata Sandi: {resetTarget.nama}
             </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Tetapkan password baru untuk <span className="font-semibold text-slate-700">{resetTarget.nama}</span> ({resetTarget.noHp})
-            </p>
-
-            <form onSubmit={handleResetPasswordSubmit} className="mt-4 space-y-4">
+            <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Password Baru
+                  Masukkan Kata Sandi Baru *
                 </label>
                 <input
-                  type="text"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  type="password"
                   required
                   minLength={6}
-                  placeholder="Ketik password baru (min. 6 karakter)"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Minimal 6 karakter..."
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm"
                 />
               </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setResetTarget(null)}
@@ -439,10 +481,10 @@ const DashboardAdmin: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={resetLoading}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg"
+                  disabled={resetting}
+                  className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
                 >
-                  {resetLoading ? 'Menyimpan...' : 'Simpan Password Baru'}
+                  {resetting ? 'Menyimpan...' : 'Simpan Kata Sandi Baru'}
                 </button>
               </div>
             </form>

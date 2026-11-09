@@ -1,9 +1,21 @@
+// Backend/services/telegramService.js
 const prisma = require('../db');
 const { isNotificationTypeEnabled } = require('../config/notificationConfig');
 const systemConfigStore = require('../config/systemConfigStore');
-const { buildDedupeKey } = require('./ticketNotificationService');
+const ticketNotificationService = require('./ticketNotificationService');
 
 const TELEGRAM_API = 'https://api.telegram.org';
+
+function resolveBuildDedupeKey(params) {
+  if (typeof ticketNotificationService?.buildDedupeKey === 'function') {
+    return ticketNotificationService.buildDedupeKey(params);
+  }
+  const { buildDedupeKey } = require('./ticketNotificationService');
+  if (typeof buildDedupeKey === 'function') {
+    return buildDedupeKey(params);
+  }
+  return `${params.ticketId}:${params.type}:${params.recipientId}:${params.occurrenceToken}`;
+}
 
 async function sendTelegramMessage(chatId, message) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -53,7 +65,7 @@ async function notifyTicketEvent(
   }
 
   const chatId = recipient.telegramChatId ? String(recipient.telegramChatId) : '';
-  const dedupeKey = buildDedupeKey({
+  const dedupeKey = resolveBuildDedupeKey({
     ticketId,
     type,
     recipientId: recipient.id,
