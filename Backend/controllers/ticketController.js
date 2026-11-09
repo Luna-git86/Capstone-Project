@@ -547,12 +547,15 @@ const triageTicket = async (req, res) => {
 const updateTicketStatus = async (req, res) => {
   try {
     const id = Number(req.params.id);
+    // [BARU] Tambahkan judul, deskripsi, dan fotoInstruksi ke dalam destructuring
     const {
       status,
       catatanRevisi,
       laporanPenyelesaian,
       fotoBukti,
       fotoInstruksi,
+      judul,
+      deskripsi
     } = req.body;
     const role = req.user.role;
 
@@ -563,6 +566,7 @@ const updateTicketStatus = async (req, res) => {
     }
 
     const validStatus = [
+      'BARU',
       'MENUNGGU_TRIASE',
       'DIPROSES',
       'MENUNGGU_VALIDASI',
@@ -626,14 +630,18 @@ const updateTicketStatus = async (req, res) => {
         return res.status(403).json({ message: 'Koordinator tidak memiliki hak akses untuk mengubah tiket dari divisi lain.' });
       }
     } else if (role === 'STAF') {
-      // Staf HANYA berhak memperbarui tugas yang ditugaskan kepadanya
-      if (currentTicket.pelaksanaId !== userId) {
+      // Staf berhak memperbarui tugas yang ditugaskan kepadanya ATAU laporan yang dibuatnya sendiri
+      const isPelaksana = currentTicket.pelaksanaId === userId;
+      const isPembuat = currentTicket.pembuatId === userId;
+
+      if (!isPelaksana && !isPembuat) {
         return res.status(403).json({
-          message: 'Anda hanya memiliki wewenang untuk memperbarui tugas yang ditugaskan kepada Anda.',
+          message: 'Anda hanya memiliki wewenang untuk memperbarui tugas yang ditugaskan kepada Anda atau laporan yang Anda buat.',
         });
       }
-      // Staf HANYA berwenang mengirim laporan selesai (MENUNGGU_VALIDASI), kendala (HOLD_ESKALASI), atau progres (DIPROSES)
-      if (!['MENUNGGU_VALIDASI', 'HOLD_ESKALASI', 'DIPROSES'].includes(status)) {
+
+      // Staf berwenang mengirim laporan selesai, kendala, progres, atau melakukan REVISI LAPORAN (MENUNGGU_TRIASE)
+      if (!['MENUNGGU_VALIDASI', 'HOLD_ESKALASI', 'DIPROSES', 'MENUNGGU_TRIASE'].includes(status)) {
         return res.status(403).json({
           message: `Staf tidak memiliki wewenang untuk mengubah status tiket menjadi ${status}.`,
         });
@@ -666,6 +674,9 @@ const updateTicketStatus = async (req, res) => {
         fotoBukti !== undefined ? fotoBukti : currentTicket.fotoBukti,
       fotoInstruksi:
         fotoInstruksi !== undefined ? fotoInstruksi : currentTicket.fotoInstruksi,
+      // [BARU] Simpan teks judul dan deskripsi baru (jika ada kiriman)
+      judul: judul !== undefined ? judul : currentTicket.judul,
+      deskripsi: deskripsi !== undefined ? deskripsi : currentTicket.deskripsi,
       completedAt:
         status === 'SELESAI'
           ? currentTicket.completedAt || new Date()
