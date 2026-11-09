@@ -30,6 +30,7 @@ const createTicket = async (req, res) => {
       divisiId,
       pelaksanaId,
       deadline,
+      fotoInstruksi, // Menangkap foto instruksi / foto awal laporan masalah dari Frontend
       tipe, // 'LAPORAN_MASALAH' atau 'BUAT_TUGAS'
       parentTicketId, // Hubungan relasi arahan induk (Kadiv -> Koordinator -> Staf)
     } = req.body;
@@ -83,6 +84,7 @@ const createTicket = async (req, res) => {
 
     // Validasi Relasi Arahan Induk (parentTicketId)
     let selectedParentTicketId = null;
+    let inheritedFotoInstruksi = null;
     if (parentTicketId !== undefined && parentTicketId !== null && parentTicketId !== '') {
       selectedParentTicketId = Number(parentTicketId);
       if (!Number.isInteger(selectedParentTicketId) || selectedParentTicketId <= 0) {
@@ -101,6 +103,8 @@ const createTicket = async (req, res) => {
           message: 'Tiket arahan induk tidak berada dalam divisi Anda.',
         });
       }
+      // Wariskan fotoInstruksi dari tiket induk jika tugas turunan tidak mengunggah foto baru
+      inheritedFotoInstruksi = parentTicket.fotoInstruksi || null;
     }
 
     let selectedPelaksanaId = null;
@@ -195,6 +199,11 @@ const createTicket = async (req, res) => {
     const initialStatus =
       isBuatTugas && selectedPelaksanaId ? 'DIPROSES' : 'MENUNGGU_TRIASE';
 
+    const finalFotoInstruksi =
+      fotoInstruksi && String(fotoInstruksi).trim() !== ''
+        ? String(fotoInstruksi).trim()
+        : inheritedFotoInstruksi;
+
     const newTicket = await prisma.ticket.create({
       data: {
         judul: judul.trim(),
@@ -202,6 +211,7 @@ const createTicket = async (req, res) => {
         deskripsi: deskripsi.trim(),
         prioritas: selectedPrioritas,
         status: initialStatus,
+        fotoInstruksi: finalFotoInstruksi, // Disimpan ke database
         pembuatId,
         penanggungJawabId,
         divisiId: selectedDivisiId,
@@ -217,7 +227,7 @@ const createTicket = async (req, res) => {
           select: { id: true, nama: true, noHp: true, telegramChatId: true, role: true },
         },
         parentTicket: {
-          select: { id: true, judul: true, status: true, prioritas: true, pembuatId: true },
+          select: { id: true, judul: true, status: true, prioritas: true, pembuatId: true, fotoInstruksi: true },
         },
         childTickets: {
           select: { id: true, judul: true, status: true, pelaksanaId: true },
@@ -344,6 +354,7 @@ const getTickets = async (req, res) => {
             status: true,
             prioritas: true,
             deadline: true,
+            fotoInstruksi: true,
             pembuat: { select: { id: true, nama: true, role: true } },
           },
         },
@@ -376,7 +387,15 @@ const getTickets = async (req, res) => {
 const triageTicket = async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { prioritas, divisiId, pelaksanaId, deadline, status, catatanRevisi } = req.body;
+    const {
+      prioritas,
+      divisiId,
+      pelaksanaId,
+      deadline,
+      status,
+      catatanRevisi,
+      fotoInstruksi, // Mendukung penambahan/pembaruan fotoInstruksi saat triase
+    } = req.body;
     const role = req.user.role;
     const userDivisiId = req.user.divisiId ? Number(req.user.divisiId) : null;
 
@@ -472,6 +491,8 @@ const triageTicket = async (req, res) => {
         penanggungJawabId: Number(req.user.id),
         deadline: selectedDeadline,
         status: nextStatus,
+        fotoInstruksi:
+          fotoInstruksi !== undefined ? fotoInstruksi : currentTicket.fotoInstruksi,
         catatanRevisi:
           catatanRevisi !== undefined ? catatanRevisi : currentTicket.catatanRevisi,
         completedAt:
@@ -487,7 +508,7 @@ const triageTicket = async (req, res) => {
           select: { id: true, nama: true, noHp: true, telegramChatId: true, role: true },
         },
         parentTicket: {
-          select: { id: true, judul: true, status: true },
+          select: { id: true, judul: true, status: true, fotoInstruksi: true },
         },
       },
     });
@@ -526,7 +547,13 @@ const triageTicket = async (req, res) => {
 const updateTicketStatus = async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { status, catatanRevisi, laporanPenyelesaian, fotoBukti } = req.body;
+    const {
+      status,
+      catatanRevisi,
+      laporanPenyelesaian,
+      fotoBukti,
+      fotoInstruksi,
+    } = req.body;
     const role = req.user.role;
 
     if (role === 'ADMIN') {
@@ -637,6 +664,8 @@ const updateTicketStatus = async (req, res) => {
           : currentTicket.laporanPenyelesaian,
       fotoBukti:
         fotoBukti !== undefined ? fotoBukti : currentTicket.fotoBukti,
+      fotoInstruksi:
+        fotoInstruksi !== undefined ? fotoInstruksi : currentTicket.fotoInstruksi,
       completedAt:
         status === 'SELESAI'
           ? currentTicket.completedAt || new Date()
@@ -656,7 +685,7 @@ const updateTicketStatus = async (req, res) => {
           select: { id: true, nama: true, noHp: true, telegramChatId: true, role: true },
         },
         parentTicket: {
-          select: { id: true, judul: true, status: true },
+          select: { id: true, judul: true, status: true, fotoInstruksi: true },
         },
         childTickets: {
           select: { id: true, judul: true, status: true },
@@ -797,7 +826,7 @@ const createOrUpdateSop = async (req, res) => {
   }
 };
 
-// 7. Ambil Detail Tiket Berdasarkan ID (Termasuk Hirarki Parent-Child)
+// 7. Ambil Detail Tiket Berdasarkan ID (Termasuk Hirarki Parent-Child & fotoInstruksi)
 const getTicketById = async (req, res) => {
   try {
     const ticketId = parseInt(req.params.id);
@@ -819,6 +848,7 @@ const getTicketById = async (req, res) => {
             status: true,
             prioritas: true,
             deadline: true,
+            fotoInstruksi: true,
             pembuat: { select: { id: true, nama: true, role: true } },
           },
         },

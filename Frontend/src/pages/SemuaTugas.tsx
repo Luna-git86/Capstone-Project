@@ -109,12 +109,6 @@ const SemuaTugas: React.FC = () => {
       const rawTickets: Ticket[] = Array.isArray(ticketRes.data)
         ? ticketRes.data
         : ticketRes.data?.data || [];
-<<<<<<< HEAD
-
-=======
-      
-      // React (Virtual DOM) akan otomatis memperbarui tampilan jika ada perbedaan data tiket
->>>>>>> 852a56308fb9d34a865bb7a7bdcd0e3af0f7bdd2
       setTickets(rawTickets);
 
       try {

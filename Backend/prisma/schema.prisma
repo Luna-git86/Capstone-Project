@@ -31,68 +31,85 @@ enum StatusTiket {
   DITOLAK
 }
 
-enum StatusSop {
-  MENUNGGU_VALIDASI
-  DISAHKAN
-  DIREVISI
+enum NotificationChannel {
+  TELEGRAM
+}
+
+enum NotificationEventType {
+  TICKET_CREATED
+  STATUS_CHANGED
+  DEADLINE_REMINDER
+  DEADLINE_OVERDUE
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
 }
 
 model Divisi {
-  id        Int          @id @default(autoincrement())
-  nama      String       @unique
-  users     User[]
-  tickets   Ticket[]
-  sops      DokumenSop[]
-  createdAt DateTime     @default(now())
+  id          Int          @id @default(autoincrement())
+  nama        String       @unique
+  users       User[]
+  tickets     Ticket[]
+  dokumenSops DokumenSop[]
 }
 
 model User {
-  id                 Int                 @id @default(autoincrement())
-  nama               String
-  noHp               String              @unique
-  email              String?             @unique
-  password           String
-  role               Role                @default(STAF)
-  divisiId           Int?
-  divisi             Divisi?             @relation(fields: [divisiId], references: [id])
-  ticketsCreated     Ticket[]            @relation("TiketDibuat")
-  ticketsResponsible Ticket[]            @relation("TiketPenanggungJawab")
-  ticketsAssigned    Ticket[]            @relation("TiketDitugaskan")
-  sopsCreated        DokumenSop[]        @relation("SopDiajukan")
-  auditLogs          AuditLog[]
-  notificationLogs   NotificationLog[]
-  telegramLinkTokens TelegramLinkToken[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  telegramChatId     String?             @unique
+  id                  Int                 @id @default(autoincrement())
+  nama                String
+  email               String?             @unique
+  noHp                String              @unique
+  password            String
+  telegramChatId      String?             @unique
+  role                Role                @default(STAF)
+  divisiId            Int?
+  divisi              Divisi?             @relation(fields: [divisiId], references: [id])
+  createdAt           DateTime            @default(now())
+
+  tiketDibuat         Ticket[]            @relation("PembuatTiket")
+  tiketDiawasi        Ticket[]            @relation("PenanggungJawabTiket")
+  tiketDikerjakan     Ticket[]            @relation("PelaksanaTiket")
+  dokumenSopDiajukan  DokumenSop[]        @relation("SopDiajukan")
+  auditLogs           AuditLog[]
+  telegramLinkTokens  TelegramLinkToken[]
+  notificationLogs    NotificationLog[]
 }
 
 model Ticket {
   id                  Int               @id @default(autoincrement())
   judul               String
-  lokasi              String?           // Lokasi ruangan / nama aset
+  lokasi              String?
   deskripsi           String
-  prioritas           Prioritas         @default(LOW)
+  prioritas           Prioritas         @default(MEDIUM)
   status              StatusTiket       @default(MENUNGGU_TRIASE)
-  deadline            DateTime?         // Menyimpan tanggal beserta jam & menit
-  completedAt         DateTime?
-  laporanPenyelesaian String?           // Keterangan penyelesaian dari staf
-  fotoInstruksi       String?           @db.Text  // Foto saat tiket dibuat (referensi/masalah awal)
-  fotoBukti           String?           // Foto bukti pengerjaan (Base64 / URL)
-  catatanRevisi       String?           // Catatan evaluasi atasan (jika revisi) atau kendala biaya
-  pembuatId           Int
-  pembuat             User              @relation("TiketDibuat", fields: [pembuatId], references: [id])
-  penanggungJawabId   Int?
-  penanggungJawab     User?             @relation("TiketPenanggungJawab", fields: [penanggungJawabId], references: [id])
-  pelaksanaId         Int?
-  pelaksana           User?             @relation("TiketDitugaskan", fields: [pelaksanaId], references: [id])
-  divisiId            Int?
-  divisi              Divisi?           @relation(fields: [divisiId], references: [id])
-  parentTicketId      Int?
-  parentTicket        Ticket?           @relation("TiketHierarki", fields: [parentTicketId], references: [id], onDelete: SetNull)
-  childTickets        Ticket[]          @relation("TiketHierarki")
+  fotoInstruksi       String?           @db.Text
+  laporanPenyelesaian String?           @db.Text
+  fotoBukti           String?           @db.Text
+  catatanRevisi       String?           @db.Text
+  deadline            DateTime?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
+  completedAt         DateTime?
+
+  pembuatId           Int
+  pembuat             User              @relation("PembuatTiket", fields: [pembuatId], references: [id])
+
+  penanggungJawabId   Int?
+  penanggungJawab     User?             @relation("PenanggungJawabTiket", fields: [penanggungJawabId], references: [id])
+
+  divisiId            Int
+  divisi              Divisi            @relation(fields: [divisiId], references: [id])
+
+  pelaksanaId         Int?
+  pelaksana           User?             @relation("PelaksanaTiket", fields: [pelaksanaId], references: [id])
+
+  parentTicketId      Int?
+  parentTicket        Ticket?           @relation("TicketHierarchy", fields: [parentTicketId], references: [id], onDelete: SetNull)
+  childTickets        Ticket[]          @relation("TicketHierarchy")
+
   notificationLogs    NotificationLog[]
 }
 
@@ -103,11 +120,11 @@ model DokumenSop {
   revisi       String    @default("Revisi 1")
   deskripsi    String?
   fileUrl      String?
-  status       StatusSop @default(DISAHKAN)
+  status       String    @default("AKTIF")
   divisiId     Int?
   divisi       Divisi?   @relation(fields: [divisiId], references: [id])
   pengajuId    Int
-  pengaju      User      @relation("SopDiajukan", fields: [pengajuId], references: [id])
+  pengaju      User      @relation("SopDiajukan", fields: [pengajuId], references: [id], onDelete: Cascade)
   disahkanPada DateTime? @default(now())
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -119,8 +136,8 @@ model AuditLog {
   entityType String
   entityId   Int
   userId     Int
-  user       User     @relation(fields: [userId], references: [id])
-  details    String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  details    String?
   createdAt  DateTime @default(now())
 }
 
@@ -133,26 +150,29 @@ model TelegramLinkToken {
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, expiresAt])
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model NotificationLog {
-  id             Int       @id @default(autoincrement())
+  id             Int                   @id @default(autoincrement())
   ticketId       Int
   recipientId    Int
-  type           String
-  status         String    @default("PENDING")
-  message        String
-  telegramChatId String
-  dedupeKey      String    @unique
-  attempts       Int       @default(0)
-  errorMessage   String?
+  channel        NotificationChannel   @default(TELEGRAM)
+  eventType      NotificationEventType @default(STATUS_CHANGED)
+  status         NotificationStatus    @default(SENT)
+  telegramChatId String?
+  message        String                @db.Text
+  errorMessage   String?               @db.Text
+  dedupeKey      String?               @unique
   sentAt         DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  ticket         Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  recipient      User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  ticket         Ticket                @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  recipient      User                  @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
-  @@index([status, createdAt])
-  @@index([ticketId, type])
+  @@index([ticketId])
+  @@index([recipientId])
+  @@index([status])
+  @@index([eventType])
 }

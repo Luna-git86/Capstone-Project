@@ -1,8 +1,24 @@
 // Backend/services/telegramBot.js
 
-const TelegramBotPkg = require('node-telegram-bot-api');
-const TelegramBot =
-  TelegramBotPkg.default || TelegramBotPkg.TelegramBot || TelegramBotPkg;
+let TelegramBot = null;
+try {
+  const TelegramBotPkg = require('node-telegram-bot-api');
+  TelegramBot =
+    TelegramBotPkg?.default ||
+    TelegramBotPkg?.TelegramBot ||
+    TelegramBotPkg;
+
+  if (typeof TelegramBot !== 'function') {
+    const DirectTelegramBot = require('node-telegram-bot-api/src/telegram');
+    TelegramBot =
+      DirectTelegramBot?.default ||
+      DirectTelegramBot?.TelegramBot ||
+      DirectTelegramBot;
+  }
+} catch (err) {
+  TelegramBot = null;
+}
+
 const crypto = require('crypto');
 const prisma = require('../db');
 
@@ -20,8 +36,21 @@ function startTelegramBot() {
     return botInstance;
   }
 
-  const bot = new TelegramBot(botToken, { polling: true });
-  botInstance = bot;
+  if (typeof TelegramBot !== 'function') {
+    console.warn(
+      '[Telegram] Modul TelegramBot belum terinstal sempurna atau tidak kompatibel. Lewati inisialisasi polling agar server tetap berjalan.'
+    );
+    return null;
+  }
+
+  let bot;
+  try {
+    bot = new TelegramBot(botToken, { polling: true });
+    botInstance = bot;
+  } catch (initError) {
+    console.warn('[Telegram] Gagal menginisialisasi instance bot:', initError.message);
+    return null;
+  }
 
   bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
     const chatId = String(msg.chat.id);

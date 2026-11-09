@@ -14,20 +14,10 @@ import TambahTugas from './pages/TambahTugas';
 import LaporkanMasalah from './pages/LaporkanMasalah';
 import DokumenSOP from './pages/DokumenSop';
 import RiwayatTugas from './pages/RiwayatTugas';
+import RiwayatLaporan from './pages/RiwayatLaporan';
 import PeformaAnalisis from './pages/PeformaAnalisis';
 import Login from './pages/Login';
 import LaporanSLA from './pages/LaporanSLA';
-<<<<<<< HEAD
-=======
-import Dashboard from './pages/Dashboard';
-import DetailTugas from './pages/DetailTugas';
-import DetailTugasList from './pages/DetailTugasList';
-import RiwayatLaporan from './pages/RiwayatLaporan';
-
-// Rute import Staff
-import DashboardStaff from './pages/Staf/DashboardStaff';
-
->>>>>>> 852a56308fb9d34a865bb7a7bdcd0e3af0f7bdd2
 
 // Rute import Koordinator
 import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
@@ -58,8 +48,16 @@ export const getDashboardByRole = (role: string | null) => {
   }
 };
 
+const getAuthData = () => {
+  const token =
+    sessionStorage.getItem('token') || localStorage.getItem('token');
+  const role =
+    sessionStorage.getItem('userRole') || localStorage.getItem('userRole');
+  return { token, role };
+};
+
 const ProtectedRoute = () => {
-  const token = localStorage.getItem('token');
+  const { token } = getAuthData();
   if (!token) {
     return <Navigate to="/login" replace />;
   }
@@ -67,8 +65,7 @@ const ProtectedRoute = () => {
 };
 
 const RoleProtectedRoute = ({ allowedRoles }: { allowedRoles: string[] }) => {
-  const token = localStorage.getItem('token');
-  const role = localStorage.getItem('userRole');
+  const { token, role } = getAuthData();
 
   if (!token || !role) {
     return <Navigate to="/login" replace />;
@@ -126,14 +123,15 @@ function App() {
               <Route path="/dashboard-staff" element={<DashboardStaff />} />
             </Route>
 
-            {/* 6. Menu Buat Tugas dengan Batas Waktu Jam (Khusus Koordinator, Kadiv, Direktur) */}
+            {/* 6. Menu Buat Tugas (Khusus Koordinator, Kadiv, Direktur) */}
             <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR']} />}>
               <Route path="/tambah-tugas" element={<TambahTugas />} />
             </Route>
 
-            {/* 7. Menu Laporkan Masalah (Admin Diblokir) */}
+            {/* 7. Menu Laporkan Masalah & Riwayat Laporan (Admin Diblokir) */}
             <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
               <Route path="/laporkan-masalah" element={<LaporkanMasalah />} />
+              <Route path="/riwayat-laporan" element={<RiwayatLaporan />} />
             </Route>
 
             {/* 8. Laporan Kinerja / SLA (Staf Diblokir) */}
@@ -150,20 +148,10 @@ function App() {
             {/* 10. Rute Umum Lintas Role */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
               <Route path="/semua-tugas" element={<SemuaTugas />} />
-<<<<<<< HEAD
               <Route path="/semua-tugas-lengkap" element={<SemuaTugasLengkap />} />
               <Route path="/detail-tugas" element={<DetailTugasList />} />
               <Route path="/detail-tugas/:id" element={<DetailTugas />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
-=======
-              <Route path="/semua-tugas-staff" element={<SemuaTugas />} />
-              <Route path="/daftar-semua-tugas" element={<SemuaTugasLengkap />} />
-              <Route path="/riwayat" element={<RiwayatTugas />} />
-              <Route path="/detail-tugas-list" element={<DetailTugasList />} />
-              <Route path="/dokumen-sop" element={<DokumenSOP />} />
-              <Route path="/detail-tugas/:id" element={<DetailTugas />} />
-              <Route path="/riwayat-laporan" element={<RiwayatLaporan />} />
->>>>>>> 852a56308fb9d34a865bb7a7bdcd0e3af0f7bdd2
             </Route>
           </Route>
         </Route>
