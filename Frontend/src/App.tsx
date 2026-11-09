@@ -17,7 +17,7 @@ import Login from './pages/Login';
 import LaporanSLA from './pages/LaporanSLA';
 import Dashboard from './pages/Dashboard';
 import DetailTugas from './pages/DetailTugas';
-import DetailTugasList from './pages/DetailTugasList';
+import DetailLaporan from './pages/DetailLaporan';
 import RiwayatLaporan from './pages/RiwayatLaporan';
 
 // Rute import Staff
@@ -147,10 +147,10 @@ function App() {
               <Route path="/semua-tugas-staff" element={<SemuaTugas />} />
               <Route path="/daftar-semua-tugas" element={<SemuaTugasLengkap />} />
               <Route path="/riwayat" element={<RiwayatTugas />} />
-              <Route path="/detail-tugas-list" element={<DetailTugasList />} />
               <Route path="/dokumen-sop" element={<DokumenSOP />} />
               <Route path="/detail-tugas/:id" element={<DetailTugas />} />
               <Route path="/riwayat-laporan" element={<RiwayatLaporan />} />
+              <Route path="/detail-laporan/:id" element={<DetailLaporan />} />
             </Route>
           </Route>
         </Route>

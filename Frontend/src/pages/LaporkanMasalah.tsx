@@ -53,7 +53,7 @@ const LaporkanMasalah: React.FC = () => {
     judul: '',
     lokasi: '',
     deskripsi: '',
-    fotoBukti: '', // Menambahkan field untuk menyimpan string base64 foto
+    fotoInstruksi: '', // Menambahkan field untuk menyimpan string base64 foto
   });
   
   // State khusus untuk UI Drag & Drop
@@ -93,7 +93,7 @@ const LaporkanMasalah: React.FC = () => {
     }
     try {
       const base64Str = await compressImageToBase64(file);
-      setFormData(prev => ({ ...prev, fotoBukti: base64Str }));
+      setFormData(prev => ({ ...prev, fotoInstruksi: base64Str }));
       setPreviewName(file.name);
     } catch (err) {
       alert('Gagal memproses gambar.');
@@ -126,7 +126,7 @@ const LaporkanMasalah: React.FC = () => {
   };
 
   const hapusFoto = () => {
-    setFormData(prev => ({ ...prev, fotoBukti: '' }));
+    setFormData(prev => ({ ...prev, fotoInstruksi: '' }));
     setPreviewName('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -145,11 +145,11 @@ const LaporkanMasalah: React.FC = () => {
         judul: formData.judul,
         lokasi: formData.lokasi,
         deskripsi: formData.deskripsi,
-        fotoBukti: formData.fotoBukti || null, // Kirim foto jika ada
+        fotoInstruksi: formData.fotoInstruksi || null, // Kirim foto jika ada
       });
 
       setCreatedTicket(res.data.data);
-      setFormData(prev => ({ ...prev, judul: '', lokasi: '', deskripsi: '', fotoBukti: '' }));
+      setFormData(prev => ({ ...prev, judul: '', lokasi: '', deskripsi: '', fotoInstruksi: '' }));
       setPreviewName('');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Gagal mengajukan tiket laporan masalah.');
@@ -279,9 +279,9 @@ const LaporkanMasalah: React.FC = () => {
               isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-slate-400'
             }`}
           >
-            {formData.fotoBukti ? (
+            {formData.fotoInstruksi ? (
               <div className="w-full">
-                <img src={formData.fotoBukti} alt="Preview Bukti" className="h-40 mx-auto object-cover rounded-lg border border-slate-200 shadow-sm mb-3" />
+                <img src={formData.fotoInstruksi} alt="Preview Bukti" className="h-40 mx-auto object-cover rounded-lg border border-slate-200 shadow-sm mb-3" />
                 <p className="text-xs font-bold text-slate-700 mb-2 truncate px-4">{previewName}</p>
                 <button type="button" onClick={hapusFoto} className="px-3 py-1 bg-rose-100 text-rose-700 text-[10px] font-bold uppercase rounded-lg hover:bg-rose-200 transition">
                   Hapus & Ganti Foto

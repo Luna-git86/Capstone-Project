@@ -1,6 +1,6 @@
 // Frontend/src/pages/TambahTugas.tsx
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { getAuthRole, getAuthDivisiId, getAuthUserId } from '../utils/authStorage';
 
@@ -58,19 +58,29 @@ const compressImageToBase64 = (file: File): Promise<string> => {
 
 const TambahTugas: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [searchParams] = useSearchParams();
-  const preselectedTicketId = searchParams.get('ticketId') || '';
-  const parentId = searchParams.get('parentId');
-  const parentTitle = searchParams.get('parentTitle');
+  
+  // Tangkap data dari URL Params (jika diakses dari link)
+  const paramParentId = searchParams.get('parentId');
+  const paramParentTitle = searchParams.get('parentTitle');
+
+  // Tangkap data dari React Router State (dikirim oleh DetailLaporan.tsx)
+  const stateSourceId = location.state?.ticketId;
+  const stateSourceJudul = location.state?.judul;
+
+  // Tentukan sumber penugasan (utamakan dari Router State)
+  const sourceTicketId = stateSourceId || paramParentId || '';
+  const sourceTicketTitle = stateSourceJudul || paramParentTitle || '';
 
   const userRole = getAuthRole() || 'KOORDINATOR';
   const userDivisiId = getAuthDivisiId() || '';
   const currentUserId = getAuthUserId();
 
   const [incomingTickets, setIncomingTickets] = useState<IncomingTicket[]>([]);
-  const [selectedTicketId, setSelectedTicketId] = useState<string>(preselectedTicketId);
+  const [selectedTicketId, setSelectedTicketId] = useState<string>(String(sourceTicketId));
   
   // STATE MASTER DATA
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
@@ -80,19 +90,19 @@ const TambahTugas: React.FC = () => {
 
   // STATE FORM MULTI-DELEGASI
   const [formData, setFormData] = useState({
-    judul: '',
-    lokasi: '',
-    deskripsi: '',
-    prioritas: 'MEDIUM',
-    divisiId: userDivisiId,
+    judul: location.state?.judul || '',
+    lokasi: location.state?.lokasi || '',
+    deskripsi: location.state?.deskripsi || '',
+    prioritas: location.state?.prioritas || 'MEDIUM',
+    divisiId: location.state?.divisiId ? String(location.state.divisiId) : userDivisiId,
     pelaksanaIds: [] as string[], 
     deadline: '',
-    fotoBukti: '', // State baru untuk menyimpan lampiran instruksi
+    fotoInstruksi: location.state?.fotoInstruksi || '', // Auto-attach gambar dari laporan jika ada
   });
 
   // STATE DRAG & DROP FOTO
   const [isDragging, setIsDragging] = useState(false);
-  const [previewName, setPreviewName] = useState('');
+  const [previewName, setPreviewName] = useState(formData.fotoInstruksi ? 'Lampiran dari Laporan Awal' : '');
 
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -126,20 +136,6 @@ const TambahTugas: React.FC = () => {
           return false;
         });
         setIncomingTickets(delegatableTickets);
-
-        if (preselectedTicketId) {
-          const found = delegatableTickets.find((t) => String(t.id) === String(preselectedTicketId));
-          if (found) {
-            setFormData((prev) => ({
-              ...prev,
-              judul: found.judul,
-              lokasi: found.lokasi || '',
-              deskripsi: found.deskripsi,
-              prioritas: found.prioritas || 'MEDIUM',
-              divisiId: found.divisi?.id ? String(found.divisi.id) : prev.divisiId,
-            }));
-          }
-        }
       } catch (e) {
         console.warn('Gagal memuat tiket masuk:', e);
       }
@@ -170,13 +166,14 @@ const TambahTugas: React.FC = () => {
 
     loadInitialData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preselectedTicketId, userRole, currentUserId]);
+  }, [userRole, currentUserId]);
 
   const handleSelectIncomingTicket = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     setSelectedTicketId(val);
     if (!val) {
-      setFormData((prev) => ({ ...prev, judul: '', lokasi: '', deskripsi: '' }));
+      setFormData((prev) => ({ ...prev, judul: '', lokasi: '', deskripsi: '', fotoInstruksi: '' }));
+      setPreviewName('');
       return;
     }
     const found = incomingTickets.find((t) => String(t.id) === val);
@@ -190,7 +187,7 @@ const TambahTugas: React.FC = () => {
         divisiId: found.divisi?.id ? String(found.divisi.id) : prev.divisiId,
         pelaksanaIds: [], 
         deadline: found.deadline ? toDateTimeLocalInput(found.deadline) : prev.deadline,
-        fotoBukti: '', // reset foto jika pilih dari list
+        fotoBukti: '', 
       }));
       setPreviewName('');
     }
@@ -228,7 +225,7 @@ const TambahTugas: React.FC = () => {
     }
     try {
       const base64Str = await compressImageToBase64(file);
-      setFormData(prev => ({ ...prev, fotoBukti: base64Str }));
+      setFormData(prev => ({ ...prev, fotoInstruksi: base64Str }));
       setPreviewName(file.name);
     } catch (err) {
       alert('Gagal memproses gambar instruksi.');
@@ -261,7 +258,7 @@ const TambahTugas: React.FC = () => {
   };
 
   const hapusFoto = () => {
-    setFormData(prev => ({ ...prev, fotoBukti: '' }));
+    setFormData(prev => ({ ...prev, fotoInstruksi: '' }));
     setPreviewName('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -299,7 +296,7 @@ const TambahTugas: React.FC = () => {
       const promises = formData.pelaksanaIds.map((pelaksanaId) => {
         const payload: any = {
           tipe: 'BUAT_TUGAS',
-          ticketId: selectedTicketId ? Number(selectedTicketId) : undefined,
+          ticketId: selectedTicketId ? Number(selectedTicketId) : undefined, // Mengubah Laporan Masuk menjadi Tugas
           judul: formData.judul,
           lokasi: formData.lokasi,
           deskripsi: formData.deskripsi,
@@ -307,11 +304,12 @@ const TambahTugas: React.FC = () => {
           divisiId: Number(formData.divisiId),
           pelaksanaId: Number(pelaksanaId),
           deadline: new Date(formData.deadline).toISOString(),
-          fotoBukti: formData.fotoBukti || null, // Mengirimkan lampiran foto instruksi
+          fotoInstruksi: formData.fotoInstruksi || null,
         };
 
-        if (parentId) {
-          payload.parentTicketId = Number(parentId);
+        // Jika ini berasal dari tiket induk (Arahan Koor/Kadiv), catat parent-nya
+        if (paramParentId) {
+          payload.parentTicketId = Number(paramParentId);
         }
 
         return api.post('/tickets', payload);
@@ -320,7 +318,12 @@ const TambahTugas: React.FC = () => {
       await Promise.all(promises);
 
       setSuccessCount(promises.length);
-      setSelectedTicketId('');
+      
+      // Jika penugasan berhasil, kosongkan state
+      if (!sourceTicketId) {
+        setSelectedTicketId('');
+      }
+      
       setFormData((prev) => ({
         ...prev,
         judul: '',
@@ -328,11 +331,11 @@ const TambahTugas: React.FC = () => {
         deskripsi: '',
         pelaksanaIds: [],
         deadline: '',
-        fotoBukti: '',
+        fotoInstruksi: '',
       }));
       setPreviewName('');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Terjadi kesalahan saat menerbitkan sebagian atau seluruh tugas.');
+      setError(err.response?.data?.message || 'Terjadi kesalahan saat menerbitkan tugas.');
     } finally {
       setSubmitting(false);
     }
@@ -344,7 +347,7 @@ const TambahTugas: React.FC = () => {
   const pageTitle =
     userRole === 'DIREKTUR' ? 'Terbitkan Arahan Direksi' :
     userRole === 'KADIV' ? 'Terbitkan Arahan Divisi' :
-    parentId ? 'Terbitkan Tiket Operasional Lapangan' :
+    sourceTicketId ? 'Terbitkan Tiket Operasional Lapangan' :
     userRole === 'KOORDINATOR' ? 'Penugasan Tim Lapangan' : 'Pendelegasian Tugas';
 
   return (
@@ -359,23 +362,24 @@ const TambahTugas: React.FC = () => {
         <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
           {userRole === 'DIREKTUR' ? 'Menerbitkan arahan strategis rumah sakit kepada Kepala Divisi (Kadiv).'
             : userRole === 'KADIV' ? 'Menerbitkan target atau arahan divisi kepada Koordinator terkait.'
-            : parentId ? `Anda sedang memecah arahan induk #T-${parentId} menjadi beberapa tiket operasional teknis.`
+            : sourceTicketId ? `Anda sedang menugaskan staf untuk menangani laporan / tiket #T-${String(sourceTicketId).padStart(3, '0')}.`
             : 'Pendelegasian tugas operasional kepada satu atau beberapa staf sekaligus.'}
         </p>
       </div>
 
-      {parentId && (
+      {/* Peringatan: TUGAS BERSUMBER DARI LAPORAN / INDUK */}
+      {sourceTicketId && (
         <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between shadow-sm">
           <div>
             <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider bg-indigo-100 px-2 py-0.5 rounded">
               Tugas Turunan (Sub-Task)
             </span>
             <p className="text-sm font-bold text-indigo-950 mt-1">
-              Sumber: #T-{String(parentId).padStart(3, '0')} {parentTitle ? `— ${parentTitle}` : ''}
+              Sumber: #T-{String(sourceTicketId).padStart(3, '0')} {sourceTicketTitle ? `— ${sourceTicketTitle}` : ''}
             </p>
           </div>
-          <button type="button" onClick={() => navigate(`/detail-tugas/${parentId}`)} className="text-xs text-indigo-600 hover:text-indigo-800 font-bold bg-white px-3 py-1.5 rounded-lg border border-indigo-200 shadow-sm transition">
-            Lihat Tiket Induk
+          <button type="button" onClick={() => navigate(`/detail-laporan/${sourceTicketId}`)} className="text-xs text-indigo-600 hover:text-indigo-800 font-bold bg-white px-3 py-1.5 rounded-lg border border-indigo-200 shadow-sm transition whitespace-nowrap ml-4">
+            Lihat Tiket Sumber
           </button>
         </div>
       )}
@@ -390,10 +394,10 @@ const TambahTugas: React.FC = () => {
         <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="text-sm font-bold text-emerald-900">
-              Penugasan Massal Berhasil!
+              Penugasan Berhasil Diterbitkan!
             </h3>
             <p className="text-xs font-medium text-emerald-800 mt-1">
-              Sebanyak <strong>{successCount} tiket operasional baru</strong> telah diterbitkan secara paralel ke masing-masing staf.
+              Sebanyak <strong>{successCount} tiket penugasan</strong> telah dikirim kepada pelaksana yang dipilih.
             </p>
           </div>
           <button type="button" onClick={() => navigate('/semua-tugas')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm whitespace-nowrap transition">
@@ -404,7 +408,8 @@ const TambahTugas: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
         
-        {['KADIV', 'KOORDINATOR'].includes(userRole) && (
+        {/* Sembunyikan Dropdown Pilihan jika Tugas sudah Bersumber dari Laporan Tertentu */}
+        {['KADIV', 'KOORDINATOR'].includes(userRole) && !sourceTicketId && (
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               Sumber Arahan / Keluhan Masuk
@@ -413,7 +418,7 @@ const TambahTugas: React.FC = () => {
               <option value="">-- Buat Penugasan Baru (Mandiri) --</option>
               {incomingTickets.map((t) => (
                 <option key={t.id} value={String(t.id)}>
-                  [#T-{String(t.id).padStart(3, '0')}] {t.judul} ({t.lokasi || 'Tanpa lokasi'})
+                  [#T-{String(t.id).padStart(3, '0')}] {t.judul}
                 </option>
               ))}
             </select>
@@ -426,8 +431,8 @@ const TambahTugas: React.FC = () => {
             <input type="text" name="judul" value={formData.judul} onChange={handleChange} required placeholder="Contoh: Perbaikan & Cuci AC Ruang Nifas" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-slate-50" />
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Lokasi / Area *</label>
-            <input type="text" name="lokasi" value={formData.lokasi} onChange={handleChange} required placeholder="Contoh: Gedung Utama Lt. 2" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-slate-50" />
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Lokasi / Area</label>
+            <input type="text" name="lokasi" value={formData.lokasi} onChange={handleChange} placeholder="Contoh: Gedung Utama Lt. 2" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-slate-50" />
           </div>
         </div>
 
@@ -465,9 +470,9 @@ const TambahTugas: React.FC = () => {
               isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-slate-400'
             }`}
           >
-            {formData.fotoBukti ? (
+            {formData.fotoInstruksi ? (
               <div className="w-full">
-                <img src={formData.fotoBukti} alt="Preview Bukti" className="h-40 mx-auto object-cover rounded-lg border border-slate-200 shadow-sm mb-3" />
+                <img src={formData.fotoInstruksi} alt="Preview Bukti" className="h-40 mx-auto object-cover rounded-lg border border-slate-200 shadow-sm mb-3" />
                 <p className="text-xs font-bold text-slate-700 mb-2 truncate px-4">{previewName}</p>
                 <button type="button" onClick={hapusFoto} className="px-3 py-1 bg-rose-100 text-rose-700 text-[10px] font-bold uppercase rounded-lg hover:bg-rose-200 transition">
                   Hapus & Ganti Foto

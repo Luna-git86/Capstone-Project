@@ -203,7 +203,7 @@ export default function RiwayatLaporan() {
                     </p>
                   </div>
                   <button 
-                    onClick={() => navigate(`/detail-tugas/${ticket.id}`)}
+                    onClick={() => navigate(`/detail-laporan/${ticket.id}`)}
                     className="px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg transition"
                   >
                     Lihat Detail
