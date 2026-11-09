@@ -159,7 +159,7 @@ export default function AntreanLaporan() {
                     </td>
                     <td className="py-4 px-6 text-center">
                       <button 
-                        onClick={() => navigate(`/detail-laporan/${laporan.id}`)}
+                        onClick={() => navigate(`/detail-tugas/${laporan.id}`)}
                         className={`text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm w-full ${activeTab === 'MENUNGGU' ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-600'}`}
                       >
                         Lihat Detail
