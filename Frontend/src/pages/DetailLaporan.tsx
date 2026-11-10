@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { getAuthRole } from '../utils/authStorage';
+import { getAuthRole, getAuthUserId } from '../utils/authStorage';
 
 interface TicketData {
   id: number;
@@ -49,11 +49,10 @@ export default function DetailLaporan() {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Data User Login
+// Data User Login
   const userRole = getAuthRole() || 'STAF';
-  const userString = localStorage.getItem('user') || '{}';
-  const userObj = JSON.parse(userString);
-  const currentUserId = userObj.id ? Number(userObj.id) : null;
+  const userIdFromAuth = getAuthUserId();
+  const currentUserId = userIdFromAuth ? Number(userIdFromAuth) : null;
 
   // Modal Penolakan State
   const [showTolakModal, setShowTolakModal] = useState(false);
@@ -94,10 +93,9 @@ export default function DetailLaporan() {
 
   const isAuthorizedKoor = userRole === 'KOORDINATOR' && ticket?.status === 'MENUNGGU_TRIASE';
   
-  // Logika Kelonggaran Otorisasi Revisi: 
-  // Berlaku jika user adalah pembuat laporan ATAU memiliki role STAF saat status tiket DITOLAK
+  // Logika Otorisasi Revisi: 
+  // HANYA berlaku jika user yang sedang login adalah BENAR-BENAR pembuat laporan tersebut.
   const isPembuatLaporan = Boolean(
-    userRole === 'STAF' ||
     (currentUserId && Number(ticket?.pembuatId) === currentUserId) ||
     (currentUserId && Number(ticket?.pembuat?.id) === currentUserId)
   );
