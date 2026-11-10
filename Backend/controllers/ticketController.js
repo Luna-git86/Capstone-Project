@@ -837,6 +837,58 @@ const createOrUpdateSop = async (req, res) => {
   }
 };
 
+// 8. Memperbarui atau Mengarsipkan Dokumen SOP Berdasarkan ID
+const updateSopById = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { 
+      nomorSop, 
+      judul, 
+      revisi, 
+      deskripsi, 
+      fileUrl, 
+      divisiId, 
+      isArchived 
+    } = req.body;
+
+    // Verifikasi apakah dokumen dengan ID tersebut ada
+    const existingSop = await prisma.dokumenSop.findUnique({
+      where: { id },
+    });
+
+    if (!existingSop) {
+      return res.status(404).json({ message: 'Dokumen SOP tidak ditemukan.' });
+    }
+
+    // Hanya Kadiv dan Direktur yang boleh mengedit SOP
+    if (!['KADIV', 'DIREKTUR'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Anda tidak memiliki wewenang mengelola SOP.' });
+    }
+
+    const dataToUpdate = {};
+    if (nomorSop !== undefined) dataToUpdate.nomorSop = nomorSop.trim();
+    if (judul !== undefined) dataToUpdate.judul = judul.trim();
+    if (revisi !== undefined) dataToUpdate.revisi = revisi;
+    if (deskripsi !== undefined) dataToUpdate.deskripsi = deskripsi;
+    if (fileUrl !== undefined) dataToUpdate.fileUrl = fileUrl;
+    if (divisiId !== undefined) dataToUpdate.divisiId = divisiId ? Number(divisiId) : null;
+    if (isArchived !== undefined) dataToUpdate.isArchived = isArchived;
+
+    const updatedSop = await prisma.dokumenSop.update({
+      where: { id },
+      data: dataToUpdate,
+    });
+
+    return res.status(200).json({
+      message: 'Dokumen SOP berhasil diperbarui.',
+      data: updatedSop,
+    });
+  } catch (error) {
+    console.error('Error updateSopById:', error);
+    return res.status(500).json({ message: 'Gagal memperbarui dokumen SOP pada server.' });
+  }
+};
+
 // 7. Ambil Detail Tiket Berdasarkan ID (Termasuk Hirarki Parent-Child & fotoInstruksi)
 const getTicketById = async (req, res) => {
   try {
@@ -919,4 +971,5 @@ module.exports = {
   getSops,
   createOrUpdateSop,
   getTicketById,
+  updateSopById,
 };

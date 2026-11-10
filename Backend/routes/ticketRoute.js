@@ -11,6 +11,7 @@ const {
   getSops,
   createOrUpdateSop,
   getTicketById,
+  updateSopById,
 } = require('../controllers/ticketController');
 
 const {
@@ -48,6 +49,18 @@ router.post(
   '/sops',
   checkRole(['DIREKTUR', 'KADIV']),
   createOrUpdateSop
+);
+
+router.put(
+  '/sops/:id',
+  checkRole(['DIREKTUR', 'KADIV']),
+  updateSopById
+);
+
+router.patch(
+  '/sops/:id',
+  checkRole(['DIREKTUR', 'KADIV']),
+  updateSopById
 );
 
 // Buat Laporan Masalah (Semua kecuali Admin) & Buat Tugas (Koordinator, Kadiv, Direktur)
