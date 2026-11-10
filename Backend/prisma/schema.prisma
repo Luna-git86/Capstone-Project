@@ -117,7 +117,7 @@ model DokumenSop {
   id           Int       @id @default(autoincrement())
   nomorSop     String    @unique
   judul        String
-  revisi       String    @default("Revisi 1")
+  revisi       String    
   deskripsi    String?
   fileUrl      String?
   status       String    @default("AKTIF")

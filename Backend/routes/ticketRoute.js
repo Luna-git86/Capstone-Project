@@ -12,6 +12,7 @@ const {
   createOrUpdateSop,
   getTicketById,
   updateSopById,
+  deleteSopPermanently,
 } = require('../controllers/ticketController');
 
 const {
@@ -61,6 +62,13 @@ router.patch(
   '/sops/:id',
   checkRole(['DIREKTUR', 'KADIV']),
   updateSopById
+);
+
+router.delete(
+  '/sops/:id', 
+  verifyToken, 
+  checkRole(['DIREKTUR', 'KADIV']), 
+  deleteSopPermanently
 );
 
 // Buat Laporan Masalah (Semua kecuali Admin) & Buat Tugas (Koordinator, Kadiv, Direktur)

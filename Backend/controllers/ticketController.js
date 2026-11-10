@@ -837,7 +837,7 @@ const createOrUpdateSop = async (req, res) => {
   }
 };
 
-// 8. Memperbarui atau Mengarsipkan Dokumen SOP Berdasarkan ID
+// Memperbarui atau Mengarsipkan Dokumen SOP Berdasarkan ID
 const updateSopById = async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -848,21 +848,14 @@ const updateSopById = async (req, res) => {
       deskripsi, 
       fileUrl, 
       divisiId, 
-      isArchived 
+      status // <--- Ubah isArchived menjadi status
     } = req.body;
 
-    // Verifikasi apakah dokumen dengan ID tersebut ada
-    const existingSop = await prisma.dokumenSop.findUnique({
-      where: { id },
-    });
+    const existingSop = await prisma.dokumenSop.findUnique({ where: { id } });
+    if (!existingSop) return res.status(404).json({ message: 'Dokumen SOP tidak ditemukan.' });
 
-    if (!existingSop) {
-      return res.status(404).json({ message: 'Dokumen SOP tidak ditemukan.' });
-    }
-
-    // Hanya Kadiv dan Direktur yang boleh mengedit SOP
     if (!['KADIV', 'DIREKTUR'].includes(req.user.role)) {
-      return res.status(403).json({ message: 'Anda tidak memiliki wewenang mengelola SOP.' });
+      return res.status(403).json({ message: 'Akses ditolak.' });
     }
 
     const dataToUpdate = {};
@@ -872,20 +865,39 @@ const updateSopById = async (req, res) => {
     if (deskripsi !== undefined) dataToUpdate.deskripsi = deskripsi;
     if (fileUrl !== undefined) dataToUpdate.fileUrl = fileUrl;
     if (divisiId !== undefined) dataToUpdate.divisiId = divisiId ? Number(divisiId) : null;
-    if (isArchived !== undefined) dataToUpdate.isArchived = isArchived;
+    if (status !== undefined) dataToUpdate.status = status; // <--- Simpan status (AKTIF / ARSIP)
 
     const updatedSop = await prisma.dokumenSop.update({
       where: { id },
       data: dataToUpdate,
     });
 
-    return res.status(200).json({
-      message: 'Dokumen SOP berhasil diperbarui.',
-      data: updatedSop,
-    });
+    return res.status(200).json({ message: 'SOP diperbarui.', data: updatedSop });
   } catch (error) {
-    console.error('Error updateSopById:', error);
-    return res.status(500).json({ message: 'Gagal memperbarui dokumen SOP pada server.' });
+    console.error(error);
+    return res.status(500).json({ message: 'Gagal memperbarui SOP.' });
+  }
+};
+
+const deleteSopPermanently = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const existingSop = await prisma.dokumenSop.findUnique({ where: { id } });
+    
+    if (!existingSop) {
+      return res.status(404).json({ message: 'Dokumen SOP tidak ditemukan.' });
+    }
+
+    if (!['KADIV', 'DIREKTUR'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Akses ditolak.' });
+    }
+
+    await prisma.dokumenSop.delete({ where: { id } });
+
+    return res.status(200).json({ message: 'Dokumen SOP berhasil dihapus permanen.' });
+  } catch (error) {
+    console.error('Error deleteSopPermanently:', error);
+    return res.status(500).json({ message: 'Gagal menghapus dokumen SOP dari server.' });
   }
 };
 
@@ -972,4 +984,5 @@ module.exports = {
   createOrUpdateSop,
   getTicketById,
   updateSopById,
+  deleteSopPermanently,
 };
