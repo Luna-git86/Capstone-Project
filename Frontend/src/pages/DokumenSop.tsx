@@ -18,30 +18,24 @@ interface SopItem {
   updatedAt: string;
   divisi?: { id: number; nama: string } | null;
   pengaju?: { nama: string; role: string };
-  isArchived?: boolean; 
+  status?: string; 
 }
 
 export default function DokumenSop() {
   const [sops, setSops] = useState<SopItem[]>([]);
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
   
-  // State Filter & Tampilan
   const [selectedDivisi, setSelectedDivisi] = useState<string>('SEMUA');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'AKTIF' | 'ARSIP'>('AKTIF');
   const [loading, setLoading] = useState<boolean>(true);
 
-  // State Modal Form Tambah/Revisi
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editId, setEditId] = useState<number | null>(null); 
-  
-  // Menyimpan data dokumen asli saat mode Edit agar sistem tahu versi sebelumnya
   const [originalSop, setOriginalSop] = useState<SopItem | null>(null);
 
-  // State Modal Pratinjau (Hanya muncul untuk Word)
   const [previewItem, setPreviewItem] = useState<SopItem | null>(null);
 
-  // Note: Hapus 'revisi' dari formData karena sekarang dikalkulasi otomatis
   const [formData, setFormData] = useState({
     nomorSop: '',
     judul: '',
@@ -50,7 +44,6 @@ export default function DokumenSop() {
     fileUrl: '',
   });
   
-  // State File Upload
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState('');
@@ -82,7 +75,6 @@ export default function DokumenSop() {
     fetchData();
   }, []);
 
-  // Handler konversi File (PDF/Word) ke Base64
   const processFile = (file: File) => {
     const validTypes = [
       'application/pdf',
@@ -158,20 +150,32 @@ export default function DokumenSop() {
   };
 
   const handleToggleArchive = async (item: SopItem) => {
-    const isCurrentlyArchived = Boolean(item.isArchived);
+    const isCurrentlyArchived = item.status === 'ARSIP';
     const actionText = isCurrentlyArchived ? 'memulihkan' : 'mengarsipkan';
+    const newStatus = isCurrentlyArchived ? 'AKTIF' : 'ARSIP';
     
     if (!window.confirm(`Apakah Anda yakin ingin ${actionText} SOP ini?`)) return;
 
     try {
-      // HAPUS TANDA KOMENTAR PADA BARIS DI BAWAH INI
-      await api.patch(`/tickets/sops/${item.id}`, { isArchived: !isCurrentlyArchived });
-      
-      setSops(prev => prev.map(s => s.id === item.id ? { ...s, isArchived: !isCurrentlyArchived } : s));
+      await api.patch(`/tickets/sops/${item.id}`, { status: newStatus });
+      setSops(prev => prev.map(s => s.id === item.id ? { ...s, status: newStatus } : s));
       setMessage(`SOP berhasil ${isCurrentlyArchived ? 'dipulihkan' : 'diarsipkan'}.`);
       setTimeout(() => setMessage(''), 3000);
     } catch (err: any) {
       alert(`Gagal ${actionText} SOP.`);
+    }
+  };
+
+  const handleDeletePermanent = async (item: SopItem) => {
+    if (!window.confirm(`PERHATIAN: Apakah Anda yakin ingin menghapus permanen SOP "${item.judul}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+
+    try {
+      await api.delete(`/tickets/sops/${item.id}`);
+      setSops(prev => prev.filter(s => s.id !== item.id));
+      setMessage('Dokumen SOP berhasil dihapus permanen.');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Gagal menghapus dokumen SOP secara permanen.');
     }
   };
 
@@ -182,18 +186,15 @@ export default function DokumenSop() {
     setError('');
 
     try {
-      // LOGIKA AUTO-INCREMENT REVISI
       let autoRevisi = 'Terbitan Awal';
       
       if (editId && originalSop) {
-        const revString = originalSop.revisi; // Cek versi saat ini di database
-        // Ekstrak angka revisi terakhir dari string "Telah Direvisi (Rev.X)" menggunakan Regex
+        const revString = originalSop.revisi; 
         const match = revString.match(/Rev\.(\d+)/i);
         if (match) {
           const nextNum = parseInt(match[1], 10) + 1;
           autoRevisi = `Telah Direvisi (Rev.${nextNum})`;
         } else {
-          // Jika belum ada angka sama sekali (Misal asalnya 'Terbitan Awal'), paksa jadi Rev.1
           autoRevisi = 'Telah Direvisi (Rev.1)';
         }
       }
@@ -265,7 +266,7 @@ export default function DokumenSop() {
   };
 
   const filteredSops = sops.filter((s) => {
-    const isArchived = Boolean(s.isArchived);
+    const isArchived = s.status === 'ARSIP';
     const matchTab = activeTab === 'AKTIF' ? !isArchived : isArchived;
     const matchDivisi = selectedDivisi === 'SEMUA' || String(s.divisi?.id) === selectedDivisi;
     const searchLower = searchQuery.toLowerCase();
@@ -422,12 +423,13 @@ export default function DokumenSop() {
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                             </button>
 
+                            {/* Tombol Arsip / Pulihkan (Warna abu-abu jika aktif, hijau jika diarsipkan) */}
                             <button 
                               onClick={() => handleToggleArchive(item)}
                               title={activeTab === 'AKTIF' ? 'Arsipkan SOP' : 'Pulihkan SOP'}
                               className={`p-2 shadow-sm rounded-lg border transition-colors ${
                                 activeTab === 'AKTIF' 
-                                  ? 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-200' 
+                                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300' 
                                   : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-200'
                               }`}
                             >
@@ -437,6 +439,17 @@ export default function DokumenSop() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                               )}
                             </button>
+
+                            {/* Tombol Hapus Permanen (Hanya tampil di tab Arsip) */}
+                            {activeTab === 'ARSIP' && (
+                              <button 
+                                onClick={() => handleDeletePermanent(item)}
+                                title="Hapus Permanen"
+                                className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg shadow-sm transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                              </button>
+                            )}
                           </>
                         )}
 
