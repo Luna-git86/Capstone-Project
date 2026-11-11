@@ -116,6 +116,13 @@ export default function DetailTugas() {
     try {
       const response = await api.get(`/tickets/${id}`);
       const ticketData = response.data.data;
+
+      // Jika jenis tiket adalah LAPORAN, langsung navigasi ke halaman detail laporan
+      if (ticketData.jenisTiket === 'LAPORAN') {
+        navigate(`/detail-laporan/${id}`, { replace: true });
+        return;
+      }
+
       setTicket(ticketData);
 
       if (isAtasan && !isBackground) {

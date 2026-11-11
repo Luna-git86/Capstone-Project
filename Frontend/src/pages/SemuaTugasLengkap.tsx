@@ -43,7 +43,7 @@ const SemuaTugasLengkap: React.FC = () => {
       // Hanya aktifkan animasi loading jika ini muat awal (bukan di latar belakang)
       if (!isBackground) setLoading(true);
       
-      const res = await api.get('/tickets');
+      const res = await api.get('/tickets?jenis=TUGAS');
       const data: Ticket[] = Array.isArray(res.data) ? res.data : res.data?.data || [];
       
       // React akan memperbarui Virtual DOM secara otomatis tanpa berkedip

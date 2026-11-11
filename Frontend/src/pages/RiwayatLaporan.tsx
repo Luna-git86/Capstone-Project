@@ -35,7 +35,7 @@ export default function RiwayatLaporan() {
       setError('');
     }
     try {
-      const response = await api.get('/tickets');
+      const response = await api.get('/tickets?jenis=LAPORAN');
       const data: TicketItem[] = Array.isArray(response.data) ? response.data : response.data?.data || [];
       setAllTickets(data);
     } catch (err: any) {

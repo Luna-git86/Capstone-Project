@@ -25,7 +25,7 @@ export default function AntreanLaporan() {
   useEffect(() => {
     const fetchTickets = async () => {
       try {
-        const response = await api.get('/tickets');
+        const response = await api.get('/tickets?jenis=LAPORAN');
         setDaftarLaporan(response.data.data || response.data || []);
       } catch (error) {
         console.error('Gagal mengambil data laporan:', error);

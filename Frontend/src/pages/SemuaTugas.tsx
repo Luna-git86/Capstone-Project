@@ -134,7 +134,7 @@ const SemuaTugas: React.FC = () => {
       // Hanya tampilkan loading screen jika ini adalah pertama kali halaman dimuat
       if (isBackground === false) setLoading(true);
       
-      const ticketRes = await api.get('/tickets');
+      const ticketRes = await api.get('/tickets?jenis=TUGAS');
       const rawTickets: Ticket[] = Array.isArray(ticketRes.data)
         ? ticketRes.data
         : ticketRes.data?.data || [];

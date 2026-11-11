@@ -48,7 +48,7 @@ export default function RiwayatTugas() {
       setError('');
     }
     try {
-      const response = await api.get('/tickets');
+      const response = await api.get('/tickets?jenis=TUGAS');
       const data: TicketItem[] = Array.isArray(response.data) ? response.data : response.data?.data || [];
       // Simpan SEMUA data ke state tanpa memfilternya dulu
       setAllTickets(data);

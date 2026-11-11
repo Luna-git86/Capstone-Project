@@ -26,14 +26,11 @@ import DashboardStaff from './pages/Staf/DashboardStaff';
 
 // Rute import Koordinator
 import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
-import DetailValidasi from './pages/Koordinator/DetailValidasi';
 import MenuLaporan from './pages/Koordinator/MenuLaporan';
 
 
 // Rute import Kadiv
 import DashboardKadiv from './pages/Kadiv/DashboardKadiv';
-import DaftarEskalasiKadiv from './pages/Kadiv/DaftarEskalasiKadiv';
-import DetailEskalasi from './pages/Kadiv/DetailEskalasi';
 
 // Fungsi penentu beranda sesuai Role masing-masing
 export const getDashboardByRole = (role: string | null) => {
@@ -108,15 +105,11 @@ function App() {
             {/* 3. Beranda Manajerial (Khusus Kepala Divisi) */}
             <Route element={<RoleProtectedRoute allowedRoles={['KADIV']} />}>
               <Route path="/dashboard-kadiv" element={<DashboardKadiv />} />
-
-              <Route path="/daftar-eskalasi-kadiv" element={<DaftarEskalasiKadiv />} />
-              <Route path="/detail-eskalasi/:id" element={<DetailEskalasi />} />
             </Route>
 
             {/* 4. Beranda Koordinator (Khusus Koordinator) */}
             <Route element={<RoleProtectedRoute allowedRoles={['KOORDINATOR']} />}>
               <Route path="/dashboard-koordinator" element={<DashboardKoordinator />} />
-              <Route path="/detail-validasi/:id" element={<DetailValidasi />} />
               <Route path="/menu-laporan" element={<MenuLaporan />} />
             </Route>
 
