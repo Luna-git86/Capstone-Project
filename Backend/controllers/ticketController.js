@@ -27,6 +27,7 @@ const createTicket = async (req, res) => {
       lokasi,
       deskripsi,
       prioritas,
+      jenisTiket, // 'LAPORAN' atau 'TUGAS'
       divisiId,
       pelaksanaId,
       deadline,
@@ -204,6 +205,11 @@ const createTicket = async (req, res) => {
         ? String(fotoInstruksi).trim()
         : inheritedFotoInstruksi;
 
+    // Tentukan jenis tiket secara otomatis berdasarkan konteks pembuatan jika frontend tidak mengirimkannya
+    // Jika isBuatTugas = true (dari halaman tambah tugas), maka default-nya 'TUGAS'
+    // Jika isBuatTugas = false (dari halaman lapor masalah), maka default-nya 'LAPORAN'
+    const finalJenisTiket = jenisTiket ? String(jenisTiket).toUpperCase() : (isBuatTugas ? 'TUGAS' : 'LAPORAN');
+
     const newTicket = await prisma.ticket.create({
       data: {
         judul: judul.trim(),
@@ -211,13 +217,14 @@ const createTicket = async (req, res) => {
         deskripsi: deskripsi.trim(),
         prioritas: selectedPrioritas,
         status: initialStatus,
-        fotoInstruksi: finalFotoInstruksi, // Disimpan ke database
+        fotoInstruksi: finalFotoInstruksi,
         pembuatId,
         penanggungJawabId,
         divisiId: selectedDivisiId,
         pelaksanaId: selectedPelaksanaId,
         deadline: selectedDeadline,
         parentTicketId: selectedParentTicketId,
+        jenisTiket: finalJenisTiket, // <--- Baris ini ditambahkan untuk menyimpan jenis tiket
       },
       include: {
         pembuat: { select: { id: true, nama: true, noHp: true, role: true } },
@@ -286,7 +293,11 @@ const createTicket = async (req, res) => {
 const getTickets = async (req, res) => {
   try {
     const { role, divisiId, id: userId } = req.user;
+    // Tangkap parameter 'jenis' dari query URL (contoh: ?jenis=LAPORAN)
+    const { jenis } = req.query; 
+
     let filter = {};
+    let roleConditions = {}; // Pisahkan kondisi role dari filter utama
 
     // Kontrol Visibilitas Berdasarkan Role
     if (role === 'KADIV') {
@@ -297,7 +308,7 @@ const getTickets = async (req, res) => {
       if (divisiId) {
         orConditions.push({ divisiId: Number(divisiId) });
       }
-      filter = { OR: orConditions };
+      roleConditions = { OR: orConditions };
     } else if (role === 'KOORDINATOR') {
       // Koordinator melihat tugas yang dibuatnya, ditugaskan kepadanya, atau dia penanggung jawabnya;
       // serta tiket laporan masalah masuk (MENUNGGU_TRIASE) atau tugas divisi yang pelaksananya Staf.
@@ -314,15 +325,34 @@ const getTickets = async (req, res) => {
           pelaksana: { role: 'STAF' },
         });
       }
-      filter = { OR: orConditions };
+      roleConditions = { OR: orConditions };
     } else if (role === 'STAF') {
       // Staf hanya melihat tugas yang ditugaskan kepadanya atau yang dia laporkan
-      filter = {
+      roleConditions = {
         OR: [
           { pelaksanaId: Number(userId) },
           { pembuatId: Number(userId) },
         ],
       };
+    }
+
+    // Gabungkan filter Role dengan filter Jenis Tiket (jika ada)
+    if (jenis) {
+      if (Object.keys(roleConditions).length > 0) {
+        // Jika ada filter role (bukan Direktur/Admin), gunakan AND
+        filter = {
+          AND: [
+            roleConditions,
+            { jenisTiket: jenis } 
+          ]
+        };
+      } else {
+        // Jika Direktur/Admin (tidak ada roleConditions), langsung set jenis
+        filter = { jenisTiket: jenis };
+      }
+    } else {
+      // Jika tidak ada request jenis, gunakan filter role seperti biasa
+      filter = roleConditions;
     }
     // DIREKTUR dan ADMIN: filter = {} (Melihat seluruh data rumah sakit)
 
