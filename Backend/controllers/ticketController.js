@@ -3,6 +3,7 @@ const prisma = require('../db');
 const { dispatchTicketNotifications } = require('../services/ticketNotificationService');
 
 // 1. Pengajuan Laporan Masalah (Semua Pegawai Operasional) & Pembuatan Tugas (Koordinator s/d Direktur)
+// 1. Pengajuan Laporan Masalah (Semua Pegawai Operasional) & Pembuatan Tugas (Koordinator s/d Direktur)
 const createTicket = async (req, res) => {
   try {
     const role = req.user.role;
@@ -16,10 +17,11 @@ const createTicket = async (req, res) => {
       });
     }
 
-    // Jika membuat tugas berdasarkan tiket laporan masalah yang sudah ada
-    if (req.body.ticketId) {
-      req.params = { id: req.body.ticketId };
-      return triageTicket(req, res);
+    // Jika membuat tugas berdasarkan tiket laporan masalah yang sudah ada (Triase / Sub-tugas),
+    // kita tetapkan req.body.parentTicketId agar menjadi tiket turunan yang BARU,
+    // bukan menimpa tiket yang lama.
+    if (req.body.ticketId && !req.body.parentTicketId) {
+      req.body.parentTicketId = req.body.ticketId;
     }
 
     const {
@@ -58,7 +60,7 @@ const createTicket = async (req, res) => {
     }
 
     const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(role);
-    const isBuatTugas = tipe === 'BUAT_TUGAS';
+    const isBuatTugas = tipe === 'BUAT_TUGAS' || parentTicketId !== undefined;
 
     // Jika melalui menu Buat Tugas, wajib memiliki role Koordinator, Kadiv, atau Direktur
     if (isBuatTugas && !isAtasan) {
@@ -106,6 +108,14 @@ const createTicket = async (req, res) => {
       }
       // Wariskan fotoInstruksi dari tiket induk jika tugas turunan tidak mengunggah foto baru
       inheritedFotoInstruksi = parentTicket.fotoInstruksi || null;
+
+      // Opsional: Jika ini turunan dari laporan lama, ubah status laporan lama menjadi DIPROSES
+      if (parentTicket.status === 'MENUNGGU_TRIASE') {
+        await prisma.ticket.update({
+          where: { id: selectedParentTicketId },
+          data: { status: 'DIPROSES', penanggungJawabId: pembuatId }
+        });
+      }
     }
 
     let selectedPelaksanaId = null;
@@ -130,7 +140,6 @@ const createTicket = async (req, res) => {
 
       // ATURAN HIERARKI BISNIS 1: KADIV
       if (role === 'KADIV') {
-        // Kadiv tidak boleh menugaskan Staf secara langsung
         if (pelaksana.role === 'STAF') {
           return res.status(400).json({
             message: 'Kepala Divisi tidak dapat menugaskan Staf secara langsung. Terbitkan tugas/arahan kepada Koordinator.',
@@ -141,7 +150,6 @@ const createTicket = async (req, res) => {
             message: 'Kepala Divisi hanya berwenang menerbitkan tugas/arahan kepada Koordinator.',
           });
         }
-        // Koordinator penerima harus berada dalam divisi tujuan yang dipilih
         if (pelaksana.divisiId && pelaksana.divisiId !== selectedDivisiId) {
           return res.status(400).json({
             message: 'Koordinator penerima harus berada dalam Divisi Tujuan yang dipilih.',
@@ -151,25 +159,21 @@ const createTicket = async (req, res) => {
 
       // ATURAN HIERARKI BISNIS 2: KOORDINATOR
       if (role === 'KOORDINATOR') {
-        // Pelaksana tidak boleh sama dengan pembuat/penanggung jawab
         if (selectedPelaksanaId === pembuatId) {
           return res.status(400).json({
             message: 'Pelaksana tugas tidak boleh sama dengan penanggung jawab / pembuat tugas.',
           });
         }
-        // Koordinator menugaskan STAF
         if (pelaksana.role !== 'STAF') {
           return res.status(400).json({
             message: 'Koordinator hanya berwenang menugaskan Staf sebagai pelaksana operasional.',
           });
         }
-        // Staf penerima harus berada di divisi yang sama dengan Koordinator
         if (userDivisiId && pelaksana.divisiId !== userDivisiId) {
           return res.status(400).json({
             message: 'Koordinator hanya dapat menugaskan Staf di dalam divisi yang sama.',
           });
         }
-        // Koordinator hanya berwenang menerbitkan tugas di divisinya sendiri
         if (userDivisiId && selectedDivisiId !== userDivisiId) {
           return res.status(400).json({
             message: 'Koordinator hanya berwenang menerbitkan tugas operasional dalam divisinya sendiri.',
@@ -224,7 +228,7 @@ const createTicket = async (req, res) => {
         pelaksanaId: selectedPelaksanaId,
         deadline: selectedDeadline,
         parentTicketId: selectedParentTicketId,
-        jenisTiket: finalJenisTiket, // <--- Baris ini ditambahkan untuk menyimpan jenis tiket
+        jenisTiket: finalJenisTiket,
       },
       include: {
         pembuat: { select: { id: true, nama: true, noHp: true, role: true } },
