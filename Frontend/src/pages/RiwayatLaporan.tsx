@@ -1,5 +1,5 @@
 // Frontend/src/pages/RiwayatLaporan.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { getAuthUserId, getAuthRole } from '../utils/authStorage';

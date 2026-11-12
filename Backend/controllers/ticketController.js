@@ -35,6 +35,7 @@ const createTicket = async (req, res) => {
       deadline,
       fotoInstruksi, // Menangkap foto instruksi / foto awal laporan masalah dari Frontend
       tipe, // 'LAPORAN_MASALAH' atau 'BUAT_TUGAS'
+      isBuatTugas: bodyIsBuatTugas,
       parentTicketId, // Hubungan relasi arahan induk (Kadiv -> Koordinator -> Staf)
     } = req.body;
 
@@ -60,7 +61,7 @@ const createTicket = async (req, res) => {
     }
 
     const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(role);
-    const isBuatTugas = tipe === 'BUAT_TUGAS' || parentTicketId !== undefined;
+    const isBuatTugas = tipe === 'BUAT_TUGAS' || bodyIsBuatTugas === true || bodyIsBuatTugas === 'true' || (parentTicketId !== undefined && parentTicketId !== null && parentTicketId !== '');
 
     // Jika melalui menu Buat Tugas, wajib memiliki role Koordinator, Kadiv, atau Direktur
     if (isBuatTugas && !isAtasan) {
@@ -275,6 +276,16 @@ const createTicket = async (req, res) => {
       } catch (notificationError) {
         console.error('[Telegram] Notifikasi tugas baru gagal:', notificationError.message);
       }
+    } else if (!isBuatTugas && newTicket.status === 'MENUNGGU_TRIASE') {
+      try {
+        await dispatchTicketNotifications({
+          previous: null,
+          current: newTicket,
+          actor: newTicket.pembuat || { id: pembuatId, role, nama: req.user.nama },
+        });
+      } catch (notificationError) {
+        console.error('[Telegram] Notifikasi laporan masalah gagal:', notificationError.message);
+      }
     }
 
     return res.status(201).json({
@@ -298,7 +309,7 @@ const getTickets = async (req, res) => {
   try {
     const { role, divisiId, id: userId } = req.user;
     // Tangkap parameter 'jenis' dari query URL (contoh: ?jenis=LAPORAN)
-    const { jenis } = req.query; 
+    const { jenis } = req.query || {};
 
     let filter = {};
     let roleConditions = {}; // Pisahkan kondisi role dari filter utama
@@ -759,7 +770,7 @@ const updateTicketStatus = async (req, res) => {
       await dispatchTicketNotifications({
         previous: currentTicket,
         current: updatedTicket,
-        actor: req.user.role === 'STAF' ? updatedTicket.pelaksana : updatedTicket.penanggungJawab,
+        actor: req.user.role === 'STAF' ? (updatedTicket.pelaksana || updatedTicket.pembuat || { id: Number(req.user.id), role: req.user.role, nama: req.user.nama }) : (updatedTicket.penanggungJawab || { id: Number(req.user.id), role: req.user.role, nama: req.user.nama }),
       });
     } catch (notificationError) {
       console.error('[Telegram] Notifikasi pembaruan status gagal:', notificationError.message);

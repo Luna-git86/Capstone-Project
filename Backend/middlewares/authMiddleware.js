@@ -30,7 +30,7 @@ const verifyToken = (req, res, next) => {
 
     if (!token) {
       return res.status(401).json({
-        message: 'Akses ditolak. Token autentikasi tidak ditemukan.',
+        message: 'Akses ditolak. Token tidak ditemukan.',
       });
     }
 

@@ -7,6 +7,9 @@ const EVENT_TASK_SUBMITTED = 'TASK_SUBMITTED';
 const EVENT_TASK_REVISION_REQUIRED = 'TASK_REVISION_REQUIRED';
 const EVENT_TASK_VERIFIED = 'TASK_VERIFIED';
 const EVENT_TASK_ESCALATED = 'TASK_ESCALATED';
+const EVENT_REPORT_SUBMITTED = 'REPORT_SUBMITTED';
+const EVENT_REPORT_REJECTED = 'REPORT_REJECTED';
+const EVENT_REPORT_RESUBMITTED = 'REPORT_RESUBMITTED';
 
 function formatTicketCode(id) {
   return `#T-${String(id).padStart(3, '0')}`;
@@ -36,6 +39,45 @@ function workflowOccurrenceToken(previous, current) {
 function planTicketNotificationEvents({ previous, current, actor }, options = {}) {
   const events = [];
   if (!current?.id) return events;
+
+  // Laporan Masalah Baru (MENUNGGU_TRIASE tanpa pelaksana)
+  if (!previous && current.status === 'MENUNGGU_TRIASE' && Array.isArray(options.koordinatorIds)) {
+    for (const koorId of options.koordinatorIds) {
+      events.push({
+        type: EVENT_REPORT_SUBMITTED,
+        recipientId: koorId,
+        occurrenceToken: `report:created:${current.id}`,
+      });
+    }
+  }
+
+  // Laporan Masalah Ditolak (Kembalikan ke Pelapor / pembuatId)
+  if (
+    current.status === 'DITOLAK' &&
+    previous?.status === 'MENUNGGU_TRIASE' &&
+    current.pembuatId
+  ) {
+    events.push({
+      type: EVENT_REPORT_REJECTED,
+      recipientId: current.pembuatId,
+      occurrenceToken: workflowOccurrenceToken(previous, current),
+    });
+  }
+
+  // Revisi Laporan Dikirim Ulang (Dari DITOLAK ke MENUNGGU_TRIASE)
+  if (
+    current.status === 'MENUNGGU_TRIASE' &&
+    previous?.status === 'DITOLAK' &&
+    Array.isArray(options.koordinatorIds)
+  ) {
+    for (const koorId of options.koordinatorIds) {
+      events.push({
+        type: EVENT_REPORT_RESUBMITTED,
+        recipientId: koorId,
+        occurrenceToken: workflowOccurrenceToken(previous, current),
+      });
+    }
+  }
 
   const prevAssignee = previous?.pelaksanaId ?? null;
   const nextAssignee = current.pelaksanaId ?? null;
@@ -97,6 +139,47 @@ function planTicketNotificationEvents({ previous, current, actor }, options = {}
   return events;
 }
 
+
+function formatJenisAwam(type) {
+  const map = {
+    [EVENT_DIRECTIVE_ASSIGNED]: 'Arahan Pimpinan',
+    [EVENT_TASK_ASSIGNED]: 'Penugasan Tugas Baru',
+    [EVENT_TASK_REASSIGNED]: 'Pengalihan Tugas',
+    [EVENT_TASK_SUBMITTED]: 'Pengajuan Tugas Selesai',
+    [EVENT_TASK_REVISION_REQUIRED]: 'Permintaan Perbaikan Tugas',
+    [EVENT_TASK_VERIFIED]: 'Tugas Disahkan Selesai',
+    [EVENT_TASK_ESCALATED]: 'Eskalasi Kendala Tugas',
+    [EVENT_REPORT_SUBMITTED]: 'Laporan Masalah Baru',
+    [EVENT_REPORT_REJECTED]: 'Laporan Masalah Dikembalikan',
+    [EVENT_REPORT_RESUBMITTED]: 'Pengajuan Ulang Laporan Masalah',
+    DEADLINE_SOON: 'Pengingat Mendekati Batas Waktu',
+    OVERDUE: 'Peringatan Melewati Batas Waktu',
+  };
+  return map[type] || String(type || '-').replace(/_/g, ' ');
+}
+
+function formatStatusAwam(status) {
+  const map = {
+    MENUNGGU_TRIASE: 'Menunggu Peninjauan',
+    DIPROSES: 'Sedang Dikerjakan',
+    MENUNGGU_VALIDASI: 'Menunggu Pemeriksaan',
+    HOLD_ESKALASI: 'Tertahan (Butuh Tindak Lanjut)',
+    SELESAI: 'Selesai',
+    DITOLAK: 'Dikembalikan / Ditolak',
+    BARU: 'Baru',
+  };
+  return map[status] || String(status || '-').replace(/_/g, ' ');
+}
+
+function formatPrioritasAwam(prioritas) {
+  const map = {
+    LOW: 'Rendah (LOW)',
+    MEDIUM: 'Sedang (MEDIUM)',
+    HIGH: 'Tinggi (HIGH)',
+  };
+  return map[prioritas] || prioritas || '-';
+}
+
 function buildNotificationMessage({ type, ticket, actor, timeZone }) {
   const headings = {
     [EVENT_DIRECTIVE_ASSIGNED]: actor?.role === 'DIREKTUR' ? '[NOTIFIKASI ARAHAN DIREKSI]' : '[NOTIFIKASI ARAHAN DIVISI]',
@@ -106,6 +189,9 @@ function buildNotificationMessage({ type, ticket, actor, timeZone }) {
     [EVENT_TASK_REVISION_REQUIRED]: '[NOTIFIKASI REVISI TUGAS]',
     [EVENT_TASK_VERIFIED]: '[NOTIFIKASI TUGAS TERVERIFIKASI]',
     [EVENT_TASK_ESCALATED]: '[NOTIFIKASI ESKALASI TUGAS]',
+    [EVENT_REPORT_SUBMITTED]: '[LAPORAN MASALAH BARU]',
+    [EVENT_REPORT_REJECTED]: '[LAPORAN MASALAH DITOLAK]',
+    [EVENT_REPORT_RESUBMITTED]: '[REVISI LAPORAN MASALAH]',
     DEADLINE_SOON: '[PENGINGAT DEADLINE]',
     OVERDUE: '[NOTIFIKASI OVERDUE]',
   };
@@ -120,22 +206,29 @@ function buildNotificationMessage({ type, ticket, actor, timeZone }) {
     [EVENT_TASK_REVISION_REQUIRED]: 'Pekerjaan perlu diperbaiki. Silakan buka aplikasi untuk melihat detail revisi.',
     [EVENT_TASK_VERIFIED]: 'Pekerjaan telah diverifikasi dan tugas dinyatakan selesai.',
     [EVENT_TASK_ESCALATED]: 'Tugas mengalami kendala/eskalasi dan memerlukan tindak lanjut pimpinan.',
+    [EVENT_REPORT_SUBMITTED]: 'Terdapat laporan masalah baru. Silakan buka aplikasi pada Menu Laporan untuk meninjau dan menugaskan staf.',
+    [EVENT_REPORT_REJECTED]: 'Laporan Anda dikembalikan/ditolak oleh atasan. Silakan buka aplikasi pada menu Laporan Saya untuk melihat catatan evaluasi dan melakukan revisi.',
+    [EVENT_REPORT_RESUBMITTED]: 'Pelapor telah memperbarui laporan masalah yang sebelumnya ditolak. Silakan buka Menu Laporan untuk meninjau kembali.',
     DEADLINE_SOON: 'Segera selesaikan tugas sebelum melewati deadline.',
     OVERDUE: 'Tugas telah melewati batas waktu penyelesaian.',
   };
 
+  const jenisText = formatJenisAwam(type);
+  const statusText = formatStatusAwam(ticket.status);
+  const prioritasText = formatPrioritasAwam(ticket.prioritas);
+
   const lines = [
     headings[type] || `[NOTIFIKASI ${type}]`,
     '',
-    `Jenis: ${type}`,
+    `Jenis: ${jenisText}`,
     `ID Tiket: ${formatTicketCode(ticket.id)}`,
     `Judul: ${ticket.judul}`,
-    `Prioritas: ${ticket.prioritas || '-'}`,
+    `Prioritas: ${prioritasText}`,
     `Deadline: ${formatDeadline(ticket.deadline, timeZone)}`,
-    `Status: ${ticket.status || '-'}`,
+    `Status: ${statusText}`,
   ];
 
-  if (type === EVENT_TASK_REVISION_REQUIRED && ticket.catatanRevisi) {
+  if ((type === EVENT_TASK_REVISION_REQUIRED || type === EVENT_REPORT_REJECTED) && ticket.catatanRevisi) {
     lines.push(`Catatan revisi: ${ticket.catatanRevisi}`);
   }
 
@@ -148,7 +241,32 @@ function buildNotificationMessage({ type, ticket, actor, timeZone }) {
 }
 
 async function dispatchTicketNotifications({ previous, current, actor }, deps = {}) {
-  const planned = planTicketNotificationEvents({ previous, current, actor }, deps);
+  let koordinatorIds = deps.koordinatorIds;
+  if (!koordinatorIds && current?.divisiId && (
+    (!previous && current.status === 'MENUNGGU_TRIASE') ||
+    (previous?.status === 'DITOLAK' && current.status === 'MENUNGGU_TRIASE')
+  )) {
+    try {
+      const db = deps.db || require('../db');
+      const koorList = await db.user.findMany({
+        where: { divisiId: current.divisiId, role: 'KOORDINATOR' },
+        select: { id: true },
+      });
+      koordinatorIds = koorList.map((k) => k.id);
+      if (koordinatorIds.length === 0) {
+        const kadivList = await db.user.findMany({
+          where: { divisiId: current.divisiId, role: 'KADIV' },
+          select: { id: true },
+        });
+        koordinatorIds = kadivList.map((k) => k.id);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  const effectiveDeps = koordinatorIds ? { ...deps, koordinatorIds } : deps;
+  const planned = planTicketNotificationEvents({ previous, current, actor }, effectiveDeps);
   const notifyTicketEvent =
     deps.notifyTicketEvent || require('./telegramService').notifyTicketEvent;
   const timeZone = deps.timeZone || getTimeZone();
@@ -195,6 +313,9 @@ module.exports = {
   EVENT_TASK_REVISION_REQUIRED,
   EVENT_TASK_VERIFIED,
   EVENT_TASK_ESCALATED,
+  EVENT_REPORT_SUBMITTED,
+  EVENT_REPORT_REJECTED,
+  EVENT_REPORT_RESUBMITTED,
   formatTicketCode,
   buildDedupeKey,
   planTicketNotificationEvents,

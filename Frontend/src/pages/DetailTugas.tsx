@@ -608,7 +608,7 @@ export default function DetailTugas() {
                  Tugas ini dilaporkan terkendala oleh pelaksana (Alat rusak / Butuh biaya).
                </p>
                
-               <button onClick={() => navigate('/daftar-eskalasi-kadiv')} className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm">
+               <button onClick={() => navigate('/semua-tugas')} className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm">
                   Proses Pengajuan Eskalasi
                </button>
              </div>

@@ -221,9 +221,74 @@ async function retryFailedNotifications(deps = {}) {
   return results;
 }
 
+async function flushPendingNotificationsForUser(userId, customChatId = null, deps = {}) {
+  if (!systemConfigStore.isTelegramEnabled()) {
+    return { flushed: 0, reason: 'TELEGRAM_DISABLED' };
+  }
+
+  const db = deps.prisma || prisma;
+  const sendMessage = deps.sendTelegramMessage || sendTelegramMessage;
+
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, nama: true, telegramChatId: true },
+  });
+
+  const chatId = customChatId || user?.telegramChatId;
+  if (!chatId) {
+    return { flushed: 0, reason: 'NO_CHAT_ID' };
+  }
+
+  // Ambil semua notifikasi tertunda atau yang sebelumnya gagal karena akun belum terhubung
+  const pendingLogs = await db.notificationLog.findMany({
+    where: {
+      recipientId: userId,
+      status: { in: ['FAILED', 'PENDING'] },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  if (pendingLogs.length === 0) {
+    return { flushed: 0, total: 0 };
+  }
+
+  console.log(`[Telegram] Mengirimkan ${pendingLogs.length} notifikasi tertunda ke akun Telegram user #${userId} (${chatId})...`);
+
+  let sentCount = 0;
+  for (const log of pendingLogs) {
+    try {
+      await sendMessage(chatId, log.message);
+      await db.notificationLog.update({
+        where: { id: log.id },
+        data: {
+          status: 'SENT',
+          sentAt: new Date(),
+          errorMessage: null,
+          telegramChatId: String(chatId),
+        },
+      });
+      sentCount++;
+      // Jeda 200ms agar urutan pesan rapi
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    } catch (err) {
+      console.error(`[Telegram] Gagal mengirim notifikasi tertunda log #${log.id}:`, err.message);
+      await db.notificationLog.update({
+        where: { id: log.id },
+        data: {
+          errorMessage: String(err.message || err).slice(0, 500),
+          telegramChatId: String(chatId),
+        },
+      });
+    }
+  }
+
+  return { flushed: sentCount, total: pendingLogs.length };
+}
+
 module.exports = {
   sendTelegramMessage,
   notifyTicketEvent,
   notifyDeadlineEvent,
   retryFailedNotifications,
+  flushPendingNotificationsForUser,
 };
