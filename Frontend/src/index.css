@@ -1,1 +1,127 @@
 @import "tailwindcss";
+
+@theme {
+  /* Tipografi */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* 60% DOMINANT: Calm Clinical Surfaces (OKLCH, meredam silau layar) */
+  --color-clinical-bg: oklch(0.972 0.008 245);
+  --color-clinical-surface: oklch(1 0 0);
+  --color-clinical-muted: oklch(0.949 0.012 245);
+  --color-clinical-border: oklch(0.903 0.018 245);
+
+  /* 30% SECONDARY: Medical Navy & Readable Slate */
+  --color-clinical-ink: oklch(0.275 0.068 250);
+  --color-clinical-body: oklch(0.415 0.055 248);
+  --color-clinical-subtle: oklch(0.575 0.048 245);
+
+  /* 10% ACCENT: Interactive Controls & Semantic Tints */
+  --color-clinical-primary: oklch(0.495 0.195 262);
+  --color-clinical-primary-soft: oklch(0.968 0.016 258);
+  --color-clinical-teal-soft: oklch(0.965 0.025 180);
+  --color-clinical-warning-soft: oklch(0.968 0.025 82);
+  --color-clinical-warning: oklch(0.545 0.135 60);
+
+  /* Data Visualization Palette (Colorblind-Safe Clinical Harmony in OKLCH) */
+  --color-chart-actual: oklch(0.275 0.068 250);
+  --color-chart-forecast: oklch(0.595 0.125 182);
+  --color-chart-band: oklch(0.895 0.095 178);
+  --color-chart-band-stroke: oklch(0.755 0.115 180);
+  --color-chart-normal: oklch(0.665 0.165 62);
+
+  /* Tema Khusus Analitik Kunjungan: Monokromatik Biru Cerah (Traveloka) + Putih */
+  --color-tvlk-bg: #f4f9ff;
+  --color-tvlk-surface: #ffffff;
+  --color-tvlk-tint: #f2f8ff;
+  --color-tvlk-soft: #ebf6ff;
+  --color-tvlk-muted: #e3f2ff;
+  --color-tvlk-border: #cbe5ff;
+  --color-tvlk-border-strong: #9cd3ff;
+  --color-tvlk-ink: #083358;
+  --color-tvlk-body: #1d5488;
+  --color-tvlk-subtle: #5385b5;
+  --color-tvlk-primary: #0194f3;
+  --color-tvlk-primary-hover: #007ce8;
+  --color-tvlk-deep: #004b96;
+  --color-tvlk-sky: #52b4fa;
+  --color-tvlk-band: #bae3ff;
+}
+
+/* Kelas Tema Reusable untuk Laman Analitik Kunjungan */
+.tvlk-shell {
+  background-color: var(--color-tvlk-bg);
+  color: var(--color-tvlk-ink);
+}
+
+.tvlk-card {
+  background-color: var(--color-tvlk-surface);
+  border: 1px solid var(--color-tvlk-border);
+  box-shadow: 0 2px 10px -2px rgb(1 148 243 / 0.06);
+}
+
+.tvlk-card:hover {
+  border-color: var(--color-tvlk-border-strong);
+}
+
+.tvlk-stage-panel {
+  background-color: var(--color-tvlk-surface);
+  border: 1px solid var(--color-tvlk-border);
+  box-shadow: 0 2px 12px -2px rgb(1 148 243 / 0.08);
+}
+
+.tvlk-stage-panel[data-active='true'] {
+  border-color: var(--color-tvlk-border-strong);
+  box-shadow: 0 10px 28px -6px rgb(1 148 243 / 0.16);
+}
+
+.tvlk-btn-primary {
+  background-color: var(--color-tvlk-primary);
+  color: #ffffff;
+  border: 1px solid var(--color-tvlk-primary);
+}
+
+.tvlk-btn-primary:hover {
+  background-color: var(--color-tvlk-primary-hover);
+  border-color: var(--color-tvlk-primary-hover);
+}
+
+.tvlk-btn-soft {
+  background-color: var(--color-tvlk-tint);
+  color: var(--color-tvlk-body);
+  border: 1px solid #c5e2ff;
+}
+
+.tvlk-btn-soft:hover {
+  background-color: var(--color-tvlk-muted);
+  border-color: var(--color-tvlk-border-strong);
+  color: var(--color-tvlk-ink);
+}
+
+.tvlk-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.tvlk-scroll::-webkit-scrollbar-track {
+  background: var(--color-tvlk-tint);
+  border-radius: 9999px;
+}
+
+.tvlk-scroll::-webkit-scrollbar-thumb {
+  background: #a8d6ff;
+  border-radius: 9999px;
+}
+
+.tvlk-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-tvlk-primary);
+}
+
+/* Hilangkan kotak hitam fokus browser saat area grafik Recharts diklik/tap */
+.recharts-wrapper,
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus,
+.recharts-surface,
+.recharts-surface:focus {
+  outline: none !important;
+}

@@ -1,38 +1,121 @@
-# Node.js (Vite Frontend & Express Backend)
-node_modules/
+# ==============================================================================
+# 1. ENVIRONMENT & SECRETS
+# ==============================================================================
 .env
+.env.*
+!.env.example
 
-# Python (FastAPI ML-Engine)
-venv/
+# ==============================================================================
+# 2. PYTHON & VIRTUAL ENVIRONMENTS / CACHES
+# ==============================================================================
 .venv/
-env/
-__pycache__/
-*.pyc
-*.pyo
-
-# OS Files
-.DS_Store
-Thumbs.db
-# Node.js
-node_modules/
-.env
-
-# Python
 venv/
+env/
+ENV/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
 
-# Mac/Windows system files
+# ==============================================================================
+# 3. NODE.JS & FRONTEND BUILD
+# ==============================================================================
+node_modules/
+dist/
+build/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==============================================================================
+# 4. DATA PRIVASI SIMRS, KONFIGURASI UNIT & PARQUET INTERMEDIATE/PROCESSED (SENSITIF)
+# ==============================================================================
+# Amankan seluruh isi folder config/ dan data/ (folder tetap ada via .gitkeep)
+scientific-method/config/*
+!scientific-method/config/.gitkeep
+
+scientific-method/data/*
+!scientific-method/data/raw/
+!scientific-method/data/interim/
+!scientific-method/data/processed/
+scientific-method/data/raw/*
+scientific-method/data/interim/*
+scientific-method/data/processed/*
+!scientific-method/data/raw/.gitkeep
+!scientific-method/data/interim/.gitkeep
+!scientific-method/data/processed/.gitkeep
+
+*.parquet
+*.xlsx
+*.xls
+scientific-method/**/*.csv
+scientific-method/**/*.docx
+scientific-method/**/*.pptx
+scientific-method/**/*.ppsx
+scientific-method/**/*.pdf
+scientific-method/**/*.png
+
+# ==============================================================================
+# 5. MODEL BINARIES, OUTPUTS, FIXTURES & ARTEFAK SEMENTARA (DIAMANKAN TOTAL)
+# ==============================================================================
+*.pkl
+*.joblib
+*.onnx
+*.bak
+*.old
+*.tmp
+*.log
+*.tsbuildinfo
+*.dump
+
+# Amankan seluruh isi models/, outputs/, dan fixtures/ (folder tetap ada via .gitkeep)
+scientific-method/models/*
+!scientific-method/models/.gitkeep
+
+scientific-method/outputs/*
+!scientific-method/outputs/dashboard/
+!scientific-method/outputs/figures/
+!scientific-method/outputs/tables/
+scientific-method/outputs/dashboard/*
+scientific-method/outputs/figures/*
+scientific-method/outputs/tables/*
+!scientific-method/outputs/dashboard/.gitkeep
+!scientific-method/outputs/figures/.gitkeep
+!scientific-method/outputs/tables/.gitkeep
+
+scientific-method/fixtures/*
+!scientific-method/fixtures/dashboard_sample/
+scientific-method/fixtures/dashboard_sample/*
+!scientific-method/fixtures/dashboard_sample/.gitkeep
+
+# ==============================================================================
+# 6. OS & EDITOR FILES
+# ==============================================================================
 .DS_Store
 Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
 
-# Pengamanan Dataset & File Database Lokal (Temuan D)
-data/
-data/raw/
-data/interim/
-data/processed/
-*.csv
-*.xlsx
-*.sql
-*.dump
-*.sqlite
+# ==============================================================================
+# 7. HASIL CAPSTONE POLNES, PENJELASAN SM DETAIL & FILE .txt / .md SCIENTIFIC METHOD
+# ==============================================================================
+scientific-method/Hasil_Capstone_Project_POLNES/
+scientific-method/penjelasan/
+scientific-method/Penjelasan_SM_Detail/
+scientific-method/Penjelasan_SM_Detail.txt
+scientific-method/**/*.md
+scientific-method/**/*.txt
+!scientific-method/requirements.txt
