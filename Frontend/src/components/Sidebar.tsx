@@ -9,7 +9,12 @@ interface MenuItem {
   allowedRoles: string[];
 }
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  onNavigate?: () => void;
+  onClose?: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ onNavigate, onClose }) => {
   const navigate = useNavigate();
 
   const userRole = getAuthRole() || 'STAF';
@@ -60,6 +65,11 @@ const Sidebar: React.FC = () => {
       path: '/laporan-sla',
       allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR'],
     },
+    {
+      title: 'Analitik Kunjungan',
+      path: '/analitik-kunjungan',
+      allowedRoles: ['DIREKTUR', 'KADIV'],
+    },
         {
       title: 'Laporkan Masalah',
       path: '/laporkan-masalah',
@@ -95,25 +105,39 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="w-64 bg-[#0B2447] text-white flex flex-col min-h-screen shadow-lg">
-      <div className="p-6 border-b border-blue-900/60 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center font-bold text-lg shadow">
-          RS
+    <aside className="w-full lg:w-64 max-w-full bg-[#0B2447] text-white flex flex-col h-full min-h-0 overflow-y-auto overflow-x-hidden shadow-lg">
+      <div className="p-4 sm:p-5 border-b border-blue-900/60 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center font-bold text-base shadow shrink-0">
+            RS
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-bold text-sm sm:text-base leading-tight truncate">E-Ticketing RSIA</h1>
+            <p className="text-xs text-blue-300 truncate">Qurrata A'yun</p>
+          </div>
         </div>
-        <div>
-          <h1 className="font-bold text-base leading-tight">E-Ticketing RSIA</h1>
-          <p className="text-xs text-blue-300">Qurrata A'yun</p>
-        </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Tutup menu navigasi"
+            className="lg:hidden p-1.5 rounded-lg text-blue-200 hover:bg-blue-800/60 hover:text-white transition shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
-      <div className="px-6 py-4 bg-blue-950/50 border-b border-blue-900/60">
-        <p className="text-sm font-semibold text-white truncate">{userName}</p>
-        <div className="mt-1 flex flex-col gap-1">
-          <span className="inline-block px-2.5 py-0.5 text-[11px] font-bold bg-blue-600/40 text-blue-200 rounded border border-blue-400/30 uppercase tracking-wider">
+      <div className="px-5 py-3.5 bg-blue-950/50 border-b border-blue-900/60 min-w-0">
+        <p className="text-sm font-semibold text-white truncate max-w-full">{userName}</p>
+        <div className="mt-1.5 flex flex-col gap-1 min-w-0">
+          <span className="inline-block px-2.5 py-0.5 text-[11px] font-bold bg-blue-600/40 text-blue-200 rounded border border-blue-400/30 uppercase tracking-wider truncate max-w-full">
             Jabatan: {userRole}
           </span>
           {userRole !== 'ADMIN' && (
-            <span className="inline-block px-2.5 py-0.5 text-[11px] font-medium bg-slate-800/80 text-blue-200 rounded border border-slate-700/50">
+            <span className="inline-block px-2.5 py-0.5 text-[11px] font-medium bg-slate-800/80 text-blue-200 rounded border border-slate-700/50 truncate max-w-full">
               Divisi: {userDivisi}
             </span>
           )}
@@ -129,6 +153,7 @@ const Sidebar: React.FC = () => {
             <NavLink
               key={item.path}
               to={item.path}
+              onClick={() => onNavigate?.()}
               className={({ isActive }) =>
                 `flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   isActive

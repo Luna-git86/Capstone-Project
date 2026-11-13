@@ -1,36 +1,39 @@
 // Frontend/src/App.tsx
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { getAuthToken, getAuthRole } from './utils/authStorage';
 import Layout from './components/Layout';
-
-import DashboardAdmin from './pages/DashboardAdmin';
-import MonitoringNotifikasi from './pages/Admin/MonitoringNotifikasi';
-import PengaturanAdmin from './pages/Admin/PengaturanAdmin';
-import SemuaTugas from './pages/SemuaTugas';
-import SemuaTugasLengkap from './pages/SemuaTugasLengkap';
-import TambahTugas from './pages/TambahTugas';
-import LaporkanMasalah from './pages/LaporkanMasalah';
-import DokumenSOP from './pages/DokumenSop';
-import RiwayatTugas from './pages/RiwayatTugas';
-import PeformaAnalisis from './pages/PeformaAnalisis';
 import Login from './pages/Login';
-import LaporanSLA from './pages/LaporanSLA';
-import Dashboard from './pages/Dashboard';
-import DetailTugas from './pages/DetailTugas';
-import DetailLaporan from './pages/DetailLaporan';
-import RiwayatLaporan from './pages/RiwayatLaporan';
 
-// Rute import Staff
-import DashboardStaff from './pages/Staf/DashboardStaff';
+const DashboardAdmin = lazy(() => import('./pages/DashboardAdmin'));
+const MonitoringNotifikasi = lazy(() => import('./pages/Admin/MonitoringNotifikasi'));
+const PengaturanAdmin = lazy(() => import('./pages/Admin/PengaturanAdmin'));
+const SemuaTugas = lazy(() => import('./pages/SemuaTugas'));
+const SemuaTugasLengkap = lazy(() => import('./pages/SemuaTugasLengkap'));
+const TambahTugas = lazy(() => import('./pages/TambahTugas'));
+const LaporkanMasalah = lazy(() => import('./pages/LaporkanMasalah'));
+const DokumenSOP = lazy(() => import('./pages/DokumenSop'));
+const RiwayatTugas = lazy(() => import('./pages/RiwayatTugas'));
+const PeformaAnalisis = lazy(() => import('./pages/PeformaAnalisis'));
+const AnalitikKunjungan = lazy(() => import('./pages/AnalitikKunjungan'));
+const LaporanSLA = lazy(() => import('./pages/LaporanSLA'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const DetailTugas = lazy(() => import('./pages/DetailTugas'));
+const DetailLaporan = lazy(() => import('./pages/DetailLaporan'));
+const RiwayatLaporan = lazy(() => import('./pages/RiwayatLaporan'));
+const DashboardStaff = lazy(() => import('./pages/Staf/DashboardStaff'));
+const DashboardKoordinator = lazy(() => import('./pages/Koordinator/DashboardKoordinator'));
+const MenuLaporan = lazy(() => import('./pages/Koordinator/MenuLaporan'));
+const DashboardKadiv = lazy(() => import('./pages/Kadiv/DashboardKadiv'));
 
-
-// Rute import Koordinator
-import DashboardKoordinator from './pages/Koordinator/DashboardKoordinator';
-import MenuLaporan from './pages/Koordinator/MenuLaporan';
-
-
-// Rute import Kadiv
-import DashboardKadiv from './pages/Kadiv/DashboardKadiv';
+const RouteSuspenseFallback = () => (
+  <div className="h-full w-full min-h-[260px] flex items-center justify-center bg-[#F4F9FF] p-6">
+    <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white border border-[#CBE5FF] shadow-xs">
+      <span className="w-4 h-4 border-2 border-[#0194F3] border-t-transparent rounded-full animate-spin" />
+      <span className="text-xs font-semibold text-[#1D5488]">Memuat halaman...</span>
+    </div>
+  </div>
+);
 
 // Fungsi penentu beranda sesuai Role masing-masing
 export const getDashboardByRole = (role: string | null) => {
@@ -79,7 +82,8 @@ const RoleProtectedRoute = ({ allowedRoles }: { allowedRoles: string[] }) => {
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <Suspense fallback={<RouteSuspenseFallback />}>
+        <Routes>
         {/* Saat pertama kali membuka web ('/'), selalu arahkan ke halaman Login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
 
@@ -134,6 +138,11 @@ function App() {
               <Route path="/laporan-sla" element={<LaporanSLA />} />
             </Route>
 
+            {/* 8b. Analitik Prediksi Kunjungan Rawat Jalan (Scientific Method) */}
+            <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV']} />}>
+              <Route path="/analitik-kunjungan" element={<AnalitikKunjungan />} />
+            </Route>
+
             {/* 9. Rute Umum Lintas Role (Daftar Tugas, Riwayat, Panduan SOP) */}
             <Route element={<RoleProtectedRoute allowedRoles={['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
               <Route path="/semua-tugas" element={<SemuaTugas />} />
@@ -151,6 +160,7 @@ function App() {
         {/* Tangkap URL yang tidak dikenal dan arahkan ke Login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
