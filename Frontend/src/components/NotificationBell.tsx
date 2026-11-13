@@ -40,6 +40,8 @@ export default function NotificationBell() {
   const userDivisi = getAuthDivisiNama();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastReadId, setLastReadId] = useState<number>(() => {
@@ -48,6 +50,39 @@ export default function NotificationBell() {
   });
 
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Fungsi Buka & Tutup Popover Notifikasi dengan Animasi Jatuh & Terangkat
+  const handleOpen = () => {
+    if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    setIsClosing(false);
+    setIsOpen(true);
+    if (notifications.length === 0) {
+      fetchNotifications(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (isClosing || !isOpen) return;
+    setIsClosing(true);
+    closeTimeoutRef.current = setTimeout(() => {
+      setIsOpen(false);
+      setIsClosing(false);
+    }, 240); // 240ms sesuai durasi animate-notif-lift
+  };
+
+  const handleToggle = () => {
+    if (isOpen) {
+      handleClose();
+    } else {
+      handleOpen();
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    };
+  }, []);
 
   // Ambil data notifikasi dari API
   const fetchNotifications = async (isSilent = false) => {
@@ -81,13 +116,13 @@ export default function NotificationBell() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        handleClose();
       }
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsOpen(false);
+        handleClose();
       }
     };
 
@@ -99,7 +134,7 @@ export default function NotificationBell() {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [isOpen]);
+  }, [isOpen, isClosing]);
 
   // Hitung jumlah notifikasi belum dibaca (ID lebih tinggi dari lastReadId)
   const unreadCount = notifications.filter((item) => item.id > lastReadId).length;
@@ -124,7 +159,7 @@ export default function NotificationBell() {
       });
     }
 
-    setIsOpen(false);
+    handleClose();
 
     // Arahkan ke rute yang sesuai
     if (item.jenisTiket === 'LAPORAN') {
@@ -215,18 +250,13 @@ export default function NotificationBell() {
 
   return (
     <div className="relative" ref={menuRef}>
-      {/* Tombol Lonceng Notifikasi */}
+      {/* Tombol Lonceng Notifikasi: z-[85] agar tidak pernah ter-blur atau tertutup bayangan */}
       <button
         type="button"
-        onClick={() => {
-          setIsOpen((prev) => !prev);
-          if (!isOpen && notifications.length === 0) {
-            fetchNotifications(false);
-          }
-        }}
+        onClick={handleToggle}
         aria-label="Buka notifikasi akun"
         aria-expanded={isOpen}
-        className={`relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 shadow-xs ${
+        className={`relative z-[85] w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 shadow-xs ${
           isOpen
             ? 'bg-[#0f5c43] text-white shadow-md ring-2 ring-[#0f5c43]/30 scale-102'
             : 'bg-white text-slate-700 border border-clinical-border hover:border-[#0f5c43]/40 hover:text-[#0f5c43] hover:shadow-sm active:scale-95'
@@ -251,14 +281,20 @@ export default function NotificationBell() {
       {/* Floating Popover Pusat Notifikasi */}
       {isOpen && (
         <>
-          {/* Backdrop Overlay halus untuk menutup elemen di belakang dan menangkap klik luar */}
+          {/* Backdrop Overlay halus hanya di bawah Topbar agar Topbar dan tombol lonceng tidak kena blur / bayangan gelap */}
           <div
-            className="fixed inset-0 z-[70] bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-200"
-            onClick={() => setIsOpen(false)}
+            className={`fixed inset-x-0 bottom-0 top-[4.5rem] z-[70] bg-slate-900/15 backdrop-blur-xs transition-opacity duration-240 ${
+              isClosing ? 'opacity-0' : 'opacity-100 animate-in fade-in duration-200'
+            }`}
+            onClick={handleClose}
             aria-hidden="true"
           />
 
-          <div className="fixed inset-x-3.5 top-[4.6rem] sm:top-full sm:mt-2.5 sm:right-0 sm:inset-x-auto sm:absolute w-auto sm:w-[24rem] md:w-[26rem] max-w-sm sm:max-w-none mx-auto sm:mx-0 bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/90 z-[80] overflow-hidden flex flex-col max-h-[calc(100dvh-6.5rem)] sm:max-h-[30rem] animate-in fade-in zoom-in-95 duration-200">
+          <div
+            className={`fixed inset-x-3.5 top-[4.6rem] sm:top-full sm:mt-2.5 sm:right-0 sm:inset-x-auto sm:absolute w-auto sm:w-[24rem] md:w-[26rem] max-w-sm sm:max-w-none mx-auto sm:mx-0 bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/90 z-[80] overflow-hidden flex flex-col max-h-[calc(100dvh-6.5rem)] sm:max-h-[30rem] ${
+              isClosing ? 'animate-notif-lift' : 'animate-notif-drop'
+            }`}
+          >
             {/* Header Popover */}
             <div className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-gradient-to-r from-emerald-50/90 via-white to-teal-50/50 border-b border-slate-100 flex items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
@@ -309,7 +345,7 @@ export default function NotificationBell() {
                 {/* Tombol Tutup */}
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleClose}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
                 >
                   <X className="w-4 h-4" />
@@ -427,7 +463,7 @@ export default function NotificationBell() {
                 <button
                   type="button"
                   onClick={() => {
-                    setIsOpen(false);
+                    handleClose();
                     navigate('/monitoring-notifikasi');
                   }}
                   className="text-[9px] sm:text-[10px] font-bold text-[#0f5c43] hover:underline flex items-center gap-1 shrink-0 bg-white px-2 py-1 rounded-lg border border-slate-200"
@@ -439,7 +475,7 @@ export default function NotificationBell() {
                 <button
                   type="button"
                   onClick={() => {
-                    setIsOpen(false);
+                    handleClose();
                     navigate('/riwayat');
                   }}
                   className="text-[9px] sm:text-[10px] font-bold text-[#0f5c43] hover:underline flex items-center gap-1 shrink-0"
