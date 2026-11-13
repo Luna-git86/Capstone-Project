@@ -15,9 +15,15 @@ interface Ticket {
   divisi?: { nama: string };
 }
 
+interface SmKadivSummary {
+  by_poliklinik: Record<string, { total_visits: number; mean_daily: number }>;
+  role_scope?: { divisi: string; accessible_poliklinik: string[] };
+}
+
 const DashboardKadiv: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [smKadiv, setSmKadiv] = useState<SmKadivSummary | null>(null);
 
   const userName = getAuthUserName('Kepala Divisi');
   const userRole = getAuthRole();
@@ -34,8 +40,21 @@ const DashboardKadiv: React.FC = () => {
         setLoading(false);
       }
     };
+    const fetchSmSummary = async () => {
+      try {
+        const res = await api.get('/sm/summary');
+        setSmKadiv(res.data?.data || null);
+      } catch {
+        // Opsional; tidak menghalangi tiket Kadiv
+      }
+    };
     fetchTickets();
+    fetchSmSummary();
   }, []);
+
+  const kadivPoliEntries = Object.entries(smKadiv?.by_poliklinik || {});
+  const kadivSmTotalVisits = kadivPoliEntries.reduce((acc, [, v]) => acc + v.total_visits, 0);
+  const kadivSmMeanDaily = kadivPoliEntries.reduce((acc, [, v]) => acc + v.mean_daily, 0);
 
   const now = new Date();
   const menungguTriase = tickets.filter((t) => t.status === 'MENUNGGU_TRIASE');
@@ -76,6 +95,50 @@ const DashboardKadiv: React.FC = () => {
           Buka Panel Triase & Delegasi
         </Link>
       </div>
+
+      {/* Banner Akses Cepat Analitik Kunjungan Divisi */}
+      {smKadiv && (
+        <div className="bg-clinical-surface border border-clinical-border rounded-2xl p-4 sm:px-5 sm:py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-xs">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="w-2.5 h-2.5 rounded-full bg-chart-forecast" />
+              <span className="text-xs font-bold uppercase tracking-wider text-clinical-ink">
+                Analitik & Proyeksi Poliklinik ({userDivisi})
+              </span>
+            </div>
+            {kadivPoliEntries.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs sm:text-sm text-clinical-body">
+                <span>
+                  Unit Terkelola: <strong className="font-mono text-clinical-ink">{kadivPoliEntries.length} Poliklinik</strong>
+                </span>
+                <span>
+                  Total Kunjungan Divisi:{' '}
+                  <strong className="font-mono text-chart-forecast">
+                    {kadivSmTotalVisits.toLocaleString('id-ID')} pasien
+                  </strong>
+                </span>
+                <span>
+                  Rata-Rata Harian Gabungan:{' '}
+                  <strong className="font-mono text-clinical-ink">
+                    {Math.round(kadivSmMeanDaily)} pasien/hari
+                  </strong>
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs sm:text-sm text-clinical-subtle">
+                Divisi Anda tidak membawahi unit poliklinik medis secara langsung.
+              </p>
+            )}
+          </div>
+
+          <Link
+            to="/analitik-kunjungan"
+            className="px-4 py-2.5 bg-clinical-primary hover:opacity-95 text-white text-xs sm:text-sm font-semibold rounded-xl transition shadow-xs text-center shrink-0"
+          >
+            Buka Analitik & Proyeksi Kunjungan
+          </Link>
+        </div>
+      )}
 
       {/* 4 Kartu Ringkasan Manajerial */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

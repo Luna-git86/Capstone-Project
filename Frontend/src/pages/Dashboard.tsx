@@ -1,7 +1,25 @@
 import { getAuthUserName, getAuthRole, getAuthDivisiNama } from '../utils/authStorage';
 // Frontend/src/pages/Dashboard.tsx
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
+
+interface SmSummarySnippet {
+  kpi_total_rs?: {
+    total_visits_all_time: number;
+    mean_daily_visits: number;
+    annual_trends?: Record<
+      string,
+      { total: number; daily_mean: number; h1_actual?: number; h2_projected?: number }
+    >;
+    model_performance_test_2026?: {
+      mae: number;
+      rmse: number;
+      wape_pct: number;
+      mase: number;
+    };
+  };
+}
 
 interface Ticket {
   id: number;
@@ -20,6 +38,7 @@ const Dashboard: React.FC = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selectedDivisi, setSelectedDivisi] = useState<string>('SEMUA');
   const [loading, setLoading] = useState<boolean>(true);
+  const [smSummary, setSmSummary] = useState<SmSummarySnippet | null>(null);
 
   const userName = getAuthUserName('Eksekutif');
   const userRole = getAuthRole() || 'DIREKTUR';
@@ -36,7 +55,16 @@ const Dashboard: React.FC = () => {
         setLoading(false);
       }
     };
+    const fetchSmSummary = async () => {
+      try {
+        const res = await api.get('/sm/summary');
+        setSmSummary(res.data?.data || null);
+      } catch {
+        // Ringkasan analitik bersifat tambahan; tidak menghalangi tiket utama
+      }
+    };
     fetchTickets();
+    fetchSmSummary();
   }, []);
 
   // Ambil daftar divisi unik secara dinamis dari data tiket
@@ -106,6 +134,45 @@ const Dashboard: React.FC = () => {
           </select>
         </div>
       </div>
+
+      {/* Banner Akses Cepat Analitik & Proyeksi Kunjungan */}
+      {smSummary?.kpi_total_rs && (
+        <div className="bg-clinical-surface border border-clinical-border rounded-2xl p-4 sm:px-5 sm:py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-xs">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="w-2.5 h-2.5 rounded-full bg-chart-forecast" />
+              <span className="text-xs font-bold uppercase tracking-wider text-clinical-ink">
+                Ringkasan Kunjungan & Proyeksi Rawat Jalan RSIA
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs sm:text-sm text-clinical-body">
+              <span>
+                Total Tercatat (2023–Jun 2026):{' '}
+                <strong className="font-mono text-clinical-ink">
+                  {smSummary.kpi_total_rs.total_visits_all_time.toLocaleString('id-ID')} pasien
+                </strong>
+              </span>
+              {smSummary.kpi_total_rs.annual_trends?.['2026_full_est'] && (
+                <span>
+                  Estimasi Tahun 2026:{' '}
+                  <strong className="font-mono text-chart-forecast">
+                    {smSummary.kpi_total_rs.annual_trends['2026_full_est'].total.toLocaleString('id-ID')} pasien
+                  </strong>{' '}
+                  (Jan–Jun: {smSummary.kpi_total_rs.annual_trends['2026_full_est'].h1_actual?.toLocaleString('id-ID')} • Jul–Des Proyeksi:{' '}
+                  {smSummary.kpi_total_rs.annual_trends['2026_full_est'].h2_projected?.toLocaleString('id-ID')})
+                </span>
+              )}
+            </div>
+          </div>
+
+          <Link
+            to="/analitik-kunjungan"
+            className="px-4 py-2.5 bg-clinical-primary hover:opacity-95 text-white text-xs sm:text-sm font-semibold rounded-xl transition shadow-xs text-center shrink-0"
+          >
+            Buka Analitik & Proyeksi Kunjungan
+          </Link>
+        </div>
+      )}
 
       {/* 4 Kartu Ringkasan Utama */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

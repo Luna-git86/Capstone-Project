@@ -39,6 +39,9 @@ app.use('/api/notifications', notificationRoutes);
 const configRoutes = require('./routes/configRoute');
 app.use('/api/config', configRoutes);
 
+const smRoutes = require('./routes/smRoute');
+app.use('/api/sm', smRoutes);
+
 app.get('/', (req, res) => {
   res.send('Server Backend E-Ticketing RSIA berjalan dengan baik!');
 });
