@@ -1,6 +1,16 @@
 // Frontend/src/pages/SemuaTugasLengkap.tsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  Clock,
+  Eye,
+  Filter,
+  Layers,
+  MapPin,
+  Plus,
+  Search,
+  X,
+} from 'lucide-react';
 import api from '../services/api';
 import { getAuthRole } from '../utils/authStorage';
 import TaskSubNav from '../components/TaskSubNav';
@@ -40,32 +50,22 @@ const SemuaTugasLengkap: React.FC = () => {
 
   const fetchTickets = async (isBackground = false) => {
     try {
-      // Hanya aktifkan animasi loading jika ini muat awal (bukan di latar belakang)
       if (!isBackground) setLoading(true);
-      
       const res = await api.get('/tickets?jenis=TUGAS');
       const data: Ticket[] = Array.isArray(res.data) ? res.data : res.data?.data || [];
-      
-      // React akan memperbarui Virtual DOM secara otomatis tanpa berkedip
       setTickets(data);
     } catch (err) {
       console.error('Gagal mengambil semua tugas', err);
     } finally {
-      // Matikan animasi loading hanya jika ini muat awal
       if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
-    // 1. Ambil data pertama kali saat halaman dibuka (dengan loading)
     fetchTickets(false);
-
-    // 2. Setup Polling: Jalankan Fetch API setiap 10 detik di latar belakang
     const intervalId = setInterval(() => {
       fetchTickets(true);
-    }, 10000); // 10 detik
-
-    // 3. Cleanup: Bersihkan interval saat komponen dilepas agar tidak memory leak
+    }, 10000);
     return () => clearInterval(intervalId);
   }, []);
 
@@ -81,7 +81,6 @@ const SemuaTugasLengkap: React.FC = () => {
 
   const filteredTickets = useMemo(() => {
     return tickets.filter((t) => {
-      // Filter status
       if (filterStatus === 'ARAHAN_PIMPINAN') {
         if (!['DIREKTUR', 'KADIV'].includes(t.pembuat?.role || '')) return false;
       } else if (filterStatus === 'AKTIF') {
@@ -90,7 +89,6 @@ const SemuaTugasLengkap: React.FC = () => {
         if (t.status !== filterStatus) return false;
       }
 
-      // Filter search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTitle = t.judul.toLowerCase().includes(q);
@@ -108,36 +106,49 @@ const SemuaTugasLengkap: React.FC = () => {
   const getStatusBadge = (status: Ticket['status']) => {
     switch (status) {
       case 'MENUNGGU_TRIASE':
-        return { label: 'Menunggu Triase', bg: 'bg-amber-100 text-amber-800' };
+        return { label: 'Menunggu Triase', bg: 'bg-amber-100 text-amber-900 border-amber-300' };
       case 'DIPROSES':
-        return { label: 'Sedang Dikerjakan', bg: 'bg-blue-100 text-blue-800' };
+        return { label: 'Sedang Dikerjakan', bg: 'bg-blue-100 text-blue-900 border-blue-300' };
       case 'MENUNGGU_VALIDASI':
-        return { label: 'Menunggu Validasi', bg: 'bg-purple-100 text-purple-800' };
+        return { label: 'Menunggu Validasi', bg: 'bg-indigo-100 text-indigo-900 border-indigo-300' };
       case 'HOLD_ESKALASI':
-        return { label: 'Tertahan (Kendala)', bg: 'bg-rose-100 text-rose-800' };
+        return { label: 'Tertahan (Kendala)', bg: 'bg-rose-100 text-rose-900 border-rose-300' };
       case 'SELESAI':
-        return { label: 'Selesai', bg: 'bg-emerald-100 text-emerald-800' };
+        return { label: 'Selesai', bg: 'bg-blue-100 text-brand-deep border-brand-mint/50' };
       case 'DITOLAK':
-        return { label: 'Ditolak', bg: 'bg-slate-200 text-slate-700' };
+        return { label: 'Ditolak', bg: 'bg-slate-200 text-slate-700 border-slate-300' };
       default:
-        return { label: status, bg: 'bg-slate-100 text-slate-800' };
+        return { label: status, bg: 'bg-slate-100 text-slate-800 border-slate-200' };
     }
   };
 
+  const formatDateTime = (dateStr: string | null) => {
+    if (!dateStr) return 'Tidak diatur';
+    return new Intl.DateTimeFormat('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(dateStr));
+  };
+
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-7xl mx-auto pb-28 md:pb-12">
       {/* Header Utama */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-clinical-surface p-5 sm:p-6 rounded-3xl border border-clinical-border shadow-xs">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-              Halaman Inventaris Lengkap
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="px-3 py-0.5 text-xs font-bold rounded-full bg-blue-50 text-brand-deep border border-brand-mint/40">
+              Inventaris Lengkap
             </span>
-            <span className="text-xs text-slate-400">Semua Riwayat & Tugas Berjalan</span>
+            <span className="text-xs text-slate-400 font-medium">Seluruh Riwayat & Tugas Berjalan</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">Semua Tugas</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Menampilkan seluruh inventaris penugasan rumah sakit dari yang aktif hingga yang telah selesai.
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-clinical-ink tracking-tight">
+            Semua Inventaris Tugas
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Daftar komprehensif seluruh tugas operasional dari yang sedang berlangsung hingga yang sudah tuntas.
           </p>
         </div>
 
@@ -145,16 +156,16 @@ const SemuaTugasLengkap: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate('/tambah-tugas')}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-colors self-start sm:self-auto"
+            className="h-11 px-5 bg-brand-orange hover:bg-brand-orange/90 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-md shadow-brand-orange/20 flex items-center gap-2 transition self-start sm:self-auto shrink-0"
           >
-            <span>+ Buat Tugas Baru</span>
+            <Plus className="w-4 h-4" />
+            <span>Terbitkan Tugas Baru</span>
           </button>
         )}
       </div>
 
-      {/* Kontainer Dua Kolom: Side Menu Kecil + Konten Tabel Lengkap */}
+      {/* Kontainer Dua Kolom */}
       <div className="flex flex-col lg:flex-row items-start gap-6">
-        {/* Side Menu Kecil */}
         <TaskSubNav
           currentTab="SEMUA"
           activeCount={counts.active}
@@ -162,160 +173,141 @@ const SemuaTugasLengkap: React.FC = () => {
           completedCount={counts.completed}
         />
 
-        {/* Konten Kanan: Filter & Tabel Semua Tugas */}
-        <div className="flex-1 w-full space-y-4">
-          {/* Toolbar Search & Status Select */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <div className="flex-1 w-full space-y-5">
+          {/* Toolbar Pencarian & Filter Status */}
+          <div className="bg-clinical-surface p-4 rounded-3xl border border-clinical-border shadow-xs flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
             <div className="relative flex-1">
               <input
                 type="text"
                 placeholder="Cari judul, #T-xxx, pelaksana, divisi..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-11 pl-10 pr-8 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
               />
-              <span className="absolute left-3 top-2.5 text-slate-400 text-[11px] font-semibold">Cari:</span>
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
               {searchQuery && (
                 <button
+                  type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
                 >
-                  x
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="SEMUA">Semua Status ({counts.total})</option>
-              <option value="AKTIF">Tugas Aktif Saja ({counts.active})</option>
-              <option value="SELESAI">Sudah Selesai ({counts.completed})</option>
-              <option value="ARAHAN_PIMPINAN">Arahan Pimpinan (Direksi/Kadiv)</option>
-              <option value="MENUNGGU_TRIASE">Menunggu Triase</option>
-              <option value="DIPROSES">Sedang Dikerjakan</option>
-              <option value="MENUNGGU_VALIDASI">Menunggu Validasi</option>
-              <option value="HOLD_ESKALASI">Tertahan (Kendala)</option>
-              <option value="DITOLAK">Ditolak</option>
-            </select>
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="h-11 px-3.5 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-bold text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
+              >
+                <option value="SEMUA">Semua Status ({counts.total})</option>
+                <option value="AKTIF">Tugas Aktif Saja ({counts.active})</option>
+                <option value="SELESAI">Sudah Selesai ({counts.completed})</option>
+                <option value="ARAHAN_PIMPINAN">Arahan Pimpinan</option>
+                <option value="MENUNGGU_TRIASE">Menunggu Triase</option>
+                <option value="DIPROSES">Sedang Dikerjakan</option>
+                <option value="MENUNGGU_VALIDASI">Menunggu Validasi</option>
+                <option value="HOLD_ESKALASI">Tertahan (Kendala)</option>
+              </select>
+            </div>
           </div>
 
-          {/* Tabel Lengkap */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-500 uppercase bg-slate-50 font-semibold tracking-wider">
-                  <th className="py-3 px-4">ID & Judul Tugas</th>
-                  <th className="py-3 px-4">Divisi & Lokasi</th>
-                  <th className="py-3 px-4">Pelaksana / Ditugaskan</th>
-                  <th className="py-3 px-4">Status & Prioritas</th>
-                  <th className="py-3 px-4">Batas Waktu / Selesai</th>
-                  <th className="py-3 px-4 text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {loading ? (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-slate-400">
-                      Memuat seluruh daftar tugas...
-                    </td>
-                  </tr>
-                ) : filteredTickets.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-slate-400">
-                      Tidak ada tugas ditemukan.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredTickets.map((t) => {
-                    const badge = getStatusBadge(t.status);
-                    const isDireksi = t.pembuat?.role === 'DIREKTUR';
-                    const isKadiv = t.pembuat?.role === 'KADIV';
+          {/* List Kartu Tugas Lengkap */}
+          {loading ? (
+            <div className="bg-clinical-surface p-12 text-center rounded-3xl border border-clinical-border shadow-xs text-slate-400 text-xs font-bold">
+              <div className="w-8 h-8 border-3 border-brand-deep border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              <span>Memuat seluruh daftar tugas...</span>
+            </div>
+          ) : filteredTickets.length === 0 ? (
+            <div className="bg-clinical-surface p-10 text-center rounded-3xl border border-clinical-border shadow-xs space-y-2">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-blue-50 text-brand-deep flex items-center justify-center font-bold text-lg">
+                <Layers className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-bold text-clinical-ink">Tidak Ada Tugas</h3>
+              <p className="text-xs text-slate-400">Tidak ada data penugasan pada kriteria filter ini.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredTickets.map((t) => {
+                const badge = getStatusBadge(t.status);
+                const priorityColor =
+                  t.prioritas === 'HIGH'
+                    ? 'border-l-rose-500'
+                    : t.prioritas === 'MEDIUM'
+                    ? 'border-l-brand-orange'
+                    : 'border-l-blue-500';
 
-                    return (
-                      <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className="font-mono font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">
-                              #T-{String(t.id).padStart(3, '0')}
-                            </span>
-                            {isDireksi && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
-                                Arahan Direksi
-                              </span>
-                            )}
-                            {isKadiv && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
-                                Arahan Divisi
-                              </span>
-                            )}
-                          </div>
-                          <p className="font-bold text-slate-900 text-xs">{t.judul}</p>
-                          <p className="text-[11px] text-slate-500 line-clamp-1">{t.deskripsi}</p>
-                        </td>
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => navigate(`/detail-tugas/${t.id}`)}
+                    className={`bg-clinical-surface p-5 sm:p-6 rounded-3xl border border-clinical-border border-l-4 ${priorityColor} shadow-xs hover:shadow-md transition cursor-pointer space-y-3.5`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-clinical-border/60 pb-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono font-extrabold text-xs bg-blue-50 text-brand-deep px-2.5 py-1 rounded-xl">
+                          #T-{String(t.id).padStart(3, '0')}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${badge.bg}`}>
+                          {badge.label}
+                        </span>
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase bg-slate-100 text-slate-700">
+                          {t.prioritas}
+                        </span>
+                      </div>
 
-                        <td className="py-3 px-4 space-y-0.5">
-                          <p className="font-semibold text-slate-800">{t.divisi?.nama || 'Lintas Divisi'}</p>
-                          <p className="text-slate-500 text-[11px]">{t.lokasi || 'RSIA'}</p>
-                        </td>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span className="font-semibold text-slate-600">
+                          Target: {formatDateTime(t.deadline)}
+                        </span>
+                      </div>
+                    </div>
 
-                        <td className="py-3 px-4 space-y-0.5">
-                          <p className="font-semibold text-slate-800">{t.pelaksana?.nama || 'Belum Ditunjuk'}</p>
-                          <p className="text-slate-500 text-[11px]">Dari: {t.pembuat?.nama || 'Pegawai'}</p>
-                        </td>
+                    <div>
+                      <h3 className="text-base font-extrabold text-clinical-ink hover:text-brand-deep transition">
+                        {t.judul}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                        {t.deskripsi}
+                      </p>
+                    </div>
 
-                        <td className="py-3 px-4 space-y-1">
-                          <span className={`inline-block px-2 py-0.5 rounded-full font-bold text-[10px] ${badge.bg}`}>
-                            {badge.label}
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                        {t.lokasi && (
+                          <span className="inline-flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{t.lokasi}</span>
                           </span>
-                          <div>
-                            <span
-                              className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                t.prioritas === 'HIGH'
-                                  ? 'bg-rose-100 text-rose-700'
-                                  : t.prioritas === 'MEDIUM'
-                                  ? 'bg-amber-100 text-amber-700'
-                                  : 'bg-blue-100 text-blue-700'
-                              }`}
-                            >
-                              {t.prioritas}
-                            </span>
-                          </div>
-                        </td>
+                        )}
+                        <span><strong>Divisi:</strong> {t.divisi?.nama || '-'}</span>
+                        <span>
+                          <strong>Pelaksana:</strong>{' '}
+                          <span className="font-bold text-brand-deep">{t.pelaksana?.nama || 'Belum Ditunjuk'}</span>
+                        </span>
+                      </div>
 
-                        <td className="py-3 px-4 space-y-0.5">
-                          {t.deadline ? (
-                            <p className="text-slate-700">
-                              DL: {new Date(t.deadline).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          ) : (
-                            <p className="text-slate-400 italic">Tanpa deadline</p>
-                          )}
-                          {t.completedAt && (
-                            <p className="text-emerald-700 font-semibold text-[10px]">
-                              Selesai: {new Date(t.completedAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          )}
-                        </td>
-
-                        <td className="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/detail-tugas/${t.id}`)}
-                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg border border-slate-300 transition-colors"
-                          >
-                            Lihat Detail
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/detail-tugas/${t.id}`);
+                        }}
+                        className="h-9 px-4 bg-slate-100 hover:bg-slate-200 text-clinical-ink font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Detail</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

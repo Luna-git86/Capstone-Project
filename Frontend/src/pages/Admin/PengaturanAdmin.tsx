@@ -125,7 +125,7 @@ export default function PengaturanAdmin() {
     return (
       <div className="p-8 flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#19376D] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#134A33] mx-auto mb-4"></div>
           <p className="text-gray-600 font-medium">Memuat Pengaturan Sistem RSIA...</p>
         </div>
       </div>
@@ -138,7 +138,7 @@ export default function PengaturanAdmin() {
         <p>Gagal memuat konfigurasi. Silakan refresh halaman atau periksa koneksi backend.</p>
         <button
           onClick={loadData}
-          className="mt-4 px-4 py-2 bg-[#19376D] text-white rounded font-medium hover:bg-[#0B2447]"
+          className="mt-4 px-4 py-2 bg-[#134A33] text-white rounded font-medium hover:bg-[#0E3B2A]"
         >
           Coba Lagi
         </button>
@@ -151,7 +151,7 @@ export default function PengaturanAdmin() {
       {/* Header Halaman */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B2447]">Pengaturan Sistem & Operasional</h1>
+          <h1 className="text-2xl font-bold text-[#0E3B2A]">Pengaturan Sistem & Operasional</h1>
           <p className="text-sm text-gray-500">
             Kelola integrasi Telegram Bot, jadwal pengingat deadline, dan akun pegawai.
           </p>
@@ -166,7 +166,7 @@ export default function PengaturanAdmin() {
           <button
             onClick={handleSaveConfig}
             disabled={saving}
-            className="px-5 py-2 bg-[#19376D] hover:bg-[#0B2447] text-white rounded-lg text-sm font-semibold shadow-sm transition disabled:opacity-50"
+            className="px-5 py-2 bg-[#134A33] hover:bg-[#0E3B2A] text-white rounded-lg text-sm font-semibold shadow-sm transition disabled:opacity-50"
           >
             {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
           </button>
@@ -193,7 +193,7 @@ export default function PengaturanAdmin() {
           onClick={() => setActiveTab('operasional')}
           className={`py-2 px-4 font-semibold text-sm border-b-2 transition ${
             activeTab === 'operasional'
-              ? 'border-[#19376D] text-[#19376D]'
+              ? 'border-[#134A33] text-[#134A33]'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
@@ -204,7 +204,7 @@ export default function PengaturanAdmin() {
           onClick={() => setActiveTab('penerima')}
           className={`py-2 px-4 font-semibold text-sm border-b-2 transition ${
             activeTab === 'penerima'
-              ? 'border-[#19376D] text-[#19376D]'
+              ? 'border-[#134A33] text-[#134A33]'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
@@ -230,7 +230,7 @@ export default function PengaturanAdmin() {
                 onChange={(e) =>
                   setConfig({ ...config, reminderHoursBeforeDeadline: Number(e.target.value) || 24 })
                 }
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-14 text-sm focus:ring-2 focus:ring-[#19376D] focus:outline-none"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-14 text-sm focus:ring-2 focus:ring-[#134A33] focus:outline-none"
               />
               <span className="absolute right-3 text-sm text-gray-500 font-medium pointer-events-none">
                 Jam
@@ -267,7 +267,7 @@ export default function PengaturanAdmin() {
           {/* Matriks Per Role */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left border border-gray-200 rounded-lg overflow-hidden">
-              <thead className="bg-[#0B2447] text-white text-xs uppercase font-semibold">
+              <thead className="bg-[#0E3B2A] text-white text-xs uppercase font-semibold">
                 <tr>
                   <th className="px-4 py-3">Nama Pegawai</th>
                   <th className="px-4 py-3">Email</th>

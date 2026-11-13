@@ -1,29 +1,19 @@
 import React, { useEffect, useState } from 'react';
+import { Menu, RefreshCw, Send, Unlink } from 'lucide-react';
 import api from '../services/api';
-import { getAuthRole, getAuthUserName, getAuthDivisiNama, isTelegramLinked } from '../utils/authStorage';
+import { isTelegramLinked } from '../utils/authStorage';
+import NotificationBell from './NotificationBell';
 
 interface TopbarProps {
   onToggleSidebar?: () => void;
 }
 
 const Topbar: React.FC<TopbarProps> = ({ onToggleSidebar }) => {
-  const userName = getAuthUserName('Pengguna RSIA');
-  const userRole = getAuthRole() || 'STAF';
-  const userDivisi = getAuthDivisiNama();
   const [telegramLinked, setTelegramLinked] = useState(
     isTelegramLinked()
   );
   const [linking, setLinking] = useState(false);
   const [linkMessage, setLinkMessage] = useState('');
-
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .substring(0, 2)
-      .toUpperCase();
-  };
 
   const today = new Intl.DateTimeFormat('id-ID', {
     weekday: 'long',
@@ -31,6 +21,11 @@ const Topbar: React.FC<TopbarProps> = ({ onToggleSidebar }) => {
     month: 'long',
     year: 'numeric',
   }).format(new Date());
+
+  const now = new Date();
+  const dayNumber = now.getDate();
+  const weekdayShort = new Intl.DateTimeFormat('id-ID', { weekday: 'short' }).format(now);
+  const monthYear = new Intl.DateTimeFormat('id-ID', { month: 'short', year: 'numeric' }).format(now);
 
   const refreshTelegramStatus = async () => {
     try {
@@ -98,42 +93,51 @@ const Topbar: React.FC<TopbarProps> = ({ onToggleSidebar }) => {
   };
 
   return (
-    <header className="h-16 shrink-0 bg-clinical-surface border-b border-clinical-border px-3 sm:px-6 flex items-center justify-between sticky top-0 z-10 gap-2 sm:gap-4">
-      <div className="flex items-center gap-2.5 min-w-0">
+    <header className="h-[4.5rem] shrink-0 bg-clinical-surface/95 backdrop-blur-sm border-b border-clinical-border px-3 sm:px-6 flex items-center justify-between sticky top-0 z-50 gap-2 sm:gap-4">
+      <div className="flex items-center gap-3 min-w-0">
         {onToggleSidebar && (
           <button
             type="button"
             onClick={onToggleSidebar}
             aria-label="Buka menu navigasi"
-            className="lg:hidden p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition shrink-0"
+            className="lg:hidden w-10 h-10 rounded-2xl bg-brand-deep text-white flex items-center justify-center hover:bg-brand-deeper transition shrink-0"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+            <Menu className="w-5 h-5" aria-hidden="true" />
           </button>
         )}
-        <div className="min-w-0">
-          <p className="text-xs sm:text-sm font-medium text-slate-500 truncate">{today}</p>
-          {linkMessage && (
-            <p className="hidden md:block text-[11px] text-slate-500 mt-0.5 max-w-xl truncate" title={linkMessage}>
-              {linkMessage}
-            </p>
-          )}
+        <div className="flex items-center gap-2.5 min-w-0" title={today}>
+          <span className="text-3xl sm:text-4xl font-extrabold text-clinical-ink leading-none tabular-nums">
+            {dayNumber}
+          </span>
+          <div className="min-w-0 leading-tight">
+            <p className="text-xs font-semibold text-slate-400 capitalize">{weekdayShort}</p>
+            <p className="text-xs font-semibold text-slate-400 capitalize truncate">{monthYear}</p>
+          </div>
+          <span className="hidden sm:inline-flex ml-1 px-3 py-1 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold">
+            Hari ini
+          </span>
         </div>
+        {linkMessage && (
+          <p className="hidden xl:block text-[11px] text-slate-500 max-w-xs truncate border-l border-clinical-border pl-3" title={linkMessage}>
+            {linkMessage}
+          </p>
+        )}
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {telegramLinked ? (
           <div className="hidden sm:flex items-center gap-2">
-            <span className="hidden md:inline-flex px-3 py-1.5 text-[11px] font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-xl bg-blue-50 text-blue-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" aria-hidden="true" />
               Telegram terhubung
             </span>
             <button
               type="button"
               onClick={handleDisconnectTelegram}
               disabled={linking}
-              className="px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-50 transition-colors"
             >
+              <Unlink className="w-3.5 h-3.5" aria-hidden="true" />
               {linking ? 'Memutus...' : 'Putuskan Telegram'}
             </button>
           </div>
@@ -143,37 +147,23 @@ const Topbar: React.FC<TopbarProps> = ({ onToggleSidebar }) => {
               type="button"
               onClick={handleConnectTelegram}
               disabled={linking}
-              className="px-2.5 py-1.5 text-[11px] font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 text-white shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white transition-colors"
             >
+              <Send className="w-3.5 h-3.5" aria-hidden="true" />
               {linking ? 'Menyiapkan...' : 'Hubungkan Telegram'}
             </button>
             <button
               type="button"
               onClick={refreshTelegramStatus}
-              className="hidden md:inline-flex px-2 py-1.5 text-[11px] font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
             >
+              <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
               Periksa status
             </button>
           </div>
         )}
-        <div className="text-right hidden xs:block sm:block">
-          <p className="text-xs sm:text-sm font-semibold text-slate-800 leading-tight max-w-[140px] sm:max-w-none truncate">
-            {userName}
-          </p>
-          <div className="flex items-center justify-end gap-1.5 mt-0.5">
-            <span className="text-[10px] sm:text-[11px] font-bold text-blue-700 bg-blue-50 px-1.5 sm:px-2 py-0.5 rounded border border-blue-200 uppercase">
-              {userRole}
-            </span>
-            {userRole !== 'ADMIN' && (
-              <span className="hidden md:inline-block text-[11px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                {userDivisi}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center shadow-sm shrink-0">
-          {getInitials(userName)}
-        </div>
+        {/* Tombol Notifikasi Akun Interaktif & Dinamis */}
+        <NotificationBell />
       </div>
     </header>
   );

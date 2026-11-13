@@ -27,10 +27,10 @@ const MenuLaporan = lazy(() => import('./pages/Koordinator/MenuLaporan'));
 const DashboardKadiv = lazy(() => import('./pages/Kadiv/DashboardKadiv'));
 
 const RouteSuspenseFallback = () => (
-  <div className="h-full w-full min-h-[260px] flex items-center justify-center bg-[#F4F9FF] p-6">
-    <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white border border-[#CBE5FF] shadow-xs">
-      <span className="w-4 h-4 border-2 border-[#0194F3] border-t-transparent rounded-full animate-spin" />
-      <span className="text-xs font-semibold text-[#1D5488]">Memuat halaman...</span>
+  <div className="h-full w-full min-h-[260px] flex items-center justify-center bg-[#F4F8F5] p-6">
+    <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white border border-[#C6E8D5] shadow-xs">
+      <span className="w-4 h-4 border-2 border-[#1E8455] border-t-transparent rounded-full animate-spin" />
+      <span className="text-xs font-semibold text-[#24553F]">Memuat halaman...</span>
     </div>
   </div>
 );

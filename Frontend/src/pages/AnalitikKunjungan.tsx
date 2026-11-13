@@ -145,14 +145,14 @@ const WEEK_OF_MONTH_OPTIONS = [
 ];
 
 const TVLK_BLUE = {
-  actual: '#004B96', // Biru kobalt pekat (kontras tinggi untuk data aktual)
-  forecast: '#0194F3', // Biru cerah Traveloka (prediksi utama & aksen utama)
-  bandFill: '#BAE3FF', // Biru langit lembut (area rentang wajar CI 80%)
+  actual: '#145639', // Biru kobalt pekat (kontras tinggi untuk data aktual)
+  forecast: '#1E8455', // Biru cerah Traveloka (prediksi utama & aksen utama)
+  bandFill: '#B4E0C7', // Biru langit lembut (area rentang wajar CI 80%)
   bandStroke: '#64C0FF', // Biru muda cerah (indikator batas rentang)
-  normal: '#52B4FA', // Biru langit terang (rata-rata 4 minggu)
+  normal: '#4CC38A', // Biru langit terang (rata-rata 4 minggu)
   grid: '#E2F0FF', // Garis bantu grafik biru sangat pucat
-  axis: '#5385B5', // Label sumbu biru slate
-  penjaminScale: ['#004B96', '#0194F3', '#3CA9F5', '#7CC9FA', '#B8E3FF'],
+  axis: '#5F8A75', // Label sumbu biru slate
+  penjaminScale: ['#145639', '#1E8455', '#3CA9F5', '#7CC9FA', '#B8E3FF'],
 } as const;
 
 const LAYER_CONFIG: Array<{
@@ -227,14 +227,14 @@ const CustomExecutiveTooltip: React.FC<{
   const dec = resolution === 'daily' ? 1 : 0;
 
   return (
-    <div className="bg-white text-[#083358] border border-[#CBE5FF] rounded-xl shadow-lg shadow-[#0194F3]/10 px-3.5 py-2.5 text-xs min-w-[225px] max-w-[290px]">
-      <div className="flex items-center justify-between gap-2 border-b border-[#E3F1FF] pb-1.5 mb-2">
-        <span className="font-bold text-[#083358]">{pt.fullLabel}</span>
+    <div className="bg-white text-[#0f3d2b] border border-[#C6E8D5] rounded-xl shadow-lg shadow-[#1E8455]/10 px-3.5 py-2.5 text-xs min-w-[225px] max-w-[290px]">
+      <div className="flex items-center justify-between gap-2 border-b border-[#E3F3EA] pb-1.5 mb-2">
+        <span className="font-bold text-[#0f3d2b]">{pt.fullLabel}</span>
         <span
           className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
             pt.is_future
-              ? 'bg-[#E6F4FF] text-[#0194F3] border border-[#BCE2FF]'
-              : 'bg-[#F0F7FF] text-[#1D5488] border border-[#D4E8FF]'
+              ? 'bg-[#E6F4FF] text-[#1E8455] border border-[#BCE2FF]'
+              : 'bg-[#F0F7F3] text-[#24553F] border border-[#D4E8FF]'
           }`}
         >
           {pt.periodTag}
@@ -244,14 +244,14 @@ const CustomExecutiveTooltip: React.FC<{
       <div className="space-y-1.5">
         {checkedLayers.actual && pt.actual !== null && (
           <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-1.5 text-[#1D5488]">
+            <span className="flex items-center gap-1.5 text-[#24553F]">
               <span
                 className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: TVLK_BLUE.actual }}
               />
               {pt.is_yearly && pt.label === '2026' ? 'Aktual (Jan–Jun)' : 'Kunjungan Aktual'}
             </span>
-            <span className="font-mono font-semibold text-[#004B96] tabular-nums">
+            <span className="font-mono font-semibold text-[#145639] tabular-nums">
               {formatNum(pt.actual, 0)} pasien
             </span>
           </div>
@@ -259,14 +259,14 @@ const CustomExecutiveTooltip: React.FC<{
 
         {checkedLayers.ensemble && pt.ensemble !== null && (
           <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-1.5 text-[#1D5488]">
+            <span className="flex items-center gap-1.5 text-[#24553F]">
               <span
                 className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: TVLK_BLUE.forecast }}
               />
               Prediksi Kunjungan
             </span>
-            <span className="font-mono font-semibold text-[#0194F3] tabular-nums">
+            <span className="font-mono font-semibold text-[#1E8455] tabular-nums">
               {formatNum(pt.ensemble, dec)} pasien
             </span>
           </div>
@@ -274,7 +274,7 @@ const CustomExecutiveTooltip: React.FC<{
 
         {checkedLayers.dow_mean && pt.dow_mean !== null && (
           <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-1.5 text-[#1D5488]">
+            <span className="flex items-center gap-1.5 text-[#24553F]">
               <span
                 className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: TVLK_BLUE.normal }}
@@ -288,9 +288,9 @@ const CustomExecutiveTooltip: React.FC<{
         )}
 
         {checkedLayers.ci80 && pt.ci80_low !== null && pt.ci80_high !== null && (
-          <div className="mt-1 pt-1.5 border-t border-[#E3F1FF] flex items-center justify-between gap-3 text-[11px]">
-            <span className="text-[#5385B5]">Rentang Wajar</span>
-            <span className="font-mono font-medium text-[#1D5488] tabular-nums">
+          <div className="mt-1 pt-1.5 border-t border-[#E3F3EA] flex items-center justify-between gap-3 text-[11px]">
+            <span className="text-[#5F8A75]">Rentang Wajar</span>
+            <span className="font-mono font-medium text-[#24553F] tabular-nums">
               {formatNum(pt.ci80_low, 0)} – {formatNum(pt.ci80_high, 0)} pasien
             </span>
           </div>
@@ -327,34 +327,34 @@ const KpiStripMemo = memo<{ kpiCards: KpiCardsData; selectedPoli: string }>(
     <div className="shrink-0 grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-2.5">
       <div className="tvlk-card rounded-2xl px-3.5 py-2.5 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-[#5385B5]">Total Kunjungan Aktual</p>
-          <p className="text-base sm:text-xl font-bold font-mono text-[#004B96] tabular-nums mt-0.5">
+          <p className="text-[11px] font-semibold text-[#5F8A75]">Total Kunjungan Aktual</p>
+          <p className="text-base sm:text-xl font-bold font-mono text-[#145639] tabular-nums mt-0.5">
             {kpiCards.totalActual !== null ? `${formatNum(kpiCards.totalActual)} pasien` : 'Periode Proyeksi'}
           </p>
-          <p className="text-[11px] text-[#5385B5] truncate mt-0.5">
+          <p className="text-[11px] text-[#5F8A75] truncate mt-0.5">
             {kpiCards.totalActual !== null
               ? `Tercatat ${formatNum(kpiCards.actualDaysCount)} hari di SIMRS`
               : 'Belum ada kunjungan tercatat (Jul–Des 2026)'}
           </p>
         </div>
-        <span className="hidden sm:inline-flex w-8 h-8 rounded-xl bg-[#EBF6FF] text-[#004B96] items-center justify-center shrink-0">
+        <span className="hidden sm:inline-flex w-8 h-8 rounded-xl bg-[#E9F6EF] text-[#145639] items-center justify-center shrink-0">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </span>
       </div>
 
-      <div className="tvlk-card border-[#89CCFF]! bg-linear-to-br from-[#F4FAFF] to-white rounded-2xl px-3.5 py-2.5 flex items-start justify-between gap-2">
+      <div className="tvlk-card border-[#89CCFF]! bg-linear-to-br from-[#F4F8F5] to-white rounded-2xl px-3.5 py-2.5 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-[#0194F3]">Total Prediksi Kunjungan</p>
-          <p className="text-base sm:text-xl font-bold font-mono text-[#0194F3] tabular-nums mt-0.5">
+          <p className="text-[11px] font-semibold text-[#1E8455]">Total Prediksi Kunjungan</p>
+          <p className="text-base sm:text-xl font-bold font-mono text-[#1E8455] tabular-nums mt-0.5">
             {formatNum(kpiCards.totalPred)} pasien
           </p>
-          <p className="text-[11px] text-[#5385B5] truncate mt-0.5">
+          <p className="text-[11px] text-[#5F8A75] truncate mt-0.5">
             Estimasi total dalam {formatNum(kpiCards.totalDaysCount)} hari terpilih
           </p>
         </div>
-        <span className="hidden sm:inline-flex w-8 h-8 rounded-xl bg-[#0194F3] text-white items-center justify-center shrink-0 shadow-xs shadow-[#0194F3]/30">
+        <span className="hidden sm:inline-flex w-8 h-8 rounded-xl bg-[#1E8455] text-white items-center justify-center shrink-0 shadow-xs shadow-[#1E8455]/30">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
           </svg>
@@ -363,16 +363,16 @@ const KpiStripMemo = memo<{ kpiCards: KpiCardsData; selectedPoli: string }>(
 
       <div className="tvlk-card rounded-2xl px-3.5 py-2.5 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-[#5385B5]">Rata-Rata Harian</p>
-          <p className="text-base sm:text-xl font-bold font-mono text-[#083358] tabular-nums mt-0.5">
+          <p className="text-[11px] font-semibold text-[#5F8A75]">Rata-Rata Harian</p>
+          <p className="text-base sm:text-xl font-bold font-mono text-[#0f3d2b] tabular-nums mt-0.5">
             {formatNum(kpiCards.avgDaily)}{' '}
-            <span className="text-[11px] sm:text-xs font-sans font-semibold text-[#1D5488]">pasien / hari</span>
+            <span className="text-[11px] sm:text-xs font-sans font-semibold text-[#24553F]">pasien / hari</span>
           </p>
-          <p className="text-[11px] text-[#5385B5] truncate mt-0.5">
+          <p className="text-[11px] text-[#5F8A75] truncate mt-0.5">
             {selectedPoli === 'TOTAL' ? 'Semua unit rawat jalan RSIA' : selectedPoli}
           </p>
         </div>
-        <span className="hidden sm:inline-flex w-8 h-8 rounded-xl bg-[#EBF6FF] text-[#0194F3] items-center justify-center shrink-0">
+        <span className="hidden sm:inline-flex w-8 h-8 rounded-xl bg-[#E9F6EF] text-[#1E8455] items-center justify-center shrink-0">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
@@ -381,15 +381,15 @@ const KpiStripMemo = memo<{ kpiCards: KpiCardsData; selectedPoli: string }>(
 
       <div className="tvlk-card rounded-2xl px-3.5 py-2.5 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-[#5385B5]">Puncak Kunjungan Periode Ini</p>
-          <p className="text-base sm:text-xl font-bold font-mono text-[#083358] tabular-nums mt-0.5">
+          <p className="text-[11px] font-semibold text-[#5F8A75]">Puncak Kunjungan Periode Ini</p>
+          <p className="text-base sm:text-xl font-bold font-mono text-[#0f3d2b] tabular-nums mt-0.5">
             {formatNum(kpiCards.peakValue)} pasien
           </p>
-          <p className="text-[11px] text-[#5385B5] truncate mt-0.5" title={kpiCards.peakLabel}>
+          <p className="text-[11px] text-[#5F8A75] truncate mt-0.5" title={kpiCards.peakLabel}>
             {kpiCards.peakLabel}
           </p>
         </div>
-        <span className="hidden sm:inline-flex w-8 h-8 rounded-xl bg-[#EBF6FF] text-[#005BB5] items-center justify-center shrink-0">
+        <span className="hidden sm:inline-flex w-8 h-8 rounded-xl bg-[#E9F6EF] text-[#186B46] items-center justify-center shrink-0">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
           </svg>
@@ -458,7 +458,7 @@ const ChartCanvasMemo = memo<{
   return (
     <div ref={hostRef} className="w-full h-full min-h-[260px]">
       {!readyToDraw || chartSeriesData.length === 0 ? (
-        <div className="w-full h-full flex items-center justify-center text-xs text-[#5385B5]">
+        <div className="w-full h-full flex items-center justify-center text-xs text-[#5F8A75]">
           {chartSeriesData.length === 0 ? 'Memuat seri grafik...' : ''}
         </div>
       ) : resolution === 'yearly' ? (
@@ -669,12 +669,12 @@ const ChartStagePanelMemo = memo<{
         onClick={() => {
           if (!isChartFocused) onFocusChart();
         }}
-        className={`shrink-0 px-3.5 py-2 lg:h-10 bg-[#F2F8FF] border-b border-[#DCEEFF] flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 text-xs ${
-          !isChartFocused ? 'cursor-pointer hover:bg-[#E6F3FF] transition-colors' : ''
+        className={`shrink-0 px-3.5 py-2 lg:h-10 bg-[#F1F8F4] border-b border-[#DDF1E5] flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 text-xs ${
+          !isChartFocused ? 'cursor-pointer hover:bg-[#E5F4EB] transition-colors' : ''
         }`}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="font-bold text-[#083358] truncate">
+          <span className="font-bold text-[#0f3d2b] truncate">
             {isChartFocused
               ? readoutCandidate
                 ? readoutCandidate.fullLabel
@@ -685,15 +685,15 @@ const ChartStagePanelMemo = memo<{
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 whitespace-nowrap ${
                 readoutCandidate.is_future
-                  ? 'bg-[#E3F3FF] text-[#0194F3] border border-[#B3DFFF]'
-                  : 'bg-white text-[#1D5488] border border-[#C5E2FF]'
+                  ? 'bg-[#E3F3FF] text-[#1E8455] border border-[#B3DFFF]'
+                  : 'bg-white text-[#24553F] border border-[#C0E4CF]'
               }`}
             >
               {readoutCandidate.periodTag}
             </span>
           )}
           {!isChartFocused && (
-            <span className="hidden lg:inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#0194F3] text-white shrink-0">
+            <span className="hidden lg:inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#1E8455] text-white shrink-0">
               Perbesar ⤢
             </span>
           )}
@@ -702,13 +702,13 @@ const ChartStagePanelMemo = memo<{
         {isChartFocused && (
           <div className="flex flex-wrap lg:flex-nowrap items-center gap-x-4 gap-y-1 tabular-nums shrink-0 whitespace-nowrap">
             {checkedLayers.actual && (
-              <span className="flex items-center gap-1.5 text-[#1D5488]">
+              <span className="flex items-center gap-1.5 text-[#24553F]">
                 <span
                   className="w-2 h-2 rounded-full"
                   style={{ backgroundColor: TVLK_BLUE.actual }}
                 />
                 Aktual:{' '}
-                <strong className="font-mono text-[#004B96]">
+                <strong className="font-mono text-[#145639]">
                   {readoutCandidate && readoutCandidate.actual !== null
                     ? formatNum(readoutCandidate.actual, 0)
                     : '-'}
@@ -716,13 +716,13 @@ const ChartStagePanelMemo = memo<{
               </span>
             )}
             {checkedLayers.ensemble && (
-              <span className="flex items-center gap-1.5 text-[#1D5488]">
+              <span className="flex items-center gap-1.5 text-[#24553F]">
                 <span
                   className="w-2 h-2 rounded-full"
                   style={{ backgroundColor: TVLK_BLUE.forecast }}
                 />
                 Prediksi:{' '}
-                <strong className="font-mono text-[#0194F3]">
+                <strong className="font-mono text-[#1E8455]">
                   {readoutCandidate && readoutCandidate.ensemble !== null
                     ? formatNum(readoutCandidate.ensemble, resolution === 'daily' ? 1 : 0)
                     : '-'}
@@ -733,9 +733,9 @@ const ChartStagePanelMemo = memo<{
               readoutCandidate?.ci80_low !== null &&
               readoutCandidate?.ci80_high !== null &&
               readoutCandidate !== null && (
-                <span className="hidden sm:inline text-[#5385B5]">
+                <span className="hidden sm:inline text-[#5F8A75]">
                   Rentang Wajar:{' '}
-                  <strong className="font-mono text-[#1D5488]">
+                  <strong className="font-mono text-[#24553F]">
                     {formatNum(readoutCandidate.ci80_low, 0)}–{formatNum(readoutCandidate.ci80_high, 0)}
                   </strong>
                 </span>
@@ -745,14 +745,14 @@ const ChartStagePanelMemo = memo<{
       </div>
 
       {isChartFocused && isDenseDailyRange && (
-        <div className="shrink-0 px-3.5 py-1.5 bg-[#EBF6FF] text-[#005BB5] border-b border-[#CBE5FF] text-[11px] font-medium flex flex-wrap items-center justify-between gap-2">
+        <div className="shrink-0 px-3.5 py-1.5 bg-[#E9F6EF] text-[#186B46] border-b border-[#C6E8D5] text-[11px] font-medium flex flex-wrap items-center justify-between gap-2">
           <span>
             Rentang waktu lebih dari 4 bulan: tampilan <strong>Bulanan</strong> atau <strong>Mingguan</strong> lebih mudah dibaca tanpa gelombang rapat.
           </span>
           <button
             type="button"
             onClick={onSwitchToMonthly}
-            className="px-2 py-0.5 rounded-md bg-white border border-[#B0D9FF] text-[#0194F3] hover:bg-[#F5FAFF] font-semibold transition"
+            className="px-2 py-0.5 rounded-md bg-white border border-[#B0D9FF] text-[#1E8455] hover:bg-[#F5FAFF] font-semibold transition"
           >
             Ubah ke Bulanan
           </button>
@@ -778,7 +778,7 @@ const ChartStagePanelMemo = memo<{
         </div>
       </div>
 
-      <div className="shrink-0 px-3.5 py-1.5 bg-[#F2F8FF] border-t border-[#DCEEFF] flex items-center justify-between gap-2 text-[11px] text-[#5385B5]">
+      <div className="shrink-0 px-3.5 py-1.5 bg-[#F1F8F4] border-t border-[#DDF1E5] flex items-center justify-between gap-2 text-[11px] text-[#5F8A75]">
         <span className="truncate">
           {isChartFocused
             ? 'Data Aktual SIMRS: Jan 2023 – Jun 2026 • Proyeksi Model Aktif: Jan 2023 – 31 Des 2026'
@@ -1411,59 +1411,59 @@ const AnalitikKunjungan: React.FC = () => {
   const activeLayerCount = Object.values(checkedLayers).filter(Boolean).length;
 
   const getHeatmapCellClass = (val: number, maxVal: number) => {
-    if (val === 0) return 'bg-[#F4F9FF] text-[#9BBCD9]';
+    if (val === 0) return 'bg-[#F4F8F5] text-[#9BBCD9]';
     const ratio = val / maxVal;
-    if (ratio < 0.25) return 'bg-[#DFF2FF] text-[#0B4A7D]';
-    if (ratio < 0.5) return 'bg-[#9BD6FF] text-[#073A66] font-medium';
-    if (ratio < 0.75) return 'bg-[#1BA0E2] text-white font-semibold';
-    return 'bg-[#005BB5] text-white font-bold';
+    if (ratio < 0.25) return 'bg-[#DEF2E6] text-[#0B4A7D]';
+    if (ratio < 0.5) return 'bg-[#93D1AE] text-[#073A66] font-medium';
+    if (ratio < 0.75) return 'bg-[#2FAE75] text-white font-semibold';
+    return 'bg-[#186B46] text-white font-bold';
   };
 
   if (loading) {
     return (
-      <div className="flex-1 h-full w-full flex flex-col gap-2.5 p-2.5 sm:p-3 bg-[#F4F9FF]">
-        <div className="shrink-0 bg-white border border-[#CBE5FF] rounded-2xl px-3 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
+      <div className="flex-1 h-full w-full flex flex-col gap-2.5 p-2.5 sm:p-3 bg-[#F4F8F5]">
+        <div className="shrink-0 bg-white border border-[#C6E8D5] rounded-2xl px-3 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-44 rounded-xl bg-[#EBF6FF]" />
-            <div className="h-8 w-36 rounded-xl bg-[#EBF6FF]" />
+            <div className="h-8 w-44 rounded-xl bg-[#E9F6EF]" />
+            <div className="h-8 w-36 rounded-xl bg-[#E9F6EF]" />
           </div>
           <div className="flex items-center gap-2">
-            <div className="h-8 w-56 rounded-xl bg-[#EBF6FF]" />
-            <div className="h-8 w-44 rounded-xl bg-[#EBF6FF]" />
+            <div className="h-8 w-56 rounded-xl bg-[#E9F6EF]" />
+            <div className="h-8 w-44 rounded-xl bg-[#E9F6EF]" />
           </div>
         </div>
         <div className="shrink-0 grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-2.5">
           {[0, 1, 2, 3].map((idx) => (
             <div
               key={idx}
-              className="bg-white border border-[#CBE5FF] rounded-2xl px-3.5 py-3 space-y-2"
+              className="bg-white border border-[#C6E8D5] rounded-2xl px-3.5 py-3 space-y-2"
             >
-              <div className="h-3 w-28 rounded bg-[#EBF6FF]" />
+              <div className="h-3 w-28 rounded bg-[#E9F6EF]" />
               <div className="h-6 w-32 rounded bg-[#DDF0FF]" />
-              <div className="h-2.5 w-36 rounded bg-[#F0F7FF]" />
+              <div className="h-2.5 w-36 rounded bg-[#F0F7F3]" />
             </div>
           ))}
         </div>
         <div className="flex-1 min-h-[340px] grid grid-cols-1 lg:grid-cols-12 gap-2.5">
-          <div className="lg:col-span-7 bg-white border border-[#CBE5FF] rounded-2xl p-4 flex flex-col justify-between">
-            <div className="h-4 w-52 rounded bg-[#EBF6FF]" />
-            <div className="flex-1 my-4 rounded-xl bg-[#F4FAFF] flex items-center justify-center">
-              <span className="text-xs font-semibold text-[#5385B5]">
+          <div className="lg:col-span-7 bg-white border border-[#C6E8D5] rounded-2xl p-4 flex flex-col justify-between">
+            <div className="h-4 w-52 rounded bg-[#E9F6EF]" />
+            <div className="flex-1 my-4 rounded-xl bg-[#F4F8F5] flex items-center justify-center">
+              <span className="text-xs font-semibold text-[#5F8A75]">
                 Menyiapkan analitik kunjungan RSIA...
               </span>
             </div>
-            <div className="h-3 w-64 rounded bg-[#EBF6FF]" />
+            <div className="h-3 w-64 rounded bg-[#E9F6EF]" />
           </div>
-          <div className="hidden lg:block lg:col-span-3 bg-white border border-[#CBE5FF] rounded-2xl p-3 space-y-2.5">
-            <div className="h-4 w-28 rounded bg-[#EBF6FF]" />
+          <div className="hidden lg:block lg:col-span-3 bg-white border border-[#C6E8D5] rounded-2xl p-3 space-y-2.5">
+            <div className="h-4 w-28 rounded bg-[#E9F6EF]" />
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-14 rounded-xl bg-[#F4FAFF]" />
+              <div key={i} className="h-14 rounded-xl bg-[#F4F8F5]" />
             ))}
           </div>
-          <div className="hidden lg:block lg:col-span-2 bg-white border border-[#CBE5FF] rounded-2xl p-3 space-y-2.5">
-            <div className="h-4 w-24 rounded bg-[#EBF6FF]" />
-            <div className="h-20 rounded-xl bg-[#EBF6FF]" />
-            <div className="h-32 rounded-xl bg-[#F4FAFF]" />
+          <div className="hidden lg:block lg:col-span-2 bg-white border border-[#C6E8D5] rounded-2xl p-3 space-y-2.5">
+            <div className="h-4 w-24 rounded bg-[#E9F6EF]" />
+            <div className="h-20 rounded-xl bg-[#E9F6EF]" />
+            <div className="h-32 rounded-xl bg-[#F4F8F5]" />
           </div>
         </div>
       </div>
@@ -1472,10 +1472,10 @@ const AnalitikKunjungan: React.FC = () => {
 
   if (error) {
     return (
-      <div className="h-full w-full flex items-center justify-center bg-[#F4F9FF] p-4">
-        <div className="max-w-md w-full bg-white border border-[#CBE5FF] rounded-2xl p-6 text-center space-y-3 shadow-sm shadow-[#0194F3]/5">
-          <h2 className="text-base font-bold text-[#083358]">Data Belum Dapat Dimuat</h2>
-          <p className="text-xs text-[#1D5488]">{error}</p>
+      <div className="h-full w-full flex items-center justify-center bg-[#F4F8F5] p-4">
+        <div className="max-w-md w-full bg-white border border-[#C6E8D5] rounded-2xl p-6 text-center space-y-3 shadow-sm shadow-[#1E8455]/5">
+          <h2 className="text-base font-bold text-[#0f3d2b]">Data Belum Dapat Dimuat</h2>
+          <p className="text-xs text-[#24553F]">{error}</p>
           <button
             type="button"
             onClick={() => {
@@ -1484,7 +1484,7 @@ const AnalitikKunjungan: React.FC = () => {
               setError('');
               setReloadToken((n) => n + 1);
             }}
-            className="px-4 py-2 bg-[#0194F3] hover:bg-[#007CE8] text-white rounded-xl text-xs font-semibold transition"
+            className="px-4 py-2 bg-[#1E8455] hover:bg-[#186B46] text-white rounded-xl text-xs font-semibold transition"
           >
             Muat Ulang Data
           </button>
@@ -1495,10 +1495,10 @@ const AnalitikKunjungan: React.FC = () => {
 
   if (isKadiv && kadivPoliklinikList.length === 0) {
     return (
-      <div className="h-full w-full flex items-center justify-center bg-[#F4F9FF] p-4">
-        <div className="max-w-md w-full bg-white border border-[#CBE5FF] rounded-2xl p-6 text-center space-y-2 shadow-sm shadow-[#0194F3]/5">
-          <h2 className="text-base font-bold text-[#083358]">Tidak Ada Unit Poliklinik</h2>
-          <p className="text-xs text-[#1D5488] leading-relaxed">
+      <div className="h-full w-full flex items-center justify-center bg-[#F4F8F5] p-4">
+        <div className="max-w-md w-full bg-white border border-[#C6E8D5] rounded-2xl p-6 text-center space-y-2 shadow-sm shadow-[#1E8455]/5">
+          <h2 className="text-base font-bold text-[#0f3d2b]">Tidak Ada Unit Poliklinik</h2>
+          <p className="text-xs text-[#24553F] leading-relaxed">
             Divisi Anda ({userDivisiNama || 'Non-Klinis'}) tidak membawahi poliklinik rawat jalan secara langsung.
           </p>
         </div>
@@ -1517,9 +1517,9 @@ const AnalitikKunjungan: React.FC = () => {
       <div className="tvlk-card rounded-xl p-3 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-xs font-bold text-[#083358]">Kunjungan per Poliklinik</p>
+            <p className="text-xs font-bold text-[#0f3d2b]">Kunjungan per Poliklinik</p>
             {isExpanded && (
-              <p className="text-[11px] text-[#5385B5]">
+              <p className="text-[11px] text-[#5F8A75]">
                 Klik salah satu poliklinik untuk memfilter grafik & pola jam sibuk
               </p>
             )}
@@ -1528,12 +1528,12 @@ const AnalitikKunjungan: React.FC = () => {
             <button
               type="button"
               onClick={() => setSelectedPoli('TOTAL')}
-              className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#0194F3] text-white hover:bg-[#007CE8] shrink-0"
+              className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#1E8455] text-white hover:bg-[#186B46] shrink-0"
             >
               Semua Unit ✕
             </button>
           ) : (
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#EBF6FF] text-[#0194F3] shrink-0">
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#E9F6EF] text-[#1E8455] shrink-0">
               Pilih unit
             </span>
           )}
@@ -1551,15 +1551,15 @@ const AnalitikKunjungan: React.FC = () => {
                   onClick={() => setSelectedPoli(u.poliklinik)}
                   className={`w-full text-left p-2.5 rounded-xl border ${
                     isActive
-                      ? 'bg-[#EBF6FF] border-[#0194F3]/60 shadow-xs ring-1 ring-[#0194F3]/20'
-                      : 'bg-[#F7FBFF] border-[#DCEEFF] hover:bg-[#EDF7FF] hover:border-[#A8D8FF]'
+                      ? 'bg-[#E9F6EF] border-[#1E8455]/60 shadow-xs ring-1 ring-[#1E8455]/20'
+                      : 'bg-[#F7FAF8] border-[#DDF1E5] hover:bg-[#EDF7F1] hover:border-[#A8D8FF]'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className={`font-semibold truncate ${isActive ? 'text-[#005BB5]' : 'text-[#083358]'}`}>
+                    <span className={`font-semibold truncate ${isActive ? 'text-[#186B46]' : 'text-[#0f3d2b]'}`}>
                       {u.poliklinik}
                     </span>
-                    <span className="font-mono font-semibold text-[#083358] tabular-nums shrink-0">
+                    <span className="font-mono font-semibold text-[#0f3d2b] tabular-nums shrink-0">
                       {formatNum(u.total_visits)}
                     </span>
                   </div>
@@ -1572,12 +1572,12 @@ const AnalitikKunjungan: React.FC = () => {
                       }}
                     />
                   </div>
-                  <div className="mt-1 flex items-center justify-between text-[11px] text-[#5385B5]">
+                  <div className="mt-1 flex items-center justify-between text-[11px] text-[#5F8A75]">
                     <span>Puncak {u.daily_max} / hari</span>
                     <span className="font-mono">{u.share_pct}% porsi</span>
                   </div>
                   {isExpanded && (
-                    <div className="mt-1 text-[10px] text-[#1D5488] font-medium">
+                    <div className="mt-1 text-[10px] text-[#24553F] font-medium">
                       Rata-rata {formatNum(u.daily_mean, 1)} pasien / hari
                     </div>
                   )}
@@ -1589,8 +1589,8 @@ const AnalitikKunjungan: React.FC = () => {
 
       <div className="tvlk-card rounded-xl p-3 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-bold text-[#083358]">Proporsi Penjamin Pasien</p>
-          <span className="text-[11px] text-[#5385B5] truncate">
+          <p className="text-xs font-bold text-[#0f3d2b]">Proporsi Penjamin Pasien</p>
+          <span className="text-[11px] text-[#5F8A75] truncate">
             {selectedPoli === 'TOTAL' ? 'Semua Unit RSIA' : selectedPoli}
           </span>
         </div>
@@ -1598,12 +1598,12 @@ const AnalitikKunjungan: React.FC = () => {
           {currentPenjaminList.map((pj, idx) => (
             <div key={pj.penjamin} className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-medium text-[#1D5488] truncate">{pj.penjamin}</span>
-                <span className="font-mono font-semibold text-[#083358] tabular-nums">
+                <span className="font-medium text-[#24553F] truncate">{pj.penjamin}</span>
+                <span className="font-mono font-semibold text-[#0f3d2b] tabular-nums">
                   {formatNum(pj.count)} ({pj.share_pct}%)
                 </span>
               </div>
-              <div className="w-full bg-[#E6F3FF] rounded-full h-2 overflow-hidden">
+              <div className="w-full bg-[#E5F4EB] rounded-full h-2 overflow-hidden">
                 <div
                   className="h-2 rounded-full"
                   style={{
@@ -1623,31 +1623,31 @@ const AnalitikKunjungan: React.FC = () => {
     if (!isExpanded) {
       return (
         <div className="space-y-3">
-          <div className="bg-[#EBF6FF] border border-[#BDE2FF] rounded-xl p-2.5 space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-[#0194F3]">
+          <div className="bg-[#E9F6EF] border border-[#B6E0C8] rounded-xl p-2.5 space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-[#1E8455]">
               Jam Paling Padat (24 Jam)
             </p>
-            <p className="text-sm font-bold text-[#083358]">
+            <p className="text-sm font-bold text-[#0f3d2b]">
               {peakHourStats.busiestSlot.day}, Pukul {String(peakHourStats.busiestSlot.hour).padStart(2, '0')}:00
             </p>
-            <p className="text-[11px] font-mono text-[#1D5488]">
+            <p className="text-[11px] font-mono text-[#24553F]">
               {formatNum(peakHourStats.busiestSlot.count)} total kunjungan
             </p>
           </div>
 
           <div className="space-y-2">
-            <p className="text-[11px] font-bold text-[#083358]">5 Jam Tersibuk (Akumulasi 24 Jam)</p>
+            <p className="text-[11px] font-bold text-[#0f3d2b]">5 Jam Tersibuk (Akumulasi 24 Jam)</p>
             {peakHourStats.topHours.map((item, idx) => (
               <div key={item.hour} className="space-y-1">
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-mono font-semibold text-[#1D5488]">
+                  <span className="font-mono font-semibold text-[#24553F]">
                     {String(item.hour).padStart(2, '0')}:00
                   </span>
-                  <span className="font-mono font-bold text-[#083358] tabular-nums">
+                  <span className="font-mono font-bold text-[#0f3d2b] tabular-nums">
                     {formatNum(item.total)}
                   </span>
                 </div>
-                <div className="w-full bg-[#E6F3FF] rounded-full h-1.5 overflow-hidden">
+                <div className="w-full bg-[#E5F4EB] rounded-full h-1.5 overflow-hidden">
                   <div
                     className="h-1.5 rounded-full"
                     style={{
@@ -1675,10 +1675,10 @@ const AnalitikKunjungan: React.FC = () => {
       <div className="tvlk-card rounded-xl p-3 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-[#083358]">Pola Jam Sibuk Kunjungan (24 Jam)</p>
-            <p className="text-[11px] text-[#5385B5] truncate">
+            <p className="text-xs font-bold text-[#0f3d2b]">Pola Jam Sibuk Kunjungan (24 Jam)</p>
+            <p className="text-[11px] text-[#5F8A75] truncate">
               {selectedPoli === 'TOTAL' ? 'Semua Unit RSIA' : selectedPoli} • Puncak:{' '}
-              <strong className="text-[#0194F3]">
+              <strong className="text-[#1E8455]">
                 {peakHourStats.busiestSlot.day} {String(peakHourStats.busiestSlot.hour).padStart(2, '0')}:00
               </strong>{' '}
               ({formatNum(peakHourStats.busiestSlot.count)})
@@ -1697,20 +1697,20 @@ const AnalitikKunjungan: React.FC = () => {
           <table className="w-full border-collapse text-center min-w-[640px]">
             <thead>
               <tr>
-                <th className="p-1 text-[10px] font-semibold text-[#5385B5] text-left sticky left-0 bg-white z-10">
+                <th className="p-1 text-[10px] font-semibold text-[#5F8A75] text-left sticky left-0 bg-white z-10">
                   Hari / Jam
                 </th>
                 {displayedHours.map((h) => (
-                  <th key={h} className="p-1 text-[10px] font-mono text-[#5385B5]">
+                  <th key={h} className="p-1 text-[10px] font-mono text-[#5F8A75]">
                     {String(h).padStart(2, '0')}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#F0F7FF]">
+            <tbody className="divide-y divide-[#F0F7F3]">
               {currentHeatmapData.map((row) => (
                 <tr key={row.day_name}>
-                  <td className="p-1 pr-2 text-[11px] font-semibold text-[#083358] text-left bg-white sticky left-0 z-10 whitespace-nowrap">
+                  <td className="p-1 pr-2 text-[11px] font-semibold text-[#0f3d2b] text-left bg-white sticky left-0 z-10 whitespace-nowrap">
                     {row.day_name}
                   </td>
                   {displayedHours.map((h) => {
@@ -1734,15 +1734,15 @@ const AnalitikKunjungan: React.FC = () => {
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#5385B5] pt-1 border-t border-[#E6F2FF]">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#5F8A75] pt-1 border-t border-[#E6F2FF]">
           <span>Warna biru semakin pekat menandakan jam kedatangan pasien paling padat (00:00–23:00).</span>
           <div className="flex items-center gap-1 text-[10px]">
             <span>Sepi</span>
-            <span className="w-3 h-3 rounded-xs bg-[#F4F9FF] border border-[#DCEEFF]" />
-            <span className="w-3 h-3 rounded-xs bg-[#DFF2FF]" />
-            <span className="w-3 h-3 rounded-xs bg-[#9BD6FF]" />
-            <span className="w-3 h-3 rounded-xs bg-[#1BA0E2]" />
-            <span className="w-3 h-3 rounded-xs bg-[#005BB5]" />
+            <span className="w-3 h-3 rounded-xs bg-[#F4F8F5] border border-[#DDF1E5]" />
+            <span className="w-3 h-3 rounded-xs bg-[#DEF2E6]" />
+            <span className="w-3 h-3 rounded-xs bg-[#93D1AE]" />
+            <span className="w-3 h-3 rounded-xs bg-[#2FAE75]" />
+            <span className="w-3 h-3 rounded-xs bg-[#186B46]" />
             <span>Padat</span>
           </div>
         </div>
@@ -1781,18 +1781,18 @@ const AnalitikKunjungan: React.FC = () => {
       {/* Mobile Click-away Backdrop saat Popover terbuka */}
       {openPopover && (
         <div
-          className="fixed inset-0 z-[80] bg-[#083358]/25 sm:hidden"
+          className="fixed inset-0 z-[80] bg-[#0f3d2b]/25 sm:hidden"
           onClick={() => setOpenPopover(null)}
           aria-hidden="true"
         />
       )}
 
       {/* BARIS 1: HEADER KONTROL & FILTER WAKTU FLEKSIBEL */}
-      <div className="shrink-0 bg-white border border-[#CBE5FF] border-t-3 border-t-[#0194F3] rounded-2xl px-3 py-2.5 shadow-sm shadow-[#0194F3]/5 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2.5">
+      <div className="shrink-0 bg-white border border-[#C6E8D5] border-t-3 border-t-[#1E8455] rounded-2xl px-3 py-2.5 shadow-sm shadow-[#1E8455]/5 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2.5">
         {/* Kiri: Pemilih Unit & Label Periode Aktif */}
         <div className="flex flex-wrap items-center gap-2 min-w-0 w-full xl:w-auto">
           <div className="flex items-center gap-2 min-w-[150px] flex-1 sm:flex-none">
-            <label htmlFor="exec-unit-select" className="text-xs font-semibold text-[#5385B5] hidden sm:inline">
+            <label htmlFor="exec-unit-select" className="text-xs font-semibold text-[#5F8A75] hidden sm:inline">
               Unit:
             </label>
             <select
@@ -1800,7 +1800,7 @@ const AnalitikKunjungan: React.FC = () => {
               data-testid="unit-selector"
               value={selectedPoli}
               onChange={(e) => setSelectedPoli(e.target.value)}
-              className="w-full sm:w-auto text-xs font-bold text-[#083358] bg-[#F2F8FF] border border-[#C5E2FF] rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#0194F3] focus:border-[#0194F3] max-w-full sm:max-w-[250px] truncate"
+              className="w-full sm:w-auto text-xs font-bold text-[#0f3d2b] bg-[#F1F8F4] border border-[#C0E4CF] rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#1E8455] focus:border-[#1E8455] max-w-full sm:max-w-[250px] truncate"
             >
               {!isKadiv && <option value="TOTAL">Semua Unit RSIA (Total)</option>}
               {Object.keys(summary?.by_poliklinik || {}).map((p) => (
@@ -1819,8 +1819,8 @@ const AnalitikKunjungan: React.FC = () => {
               onClick={() => setOpenPopover((prev) => (prev === 'period' ? null : 'period'))}
               className={`w-full sm:w-auto flex items-center justify-between sm:justify-start gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold max-w-full ${
                 openPopover === 'period'
-                  ? 'bg-[#0194F3] text-white border-[#0194F3] shadow-xs'
-                  : 'bg-[#F2F8FF] text-[#083358] border-[#C5E2FF] hover:bg-[#E4F2FF]'
+                  ? 'bg-[#1E8455] text-white border-[#1E8455] shadow-xs'
+                  : 'bg-[#F1F8F4] text-[#0f3d2b] border-[#C0E4CF] hover:bg-[#E3F3EA]'
               }`}
             >
               <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1847,14 +1847,14 @@ const AnalitikKunjungan: React.FC = () => {
             {openPopover === 'period' && (
               <div
                 data-testid="popover-period"
-                className="fixed inset-x-3 top-20 z-[90] w-auto max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-6rem)] overflow-y-auto sm:absolute sm:inset-auto sm:left-0 sm:top-full sm:mt-2 sm:w-96 bg-white border border-[#CBE5FF] rounded-2xl shadow-2xl shadow-[#0194F3]/15 p-4 space-y-3.5"
+                className="fixed inset-x-3 top-20 z-[90] w-auto max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-6rem)] overflow-y-auto sm:absolute sm:inset-auto sm:left-0 sm:top-full sm:mt-2 sm:w-96 bg-white border border-[#C6E8D5] rounded-2xl shadow-2xl shadow-[#1E8455]/15 p-4 space-y-3.5"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-bold text-[#083358]">Atur Periode & Rentang Tanggal</p>
+                  <p className="text-xs font-bold text-[#0f3d2b]">Atur Periode & Rentang Tanggal</p>
                   <button
                     type="button"
                     onClick={() => setOpenPopover(null)}
-                    className="text-xs text-[#0194F3] hover:text-[#0066CC] font-semibold px-1.5 py-0.5 rounded-md"
+                    className="text-xs text-[#1E8455] hover:text-[#186B46] font-semibold px-1.5 py-0.5 rounded-md"
                   >
                     Tutup
                   </button>
@@ -1862,7 +1862,7 @@ const AnalitikKunjungan: React.FC = () => {
 
                 {/* Pilihan Cepat */}
                 <div className="space-y-1.5">
-                  <p className="text-[11px] font-semibold text-[#5385B5]">Pilihan Cepat</p>
+                  <p className="text-[11px] font-semibold text-[#5F8A75]">Pilihan Cepat</p>
                   <div className="flex flex-wrap gap-1.5">
                     {(
                       [
@@ -1882,8 +1882,8 @@ const AnalitikKunjungan: React.FC = () => {
                         onClick={() => handleSelectQuickPreset(item.id)}
                         className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${
                           quickPreset === item.id && selectedMonth === 'ALL'
-                            ? 'bg-[#0194F3] text-white border-[#0194F3]'
-                            : 'bg-[#F2F8FF] text-[#1D5488] border-[#C5E2FF] hover:bg-[#E4F2FF]'
+                            ? 'bg-[#1E8455] text-white border-[#1E8455]'
+                            : 'bg-[#F1F8F4] text-[#24553F] border-[#C0E4CF] hover:bg-[#E3F3EA]'
                         }`}
                       >
                         {item.label}
@@ -1893,13 +1893,13 @@ const AnalitikKunjungan: React.FC = () => {
                 </div>
 
                 {/* Filter Bertingkat: Tahun -> Bulan -> Minggu ke-N */}
-                <div className="border-t border-[#E3F1FF] pt-3 space-y-2.5">
-                  <p className="text-[11px] font-semibold text-[#5385B5]">
+                <div className="border-t border-[#E3F3EA] pt-3 space-y-2.5">
+                  <p className="text-[11px] font-semibold text-[#5F8A75]">
                     Pilih Spesifik (Tahun, Bulan, atau Minggu ke-Berapa)
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
-                      <label htmlFor="filter-year" className="block text-[11px] font-medium text-[#1D5488] mb-1">
+                      <label htmlFor="filter-year" className="block text-[11px] font-medium text-[#24553F] mb-1">
                         Tahun
                       </label>
                       <select
@@ -1907,7 +1907,7 @@ const AnalitikKunjungan: React.FC = () => {
                         data-testid="select-filter-year"
                         value={quickPreset === 'custom' ? 'ALL' : selectedYear}
                         onChange={(e) => handleYearChange(e.target.value)}
-                        className="w-full text-xs font-semibold text-[#083358] bg-[#F2F8FF] border border-[#C5E2FF] rounded-lg px-2.5 py-1.5"
+                        className="w-full text-xs font-semibold text-[#0f3d2b] bg-[#F1F8F4] border border-[#C0E4CF] rounded-lg px-2.5 py-1.5"
                       >
                         <option value="ALL">Semua Tahun (2023–2026)</option>
                         <option value="2026">2026</option>
@@ -1918,7 +1918,7 @@ const AnalitikKunjungan: React.FC = () => {
                     </div>
 
                     <div>
-                      <label htmlFor="filter-month" className="block text-[11px] font-medium text-[#1D5488] mb-1">
+                      <label htmlFor="filter-month" className="block text-[11px] font-medium text-[#24553F] mb-1">
                         Bulan
                       </label>
                       <select
@@ -1926,7 +1926,7 @@ const AnalitikKunjungan: React.FC = () => {
                         data-testid="select-filter-month"
                         value={monthOptionsAvailable ? selectedMonth : 'ALL'}
                         onChange={(e) => handleMonthChange(e.target.value)}
-                        className="w-full text-xs font-semibold text-[#083358] bg-[#F2F8FF] border border-[#C5E2FF] rounded-lg px-2.5 py-1.5"
+                        className="w-full text-xs font-semibold text-[#0f3d2b] bg-[#F1F8F4] border border-[#C0E4CF] rounded-lg px-2.5 py-1.5"
                       >
                         <option value="ALL">Semua Bulan (Jan–Des)</option>
                         {MONTH_FULL_ID.map((mName, idx) => (
@@ -1939,7 +1939,7 @@ const AnalitikKunjungan: React.FC = () => {
                   </div>
 
                   <div>
-                    <label htmlFor="filter-week" className="block text-[11px] font-medium text-[#1D5488] mb-1">
+                    <label htmlFor="filter-week" className="block text-[11px] font-medium text-[#24553F] mb-1">
                       Minggu ke- (dalam bulan terpilih)
                     </label>
                     <select
@@ -1948,7 +1948,7 @@ const AnalitikKunjungan: React.FC = () => {
                       disabled={!weekOptionsAvailable}
                       value={weekOptionsAvailable ? selectedWeekOfMonth : 'ALL'}
                       onChange={(e) => handleWeekOfMonthChange(e.target.value)}
-                      className="w-full text-xs font-semibold text-[#083358] bg-[#F2F8FF] border border-[#C5E2FF] rounded-lg px-2.5 py-1.5 disabled:opacity-50"
+                      className="w-full text-xs font-semibold text-[#0f3d2b] bg-[#F1F8F4] border border-[#C0E4CF] rounded-lg px-2.5 py-1.5 disabled:opacity-50"
                     >
                       {WEEK_OF_MONTH_OPTIONS.map((wOpt) => (
                         <option key={wOpt.value} value={wOpt.value}>
@@ -1960,13 +1960,13 @@ const AnalitikKunjungan: React.FC = () => {
                 </div>
 
                 {/* Rentang Tanggal Bebas (Dari -> Sampai) */}
-                <div className="border-t border-[#E3F1FF] pt-3 space-y-2">
-                  <p className="text-[11px] font-semibold text-[#5385B5]">
+                <div className="border-t border-[#E3F3EA] pt-3 space-y-2">
+                  <p className="text-[11px] font-semibold text-[#5F8A75]">
                     Atau Pilih Rentang Tanggal Bebas (2023–2026)
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
-                      <label htmlFor="custom-start-date" className="block text-[11px] font-medium text-[#1D5488] mb-1">
+                      <label htmlFor="custom-start-date" className="block text-[11px] font-medium text-[#24553F] mb-1">
                         Dari Tanggal
                       </label>
                       <input
@@ -1977,11 +1977,11 @@ const AnalitikKunjungan: React.FC = () => {
                         max={meta?.data_period.future_forecast_end_date || '2026-12-31'}
                         value={customStartDate}
                         onChange={(e) => setCustomStartDate(e.target.value)}
-                        className="w-full text-xs font-mono text-[#083358] bg-[#F2F8FF] border border-[#C5E2FF] rounded-lg px-2.5 py-1.5"
+                        className="w-full text-xs font-mono text-[#0f3d2b] bg-[#F1F8F4] border border-[#C0E4CF] rounded-lg px-2.5 py-1.5"
                       />
                     </div>
                     <div>
-                      <label htmlFor="custom-end-date" className="block text-[11px] font-medium text-[#1D5488] mb-1">
+                      <label htmlFor="custom-end-date" className="block text-[11px] font-medium text-[#24553F] mb-1">
                         Sampai Tanggal
                       </label>
                       <input
@@ -1992,7 +1992,7 @@ const AnalitikKunjungan: React.FC = () => {
                         max={meta?.data_period.future_forecast_end_date || '2026-12-31'}
                         value={customEndDate}
                         onChange={(e) => setCustomEndDate(e.target.value)}
-                        className="w-full text-xs font-mono text-[#083358] bg-[#F2F8FF] border border-[#C5E2FF] rounded-lg px-2.5 py-1.5"
+                        className="w-full text-xs font-mono text-[#0f3d2b] bg-[#F1F8F4] border border-[#C0E4CF] rounded-lg px-2.5 py-1.5"
                       />
                     </div>
                   </div>
@@ -2000,7 +2000,7 @@ const AnalitikKunjungan: React.FC = () => {
                     type="button"
                     data-testid="btn-apply-date-range"
                     onClick={handleApplyCustomRange}
-                    className="w-full py-2 rounded-xl bg-[#0194F3] hover:bg-[#007CE8] text-white text-xs font-semibold transition"
+                    className="w-full py-2 rounded-xl bg-[#1E8455] hover:bg-[#186B46] text-white text-xs font-semibold transition"
                   >
                     Terapkan Rentang Tanggal
                   </button>
@@ -2015,7 +2015,7 @@ const AnalitikKunjungan: React.FC = () => {
           <div
             role="group"
             aria-label="Tampilan Resolusi Waktu"
-            className="inline-flex items-center bg-[#EEF6FF] border border-[#C5E2FF] rounded-xl p-0.5 gap-0.5"
+            className="inline-flex items-center bg-[#EEF6F1] border border-[#C0E4CF] rounded-xl p-0.5 gap-0.5"
           >
             {(
               [
@@ -2034,8 +2034,8 @@ const AnalitikKunjungan: React.FC = () => {
                   onClick={() => setResolution(opt.id)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
                     isSelected
-                      ? 'bg-[#0194F3] text-white shadow-xs'
-                      : 'text-[#3A6EA5] hover:text-[#083358] hover:bg-white/70'
+                      ? 'bg-[#1E8455] text-white shadow-xs'
+                      : 'text-[#3F7A5E] hover:text-[#0f3d2b] hover:bg-white/70'
                   }`}
                 >
                   {opt.label}
@@ -2052,8 +2052,8 @@ const AnalitikKunjungan: React.FC = () => {
               onClick={() => setOpenPopover((prev) => (prev === 'layers' ? null : 'layers'))}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
                 openPopover === 'layers'
-                  ? 'bg-[#0194F3] text-white border-[#0194F3] shadow-xs'
-                  : 'bg-white text-[#1D5488] border-[#C5E2FF] hover:bg-[#EDF7FF]'
+                  ? 'bg-[#1E8455] text-white border-[#1E8455] shadow-xs'
+                  : 'bg-white text-[#24553F] border-[#C0E4CF] hover:bg-[#EDF7F1]'
               }`}
             >
               <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -2065,14 +2065,14 @@ const AnalitikKunjungan: React.FC = () => {
             {openPopover === 'layers' && (
               <div
                 data-testid="popover-layers"
-                className="fixed inset-x-3 top-20 z-[90] w-auto max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-6rem)] overflow-y-auto sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white border border-[#CBE5FF] rounded-2xl shadow-2xl shadow-[#0194F3]/15 p-3.5 space-y-2"
+                className="fixed inset-x-3 top-20 z-[90] w-auto max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-6rem)] overflow-y-auto sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white border border-[#C6E8D5] rounded-2xl shadow-2xl shadow-[#1E8455]/15 p-3.5 space-y-2"
               >
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-[#083358]">Tampilan Garis Grafik</p>
+                  <p className="text-xs font-bold text-[#0f3d2b]">Tampilan Garis Grafik</p>
                   <button
                     type="button"
                     onClick={() => setOpenPopover(null)}
-                    className="text-xs text-[#0194F3] hover:text-[#0066CC] font-semibold"
+                    className="text-xs text-[#1E8455] hover:text-[#186B46] font-semibold"
                   >
                     Tutup
                   </button>
@@ -2086,8 +2086,8 @@ const AnalitikKunjungan: React.FC = () => {
                         key={layer.key}
                         className={`flex items-start gap-2.5 p-2 rounded-xl border cursor-pointer transition ${
                           checked
-                            ? 'bg-[#EBF6FF] border-[#0194F3]/40'
-                            : 'bg-[#F7FBFF] border-[#DCEEFF] opacity-75 hover:opacity-100'
+                            ? 'bg-[#E9F6EF] border-[#1E8455]/40'
+                            : 'bg-[#F7FAF8] border-[#DDF1E5] opacity-75 hover:opacity-100'
                         }`}
                       >
                         <input
@@ -2095,17 +2095,17 @@ const AnalitikKunjungan: React.FC = () => {
                           data-testid={`chk-layer-${layer.key}`}
                           checked={checked}
                           onChange={() => toggleLayer(layer.key)}
-                          className="mt-0.5 h-3.5 w-3.5 rounded border-[#9FD0FF] accent-[#0194F3]"
+                          className="mt-0.5 h-3.5 w-3.5 rounded border-[#9FD0FF] accent-[#1E8455]"
                         />
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-[#083358]">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-[#0f3d2b]">
                             <span
                               className="w-2.5 h-2.5 rounded-full shrink-0"
                               style={{ backgroundColor: layer.colorVar }}
                             />
                             <span className="truncate">{layer.label}</span>
                           </div>
-                          <p className="text-[11px] text-[#5385B5] leading-snug mt-0.5">{layer.desc}</p>
+                          <p className="text-[11px] text-[#5F8A75] leading-snug mt-0.5">{layer.desc}</p>
                         </div>
                       </label>
                     );
@@ -2119,7 +2119,7 @@ const AnalitikKunjungan: React.FC = () => {
           <div
             role="group"
             aria-label="Fokus Tampilan Panel"
-            className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex items-center bg-[#EEF6FF] border border-[#C5E2FF] rounded-xl p-0.5 gap-0.5"
+            className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex items-center bg-[#EEF6F1] border border-[#C0E4CF] rounded-xl p-0.5 gap-0.5"
           >
             {(
               [
@@ -2137,8 +2137,8 @@ const AnalitikKunjungan: React.FC = () => {
                   onClick={() => handleFocusPanel(panel.id)}
                   className={`px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-lg text-xs font-semibold text-center transition-colors ${
                     isFocused
-                      ? 'bg-[#0194F3] text-white shadow-xs'
-                      : 'text-[#3A6EA5] hover:text-[#083358] hover:bg-white/70'
+                      ? 'bg-[#1E8455] text-white shadow-xs'
+                      : 'text-[#3F7A5E] hover:text-[#0f3d2b] hover:bg-white/70'
                   }`}
                 >
                   {panel.label}
@@ -2179,10 +2179,10 @@ const AnalitikKunjungan: React.FC = () => {
             type="button"
             data-testid="dock-tab-units"
             onClick={() => handleFocusPanel(focusedPanel === 'units' ? 'chart' : 'units')}
-            className={`shrink-0 px-3 py-2 border-b border-[#DCEEFF] flex items-center justify-between gap-2 text-left transition-colors ${
+            className={`shrink-0 px-3 py-2 border-b border-[#DDF1E5] flex items-center justify-between gap-2 text-left transition-colors ${
               focusedPanel === 'units'
-                ? 'bg-[#0194F3] text-white'
-                : 'bg-[#F2F8FF] text-[#083358] hover:bg-[#E5F2FF]'
+                ? 'bg-[#1E8455] text-white'
+                : 'bg-[#F1F8F4] text-[#0f3d2b] hover:bg-[#E4F3EA]'
             }`}
           >
             <span className="text-xs font-bold truncate">Poliklinik</span>
@@ -2190,7 +2190,7 @@ const AnalitikKunjungan: React.FC = () => {
               className={`hidden lg:inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${
                 focusedPanel === 'units'
                   ? 'bg-white/20 text-white'
-                  : 'bg-white text-[#0194F3] border border-[#BDE2FF]'
+                  : 'bg-white text-[#1E8455] border border-[#B6E0C8]'
               }`}
             >
               {focusedPanel === 'units' ? 'Kecilkan ↙' : 'Perbesar ⤢'}
@@ -2213,10 +2213,10 @@ const AnalitikKunjungan: React.FC = () => {
             type="button"
             data-testid="dock-tab-heatmap"
             onClick={() => handleFocusPanel(focusedPanel === 'heatmap' ? 'chart' : 'heatmap')}
-            className={`shrink-0 px-3 py-2 border-b border-[#DCEEFF] flex items-center justify-between gap-2 text-left transition-colors ${
+            className={`shrink-0 px-3 py-2 border-b border-[#DDF1E5] flex items-center justify-between gap-2 text-left transition-colors ${
               focusedPanel === 'heatmap'
-                ? 'bg-[#0194F3] text-white'
-                : 'bg-[#F2F8FF] text-[#083358] hover:bg-[#E5F2FF]'
+                ? 'bg-[#1E8455] text-white'
+                : 'bg-[#F1F8F4] text-[#0f3d2b] hover:bg-[#E4F3EA]'
             }`}
           >
             <span className="text-xs font-bold truncate">Jam Sibuk 24J</span>
@@ -2224,7 +2224,7 @@ const AnalitikKunjungan: React.FC = () => {
               className={`hidden lg:inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${
                 focusedPanel === 'heatmap'
                   ? 'bg-white/20 text-white'
-                  : 'bg-white text-[#0194F3] border border-[#BDE2FF]'
+                  : 'bg-white text-[#1E8455] border border-[#B6E0C8]'
               }`}
             >
               {focusedPanel === 'heatmap' ? 'Kecilkan ↙' : 'Perbesar ⤢'}
