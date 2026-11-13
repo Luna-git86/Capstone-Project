@@ -589,7 +589,8 @@ const updateTicketStatus = async (req, res) => {
       fotoBukti,
       fotoInstruksi,
       judul,
-      deskripsi
+      deskripsi,
+      deadline
     } = req.body;
     const role = req.user.role;
 
@@ -696,6 +697,14 @@ const updateTicketStatus = async (req, res) => {
       }
     }
 
+    let updatedDeadline = currentTicket.deadline;
+    if (deadline !== undefined && deadline !== null && deadline !== '') {
+      const parsed = new Date(deadline);
+      if (!Number.isNaN(parsed.getTime())) {
+        updatedDeadline = parsed;
+      }
+    }
+
     const dataToUpdate = {
       status,
       catatanRevisi:
@@ -711,6 +720,7 @@ const updateTicketStatus = async (req, res) => {
       // [BARU] Simpan teks judul dan deskripsi baru (jika ada kiriman)
       judul: judul !== undefined ? judul : currentTicket.judul,
       deskripsi: deskripsi !== undefined ? deskripsi : currentTicket.deskripsi,
+      deadline: updatedDeadline,
       completedAt:
         status === 'SELESAI'
           ? currentTicket.completedAt || new Date()
@@ -737,6 +747,32 @@ const updateTicketStatus = async (req, res) => {
         },
       },
     });
+
+    // Sinkronisasi otomatis tiket laporan induk jika seluruh tugas turunannya sudah SELESAI
+    if (status === 'SELESAI' && updatedTicket.parentTicketId) {
+      const parentTicket = await prisma.ticket.findUnique({
+        where: { id: updatedTicket.parentTicketId },
+        include: {
+          childTickets: { select: { id: true, status: true } },
+        },
+      });
+
+      if (
+        parentTicket &&
+        parentTicket.jenisTiket === 'LAPORAN' &&
+        parentTicket.status !== 'SELESAI' &&
+        parentTicket.childTickets.length > 0 &&
+        parentTicket.childTickets.every((child) => child.status === 'SELESAI')
+      ) {
+        await prisma.ticket.update({
+          where: { id: parentTicket.id },
+          data: {
+            status: 'SELESAI',
+            completedAt: new Date(),
+          },
+        });
+      }
+    }
 
     await prisma.auditLog.create({
       data: {

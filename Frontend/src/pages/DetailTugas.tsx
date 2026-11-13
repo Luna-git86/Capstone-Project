@@ -243,6 +243,60 @@ export default function DetailTugas() {
     finally { setIsSubmitting(false); }
   };
 
+  // State untuk respons kendala
+  const [responKendalaNote, setResponKendalaNote] = useState('');
+  const [newDeadline, setNewDeadline] = useState(''); // <--- State baru
+  const [eskalasiLanjutNote, setEskalasiLanjutNote] = useState('');
+
+  const handleResponKendala = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!responKendalaNote.trim()) return alert('Tuliskan respons atau solusi untuk staf.');
+    
+    setIsSubmitting(true);
+    try {
+      const payload: any = { 
+        status: 'DIPROSES', 
+        catatanRevisi: `[Respons Koordinator]: ${responKendalaNote.trim()}` 
+      };
+
+      // Jika input deadline diisi, tambahkan ke payload
+      if (newDeadline) {
+        payload.deadline = new Date(newDeadline).toISOString();
+      }
+
+      await api.patch(`/tickets/${id}/status`, payload);
+      alert('Respons terkirim dan tugas dilanjutkan (DIPROSES).');
+      setResponKendalaNote('');
+      setNewDeadline(''); // Reset form
+      fetchDetail(true);
+    } catch (error: any) { 
+      alert(error.response?.data?.message || 'Gagal mengirim respons kendala.'); 
+    } finally { 
+      setIsSubmitting(false); 
+    }
+  };
+
+  const handleEskalasiLanjut = async () => {
+    if (!eskalasiLanjutNote.trim()) return alert('Tuliskan catatan eskalasi untuk atasan.');
+    setIsSubmitting(true);
+    try {
+      // Menggabungkan catatan staf lama dengan catatan dari atasan yang mengeskalasi
+      const payload = {
+        status: 'HOLD_ESKALASI',
+        catatanRevisi: `${ticket?.catatanRevisi || ''}\n\n[Eskalasi ${userRole}]: ${eskalasiLanjutNote.trim()}`
+      };
+
+      await api.patch(`/tickets/${id}/status`, payload);
+      alert('Kendala berhasil dieskalasikan ke tingkat selanjutnya.');
+      setEskalasiLanjutNote('');
+      fetchDetail(true);
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Gagal meneruskan eskalasi.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (loading) return <div className="p-8 text-center text-slate-500 font-medium animate-pulse">Memuat rincian tugas...</div>;
   if (!ticket) return <div className="p-8 text-center text-rose-500 font-bold">Tugas tidak ditemukan.</div>;
 
@@ -593,24 +647,117 @@ export default function DetailTugas() {
             </div>
           )}
           
-          {/* D. KADIV/DIREKTUR: ESKALASI */}
-          {isKadivDir && ticket.status === 'HOLD_ESKALASI' && (
+          {/* D. PENANGANAN KENDALA (KOORDINATOR / KADIV / DIREKTUR) */}
+          {isAtasan && ticket.status === 'HOLD_ESKALASI' && (
              <div className="bg-amber-50 p-5 rounded-2xl border-2 border-amber-300 shadow-sm">
                <div className="flex items-center gap-2 mb-2">
                  <span className="flex h-3 w-3 relative">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
                  </span>
-                 <h3 className="text-sm font-bold text-amber-900">Perlu Keputusan Manajerial</h3>
+                 <h3 className="text-sm font-bold text-amber-900">Perlu Penanganan Kendala</h3>
                </div>
                
-               <p className="text-xs text-amber-800 mb-4 bg-amber-100/50 p-2.5 rounded-lg border border-amber-200/50">
-                 Tugas ini dilaporkan terkendala oleh pelaksana (Alat rusak / Butuh biaya).
-               </p>
+               <div className="text-xs text-amber-800 mb-4 bg-amber-100/50 p-3 rounded-lg border border-amber-200/50 whitespace-pre-wrap leading-relaxed font-medium">
+                 Riwayat Kendala:
+                 {'\n'}{ticket.catatanRevisi}
+               </div>
                
-               <button onClick={() => navigate('/daftar-eskalasi-kadiv')} className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm">
-                  Proses Pengajuan Eskalasi
-               </button>
+               {isKoor ? (
+                 <div className="space-y-4">
+                   <form onSubmit={handleResponKendala} className="space-y-3">
+                     <div>
+                       <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">Respons / Solusi (Selesaikan Kendala) *</label>
+                       <textarea 
+                         rows={2} 
+                         value={responKendalaNote} 
+                         onChange={(e) => setResponKendalaNote(e.target.value)} 
+                         className="w-full p-2.5 border border-amber-200 bg-white rounded-xl text-xs" 
+                         placeholder="Berikan solusi (misal: Suku cadang sudah dibeli)..." 
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">Perpanjang Batas Waktu (Opsional)</label>
+                       <input 
+                         type="datetime-local" 
+                         value={newDeadline} 
+                         onChange={(e) => setNewDeadline(e.target.value)} 
+                         className="w-full p-2.5 border border-amber-200 bg-white rounded-xl text-xs" 
+                       />
+                       <p className="text-[9px] text-amber-700 mt-1">Biarkan kosong jika tidak mengubah batas waktu awal.</p>
+                     </div>
+                     <button type="submit" disabled={isSubmitting || !responKendalaNote.trim()} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition">
+                        Kendala Selesai (Lanjut Dikerjakan)
+                     </button>
+                   </form>
+
+                   <div className="pt-3 border-t border-amber-200/50">
+                     <details className="group">
+                        <summary className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer list-none text-center transition">
+                          Eskalasi Lanjut ke Kadiv
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                          <textarea rows={2} value={eskalasiLanjutNote} onChange={(e) => setEskalasiLanjutNote(e.target.value)} className="w-full p-2.5 border border-amber-300 bg-amber-50 rounded-xl text-xs" placeholder="Catatan untuk Kadiv: Mengapa butuh eskalasi lanjut?" />
+                          <button type="button" onClick={handleEskalasiLanjut} disabled={isSubmitting} className="w-full py-2 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs rounded-xl shadow-sm transition">
+                            Kirim Eskalasi Lanjutan
+                          </button>
+                        </div>
+                     </details>
+                   </div>
+                 </div>
+
+               ) : isKadiv ? (
+                 <div className="space-y-4">
+                   <form onSubmit={handleResponKendala} className="space-y-3">
+                     <div>
+                       <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">Respons / Keputusan Kadiv *</label>
+                       <textarea 
+                         rows={2} 
+                         value={responKendalaNote} 
+                         onChange={(e) => setResponKendalaNote(e.target.value)} 
+                         className="w-full p-2.5 border border-amber-200 bg-white rounded-xl text-xs" 
+                         placeholder="Berikan keputusan/persetujuan..." 
+                       />
+                     </div>
+                     <button type="submit" disabled={isSubmitting || !responKendalaNote.trim()} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition">
+                        Selesaikan Kendala (Kembalikan ke DIPROSES)
+                     </button>
+                   </form>
+
+                   <div className="pt-3 border-t border-amber-200/50">
+                     <details className="group">
+                        <summary className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer list-none text-center transition">
+                          Eskalasi Lanjut ke Direktur
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                          <textarea rows={2} value={eskalasiLanjutNote} onChange={(e) => setEskalasiLanjutNote(e.target.value)} className="w-full p-2.5 border border-amber-300 bg-amber-50 rounded-xl text-xs" placeholder="Catatan untuk Direktur: Mengapa butuh putusan pimpinan?" />
+                          <button type="button" onClick={handleEskalasiLanjut} disabled={isSubmitting} className="w-full py-2 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs rounded-xl shadow-sm transition">
+                            Kirim Eskalasi ke Direktur
+                          </button>
+                        </div>
+                     </details>
+                   </div>
+                 </div>
+
+               ) : (
+                 <div className="space-y-4">
+                   <form onSubmit={handleResponKendala} className="space-y-3">
+                     <div>
+                       <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">Putusan Direktur *</label>
+                       <textarea 
+                         rows={2} 
+                         value={responKendalaNote} 
+                         onChange={(e) => setResponKendalaNote(e.target.value)} 
+                         className="w-full p-2.5 border border-amber-200 bg-white rounded-xl text-xs" 
+                         placeholder="Berikan instruksi atau putusan final dari Direksi..." 
+                       />
+                     </div>
+                     <button type="submit" disabled={isSubmitting || !responKendalaNote.trim()} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition">
+                        Berikan Putusan (Kembalikan ke DIPROSES)
+                     </button>
+                   </form>
+                 </div>
+               )}
              </div>
           )}
 

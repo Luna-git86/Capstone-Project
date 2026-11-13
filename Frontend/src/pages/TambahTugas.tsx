@@ -116,6 +116,12 @@ const TambahTugas: React.FC = () => {
     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
   };
 
+  const getMinDateTimeLocal = () => {
+  const d = new Date();
+  const tzOffset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+};
+
   useEffect(() => {
     const loadInitialData = async () => {
       try {
@@ -284,6 +290,12 @@ const TambahTugas: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const targetDeadline = new Date(formData.deadline);
+    if (targetDeadline < new Date()) {
+      return setError('Batas waktu target tidak boleh diisi tanggal atau waktu yang sudah berlalu.');
+    }
+
     if (formData.pelaksanaIds.length === 0) {
       return setError('Anda wajib menunjuk minimal 1 pelaksana/staf untuk tugas ini.');
     }
@@ -447,7 +459,16 @@ const TambahTugas: React.FC = () => {
           </div>
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Batas Waktu Target *</label>
-            <input type="datetime-local" name="deadline" value={formData.deadline} onChange={handleChange} required className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-600 bg-slate-50 focus:border-blue-600" />
+            <input 
+              type="datetime-local" 
+              name="deadline" 
+              value={formData.deadline} 
+              onChange={handleChange} 
+              min={getMinDateTimeLocal()}
+              step="60"
+              required 
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-600 bg-slate-50 focus:border-blue-600" 
+            />
           </div>
         </div>
 

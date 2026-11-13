@@ -80,7 +80,7 @@ const DashboardKadiv: React.FC = () => {
       {/* 4 Kartu Ringkasan Manajerial */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Menunggu Triase</p>
+          <p className="text-sm font-medium text-slate-500">Menunggu Validasi</p>
           <p className="text-3xl font-bold text-amber-600 mt-2">{menungguTriase.length}</p>
           <p className="text-xs text-slate-500 mt-2">Perlu validasi & delegasi staf</p>
         </div>
