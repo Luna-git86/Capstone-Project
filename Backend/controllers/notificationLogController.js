@@ -272,8 +272,74 @@ const retryAllFailedNotifications = async (req, res) => {
   }
 };
 
+// 4. Ambil Notifikasi Masuk Khusus Akun yang Sedang Login (Real-time & Dynamic)
+const getMyNotifications = async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const userRole = req.user?.role;
+    if (!userId) {
+      return res.status(401).json({ message: 'Sesi pengguna tidak valid.' });
+    }
+
+    let where = { recipientId: userId };
+
+    // Jika ADMIN dan belum memiliki notifikasi personal, ambil log notifikasi sistem terkini
+    if (userRole === 'ADMIN') {
+      const personalCount = await prisma.notificationLog.count({ where: { recipientId: userId } });
+      if (personalCount === 0) {
+        where = {};
+      }
+    }
+
+    const logs = await prisma.notificationLog.findMany({
+      where,
+      include: {
+        ticket: {
+          select: {
+            id: true,
+            judul: true,
+            status: true,
+            prioritas: true,
+            lokasi: true,
+            jenisTiket: true,
+            divisi: { select: { id: true, nama: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 40,
+    });
+
+    const formatted = logs.map((item) => ({
+      id: item.id,
+      ticketId: item.ticketId,
+      ticketTitle: item.ticket?.judul || `Tiket #T-${String(item.ticketId).padStart(3, '0')}`,
+      ticketStatus: item.ticket?.status || 'UPDATE',
+      ticketPrioritas: item.ticket?.prioritas || 'MEDIUM',
+      jenisTiket: item.ticket?.jenisTiket || 'TUGAS',
+      divisiNama: item.ticket?.divisi?.nama || 'RSIA',
+      type: item.type,
+      message: item.message,
+      status: item.status,
+      createdAt: item.createdAt,
+    }));
+
+    return res.status(200).json({
+      data: formatted,
+      total: formatted.length,
+    });
+  } catch (error) {
+    console.error('Error getMyNotifications:', error);
+    return res.status(500).json({
+      message: 'Gagal memuat notifikasi akun Anda.',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getNotificationLogs,
+  getMyNotifications,
   retrySingleNotification,
   retryAllFailedNotifications,
   get MAX_RETRY_ATTEMPTS() {

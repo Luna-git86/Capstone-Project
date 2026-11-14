@@ -1,6 +1,11 @@
 // Frontend/src/App.tsx
+<<<<<<< HEAD
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+=======
+import { Suspense, lazy, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+>>>>>>> 4c60d4cc61f9920c3e7807fa20e7b96c56a35161
 import { getAuthToken, getAuthRole } from './utils/authStorage';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -27,10 +32,10 @@ const MenuLaporan = lazy(() => import('./pages/Koordinator/MenuLaporan'));
 const DashboardKadiv = lazy(() => import('./pages/Kadiv/DashboardKadiv'));
 
 const RouteSuspenseFallback = () => (
-  <div className="h-full w-full min-h-[260px] flex items-center justify-center bg-[#F4F9FF] p-6">
-    <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white border border-[#CBE5FF] shadow-xs">
-      <span className="w-4 h-4 border-2 border-[#0194F3] border-t-transparent rounded-full animate-spin" />
-      <span className="text-xs font-semibold text-[#1D5488]">Memuat halaman...</span>
+  <div className="h-full w-full min-h-[260px] flex items-center justify-center bg-[#F4F8F5] p-6">
+    <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white border border-[#C6E8D5] shadow-xs">
+      <span className="w-4 h-4 border-2 border-[#1E8455] border-t-transparent rounded-full animate-spin" />
+      <span className="text-xs font-semibold text-[#24553F]">Memuat halaman...</span>
     </div>
   </div>
 );
@@ -82,6 +87,10 @@ const RoleProtectedRoute = ({ allowedRoles }: { allowedRoles: string[] }) => {
 function App() {
   return (
     <BrowserRouter>
+<<<<<<< HEAD
+=======
+      <DynamicDocumentTitle />
+>>>>>>> 4c60d4cc61f9920c3e7807fa20e7b96c56a35161
       <Suspense fallback={<RouteSuspenseFallback />}>
         <Routes>
         {/* Saat pertama kali membuka web ('/'), selalu arahkan ke halaman Login */}
@@ -159,7 +168,7 @@ function App() {
 
         {/* Tangkap URL yang tidak dikenal dan arahkan ke Login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+        </Routes>
       </Suspense>
     </BrowserRouter>
   );
