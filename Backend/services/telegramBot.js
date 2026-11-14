@@ -149,13 +149,27 @@ function startTelegramBot() {
           throw new Error('USER_ALREADY_LINKED');
         }
 
-        return { nama: linkToken.user.nama };
+        return { userId: linkToken.userId, nama: linkToken.user.nama };
       });
 
       await bot.sendMessage(
         chatId,
         `Berhasil! Telegram kamu sudah terhubung dengan akun E-Ticketing RSIA Qurrata A’yun atas nama ${result.nama}.\n\nKamu dapat menerima notifikasi terkait tiket melalui bot ini.`
       );
+
+      // Kirim seluruh notifikasi tertunda (tugas atau laporan masalah) saat akun baru terhubung
+      try {
+        const { flushPendingNotificationsForUser } = require('./telegramService');
+        const flushResult = await flushPendingNotificationsForUser(result.userId, chatId);
+        if (flushResult.flushed > 0) {
+          await bot.sendMessage(
+            chatId,
+            `ℹ️ Terdapat ${flushResult.flushed} notifikasi tugas/laporan tertunda yang telah diteruskan ke Telegram Anda.`
+          );
+        }
+      } catch (flushErr) {
+        console.error('[Telegram] Gagal meneruskan notifikasi tertunda:', flushErr.message);
+      }
     } catch (error) {
       // Catat kode kesalahan saja, jangan mencatat token rahasia.
       const code = error.message;

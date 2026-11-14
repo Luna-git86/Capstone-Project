@@ -60,29 +60,27 @@ export default function MonitoringNotifikasi() {
   const [totalPages, setTotalPages] = useState(1);
 
   const fetchLogs = async () => {
-    setLoading(true);
     try {
-      const params: Record<string, string | number> = {
-        page,
-        limit: 25,
-      };
-
+      setLoading(true);
+      const params: any = { page, limit: 15 };
       if (statusFilter !== 'ALL') params.status = statusFilter;
       if (typeFilter !== 'ALL') params.type = typeFilter;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
       if (search.trim()) params.search = search.trim();
 
-      const response = await api.get('/notifications/logs', { params });
-      setLogs(response.data.data || []);
-      if (response.data.summary) {
-        setSummary(response.data.summary);
-      }
-      if (response.data.pagination) {
-        setTotalPages(response.data.pagination.totalPages || 1);
+      const res = await api.get('/notifications/logs', { params });
+      if (res.data) {
+        setLogs(res.data.data || []);
+        if (res.data.pagination) {
+          setTotalPages(res.data.pagination.totalPages || 1);
+        }
+        if (res.data.summary) {
+          setSummary(res.data.summary);
+        }
       }
     } catch (err: any) {
-      console.error('Error fetching notification logs:', err);
+      console.error('Error fetch notification logs:', err);
       alert(err.response?.data?.message || 'Gagal memuat log notifikasi.');
     } finally {
       setLoading(false);
@@ -91,8 +89,7 @@ export default function MonitoringNotifikasi() {
 
   useEffect(() => {
     fetchLogs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, typeFilter, startDate, endDate, page]);
+  }, [page, statusFilter, typeFilter, startDate, endDate]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,11 +116,11 @@ export default function MonitoringNotifikasi() {
     try {
       setIsRetryingAll(true);
       const res = await api.post('/notifications/logs/retry-failed');
-      alert(res.data.message || 'Proses retry selesai!');
+      alert(res.data.message || 'Proses pengiriman ulang selesai!');
       fetchLogs();
     } catch (err: any) {
       console.error('Error retry all:', err);
-      alert(err.response?.data?.message || 'Gagal memproses retry massal.');
+      alert(err.response?.data?.message || 'Gagal memproses pengiriman ulang massal.');
     } finally {
       setIsRetryingAll(false);
     }
@@ -169,16 +166,19 @@ export default function MonitoringNotifikasi() {
   const getTypeLabel = (type: string) => {
     const map: Record<string, string> = {
       DIRECTIVE_ASSIGNED: 'Arahan Kadiv',
-      TASK_ASSIGNED: 'Tugas Baru',
+      TASK_ASSIGNED: 'Penugasan Tugas Baru',
       TASK_REASSIGNED: 'Penugasan Ulang',
-      TASK_SUBMITTED: 'Laporan Selesai',
+      TASK_SUBMITTED: 'Laporan Selesai Diajukan',
       TASK_REVISION_REQUIRED: 'Permintaan Revisi',
       TASK_VERIFIED: 'Verifikasi Selesai',
-      TASK_ESCALATED: 'Eskalasi Tugas',
-      DEADLINE_SOON: 'Mendekati Batas',
-      OVERDUE: 'Melewati Batas',
+      TASK_ESCALATED: 'Eskalasi Kendala',
+      REPORT_SUBMITTED: 'Laporan Masalah Baru',
+      REPORT_REJECTED: 'Laporan Masalah Ditolak',
+      REPORT_RESUBMITTED: 'Revisi Laporan Terkirim',
+      DEADLINE_SOON: 'Mendekati Batas Waktu',
+      OVERDUE: 'Melewati Batas Waktu',
     };
-    return map[type] || type;
+    return map[type] || type.replace(/_/g, ' ');
   };
 
   return (
@@ -192,10 +192,10 @@ export default function MonitoringNotifikasi() {
             </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mt-1">
-            Monitoring Notification Log
+            Log Notifikasi Telegram
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Pemantauan pengiriman pesan Telegram, status berhasil/gagal, audit deduplikasi, dan kendali retry.
+            Pemantauan pengiriman pesan Telegram, status berhasil atau gagal, dan pengiriman ulang notifikasi.
           </p>
         </div>
 
@@ -206,7 +206,6 @@ export default function MonitoringNotifikasi() {
             disabled={loading}
             className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 shadow-sm transition"
           >
-            
             <span>Segarkan</span>
           </button>
 
@@ -216,8 +215,7 @@ export default function MonitoringNotifikasi() {
             disabled={isRetryingAll || summary.failed === 0}
             className="flex items-center gap-2 px-4 py-2 bg-rose-700 hover:bg-rose-800 disabled:bg-slate-300 text-white text-xs font-bold rounded-lg shadow-sm transition"
           >
-            
-            <span>{isRetryingAll ? 'Memproses...' : 'Retry Semua Gagal'}</span>
+            <span>{isRetryingAll ? 'Memproses...' : 'Kirim Ulang Semua Gagal'}</span>
           </button>
         </div>
       </div>
@@ -241,7 +239,7 @@ export default function MonitoringNotifikasi() {
           <p className="text-2xl font-black text-emerald-700 mt-2">
             {summary.sent}
           </p>
-          <span className="text-xs text-emerald-600">Status SENT</span>
+          <span className="text-xs text-emerald-600">Pesan sampai ke Telegram</span>
         </div>
 
         <div className="bg-rose-50/70 p-5 rounded-xl border border-rose-200 shadow-sm">
@@ -251,7 +249,7 @@ export default function MonitoringNotifikasi() {
           <p className="text-2xl font-black text-rose-700 mt-2">
             {summary.failed}
           </p>
-          <span className="text-xs text-rose-600">Status FAILED</span>
+          <span className="text-xs text-rose-600">Pesan tidak terkirim</span>
         </div>
 
         <div className="bg-amber-50/70 p-5 rounded-xl border border-amber-200 shadow-sm">
@@ -261,7 +259,7 @@ export default function MonitoringNotifikasi() {
           <p className="text-2xl font-black text-amber-700 mt-2">
             {summary.pending}
           </p>
-          <span className="text-xs text-amber-600">Status PENDING</span>
+          <span className="text-xs text-amber-600">Menunggu giliran kirim</span>
         </div>
       </section>
 
@@ -281,9 +279,9 @@ export default function MonitoringNotifikasi() {
               className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             >
               <option value="ALL">Semua Status</option>
-              <option value="SENT">Terkirim (SENT)</option>
-              <option value="FAILED">Gagal (FAILED)</option>
-              <option value="PENDING">Antrean (PENDING)</option>
+              <option value="SENT">Terkirim</option>
+              <option value="FAILED">Gagal</option>
+              <option value="PENDING">Dalam Antrean</option>
             </select>
           </div>
 
@@ -299,15 +297,18 @@ export default function MonitoringNotifikasi() {
               }}
               className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             >
-              <option value="ALL">Semua Jenis Event</option>
-              <option value="TASK_ASSIGNED">Tugas Baru (TASK_ASSIGNED)</option>
-              <option value="DIRECTIVE_ASSIGNED">Arahan Kadiv (DIRECTIVE_ASSIGNED)</option>
-              <option value="TASK_SUBMITTED">Laporan Selesai (TASK_SUBMITTED)</option>
-              <option value="TASK_REVISION_REQUIRED">Revisi (TASK_REVISION_REQUIRED)</option>
-              <option value="TASK_VERIFIED">Verifikasi (TASK_VERIFIED)</option>
-              <option value="TASK_ESCALATED">Eskalasi (TASK_ESCALATED)</option>
-              <option value="DEADLINE_SOON">Peringatan Deadline (DEADLINE_SOON)</option>
-              <option value="OVERDUE">Terlambat (OVERDUE)</option>
+              <option value="ALL">Semua Jenis Notifikasi</option>
+              <option value="TASK_ASSIGNED">Penugasan Tugas Baru</option>
+              <option value="DIRECTIVE_ASSIGNED">Arahan dari Kadiv</option>
+              <option value="TASK_SUBMITTED">Laporan Selesai Diajukan</option>
+              <option value="TASK_REVISION_REQUIRED">Permintaan Revisi Tugas</option>
+              <option value="TASK_VERIFIED">Verifikasi Tugas Selesai</option>
+              <option value="TASK_ESCALATED">Eskalasi Tugas</option>
+              <option value="REPORT_SUBMITTED">Laporan Masalah Baru</option>
+              <option value="REPORT_REJECTED">Laporan Masalah Ditolak</option>
+              <option value="REPORT_RESUBMITTED">Revisi Laporan Terkirim</option>
+              <option value="DEADLINE_SOON">Peringatan Mendekati Batas Waktu</option>
+              <option value="OVERDUE">Peringatan Melewati Batas Waktu</option>
             </select>
           </div>
 
@@ -369,7 +370,7 @@ export default function MonitoringNotifikasi() {
                 <th className="py-3 px-4">Waktu Dibuat</th>
                 <th className="py-3 px-4">Tiket Terkait</th>
                 <th className="py-3 px-4">Penerima</th>
-                <th className="py-3 px-4">Jenis Event</th>
+                <th className="py-3 px-4">Jenis Notifikasi</th>
                 <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-center">Percobaan</th>
                 <th className="py-3 px-4">Keterangan / Error</th>
@@ -413,10 +414,10 @@ export default function MonitoringNotifikasi() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="font-semibold text-slate-800">
-                        {item.recipient?.nama || `User #${item.recipientId}`}
+                        {item.recipient?.nama || `Pengguna #${item.recipientId}`}
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono">
-                        ChatID: {item.telegramChatId || '-'}
+                        ID Telegram: {item.telegramChatId || '-'}
                       </div>
                     </td>
                     <td className="py-3 px-4">

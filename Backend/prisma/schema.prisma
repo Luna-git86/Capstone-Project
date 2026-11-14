@@ -31,24 +31,6 @@ enum StatusTiket {
   DITOLAK
 }
 
-enum NotificationChannel {
-  TELEGRAM
-}
-
-enum NotificationEventType {
-  TICKET_CREATED
-  STATUS_CHANGED
-  DEADLINE_REMINDER
-  DEADLINE_OVERDUE
-}
-
-enum NotificationStatus {
-  PENDING
-  SENT
-  FAILED
-  SKIPPED
-}
-
 model Divisi {
   id          Int          @id @default(autoincrement())
   nama        String       @unique
@@ -156,24 +138,22 @@ model TelegramLinkToken {
 }
 
 model NotificationLog {
-  id             Int                   @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   ticketId       Int
   recipientId    Int
-  channel        NotificationChannel   @default(TELEGRAM)
-  eventType      NotificationEventType @default(STATUS_CHANGED)
-  status         NotificationStatus    @default(SENT)
+  type           String    @default("STATUS_CHANGED")
+  status         String    @default("PENDING")
+  message        String    @db.Text
   telegramChatId String?
-  message        String                @db.Text
-  errorMessage   String?               @db.Text
-  dedupeKey      String?               @unique
+  dedupeKey      String?   @unique
+  attempts       Int       @default(0)
+  errorMessage   String?   @db.Text
   sentAt         DateTime?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  ticket         Ticket                @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  recipient      User                  @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  ticket         Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  recipient      User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
-  @@index([ticketId])
-  @@index([recipientId])
-  @@index([status])
-  @@index([eventType])
+  @@index([status, createdAt])
+  @@index([ticketId, type])
 }

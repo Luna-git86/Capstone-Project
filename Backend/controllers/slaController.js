@@ -208,6 +208,7 @@ async function getSlaReportData(req) {
     },
     ringkasan: {
       totalTiket,
+      totalSelesai: totalTiket,
       sesuaiSLA,
       terlambat,
       persentaseSLA,
@@ -234,6 +235,7 @@ const getLaporanSLA = async (req, res) => {
     return res.status(200).json({
       metadata: report.metadata,
       ringkasan: report.ringkasan,
+      summary: report.ringkasan,
       data: report.data,
       daftarDivisi,
     });

@@ -9,7 +9,7 @@ const DEFAULT_CONFIG = {
   maxRetryAttempts: 3,
   reminderHoursBeforeDeadline: Number(process.env.SLA_REMINDER_HOURS) || 24,
   timeZone: process.env.SLA_TIME_ZONE || 'Asia/Makassar',
-  cronSchedule: process.env.SLA_CRON_SCHEDULE || '*/15 * * * *',
+  cronSchedule: process.env.SLA_CRON_SCHEDULE || '* * * * *',
   enabledNotificationTypes: {
     DIRECTIVE_ASSIGNED: true,
     TASK_ASSIGNED: true,
@@ -18,6 +18,9 @@ const DEFAULT_CONFIG = {
     TASK_REVISION_REQUIRED: true,
     TASK_VERIFIED: true,
     TASK_ESCALATED: true,
+    REPORT_SUBMITTED: true,
+    REPORT_REJECTED: true,
+    REPORT_RESUBMITTED: true,
     DEADLINE_SOON: true,
     OVERDUE: true,
   },

@@ -63,7 +63,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onNavigate, onClose }) => {
     {
       title: 'Laporan Kinerja',
       path: '/laporan-sla',
-      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR'],
+      allowedRoles: ['DIREKTUR', 'KADIV', 'KOORDINATOR'],
     },
     {
       title: 'Analitik Kunjungan',

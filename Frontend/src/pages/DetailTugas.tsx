@@ -658,106 +658,13 @@ export default function DetailTugas() {
                  <h3 className="text-sm font-bold text-amber-900">Perlu Penanganan Kendala</h3>
                </div>
                
-               <div className="text-xs text-amber-800 mb-4 bg-amber-100/50 p-3 rounded-lg border border-amber-200/50 whitespace-pre-wrap leading-relaxed font-medium">
-                 Riwayat Kendala:
-                 {'\n'}{ticket.catatanRevisi}
-               </div>
+               <p className="text-xs text-amber-800 mb-4 bg-amber-100/50 p-2.5 rounded-lg border border-amber-200/50">
+                 Tugas ini dilaporkan terkendala oleh pelaksana (Alat rusak / Butuh biaya).
+               </p>
                
-               {isKoor ? (
-                 <div className="space-y-4">
-                   <form onSubmit={handleResponKendala} className="space-y-3">
-                     <div>
-                       <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">Respons / Solusi (Selesaikan Kendala) *</label>
-                       <textarea 
-                         rows={2} 
-                         value={responKendalaNote} 
-                         onChange={(e) => setResponKendalaNote(e.target.value)} 
-                         className="w-full p-2.5 border border-amber-200 bg-white rounded-xl text-xs" 
-                         placeholder="Berikan solusi (misal: Suku cadang sudah dibeli)..." 
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">Perpanjang Batas Waktu (Opsional)</label>
-                       <input 
-                         type="datetime-local" 
-                         value={newDeadline} 
-                         onChange={(e) => setNewDeadline(e.target.value)} 
-                         className="w-full p-2.5 border border-amber-200 bg-white rounded-xl text-xs" 
-                       />
-                       <p className="text-[9px] text-amber-700 mt-1">Biarkan kosong jika tidak mengubah batas waktu awal.</p>
-                     </div>
-                     <button type="submit" disabled={isSubmitting || !responKendalaNote.trim()} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition">
-                        Kendala Selesai (Lanjut Dikerjakan)
-                     </button>
-                   </form>
-
-                   <div className="pt-3 border-t border-amber-200/50">
-                     <details className="group">
-                        <summary className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer list-none text-center transition">
-                          Eskalasi Lanjut ke Kadiv
-                        </summary>
-                        <div className="mt-3 space-y-2">
-                          <textarea rows={2} value={eskalasiLanjutNote} onChange={(e) => setEskalasiLanjutNote(e.target.value)} className="w-full p-2.5 border border-amber-300 bg-amber-50 rounded-xl text-xs" placeholder="Catatan untuk Kadiv: Mengapa butuh eskalasi lanjut?" />
-                          <button type="button" onClick={handleEskalasiLanjut} disabled={isSubmitting} className="w-full py-2 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs rounded-xl shadow-sm transition">
-                            Kirim Eskalasi Lanjutan
-                          </button>
-                        </div>
-                     </details>
-                   </div>
-                 </div>
-
-               ) : isKadiv ? (
-                 <div className="space-y-4">
-                   <form onSubmit={handleResponKendala} className="space-y-3">
-                     <div>
-                       <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">Respons / Keputusan Kadiv *</label>
-                       <textarea 
-                         rows={2} 
-                         value={responKendalaNote} 
-                         onChange={(e) => setResponKendalaNote(e.target.value)} 
-                         className="w-full p-2.5 border border-amber-200 bg-white rounded-xl text-xs" 
-                         placeholder="Berikan keputusan/persetujuan..." 
-                       />
-                     </div>
-                     <button type="submit" disabled={isSubmitting || !responKendalaNote.trim()} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition">
-                        Selesaikan Kendala (Kembalikan ke DIPROSES)
-                     </button>
-                   </form>
-
-                   <div className="pt-3 border-t border-amber-200/50">
-                     <details className="group">
-                        <summary className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer list-none text-center transition">
-                          Eskalasi Lanjut ke Direktur
-                        </summary>
-                        <div className="mt-3 space-y-2">
-                          <textarea rows={2} value={eskalasiLanjutNote} onChange={(e) => setEskalasiLanjutNote(e.target.value)} className="w-full p-2.5 border border-amber-300 bg-amber-50 rounded-xl text-xs" placeholder="Catatan untuk Direktur: Mengapa butuh putusan pimpinan?" />
-                          <button type="button" onClick={handleEskalasiLanjut} disabled={isSubmitting} className="w-full py-2 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs rounded-xl shadow-sm transition">
-                            Kirim Eskalasi ke Direktur
-                          </button>
-                        </div>
-                     </details>
-                   </div>
-                 </div>
-
-               ) : (
-                 <div className="space-y-4">
-                   <form onSubmit={handleResponKendala} className="space-y-3">
-                     <div>
-                       <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">Putusan Direktur *</label>
-                       <textarea 
-                         rows={2} 
-                         value={responKendalaNote} 
-                         onChange={(e) => setResponKendalaNote(e.target.value)} 
-                         className="w-full p-2.5 border border-amber-200 bg-white rounded-xl text-xs" 
-                         placeholder="Berikan instruksi atau putusan final dari Direksi..." 
-                       />
-                     </div>
-                     <button type="submit" disabled={isSubmitting || !responKendalaNote.trim()} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition">
-                        Berikan Putusan (Kembalikan ke DIPROSES)
-                     </button>
-                   </form>
-                 </div>
-               )}
+               <button onClick={() => navigate('/daftar-eskalasi-kadiv')} className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm">
+                  Proses Pengajuan Eskalasi
+               </button>
              </div>
           )}
 
