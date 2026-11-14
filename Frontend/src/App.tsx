@@ -1,11 +1,6 @@
 // Frontend/src/App.tsx
-<<<<<<< HEAD
-import { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-=======
 import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
->>>>>>> 4c60d4cc61f9920c3e7807fa20e7b96c56a35161
 import { getAuthToken, getAuthRole } from './utils/authStorage';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -84,13 +79,37 @@ const RoleProtectedRoute = ({ allowedRoles }: { allowedRoles: string[] }) => {
   return <Outlet />;
 };
 
+
+// Pengatur Judul Tab Browser Dinamis Sesuai Status Otentikasi dan Role
+const DynamicDocumentTitle = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    const token = getAuthToken();
+    const role = getAuthRole();
+
+    if (location.pathname === '/login' || !token) {
+      document.title = 'Selamat datang di menu login';
+    } else {
+      const roleMap: Record<string, string> = {
+        ADMIN: 'Admin',
+        DIREKTUR: 'Direktur',
+        KADIV: 'Kepala Divisi',
+        KOORDINATOR: 'Koordinator',
+        STAF: 'Staf',
+      };
+      const roleLabel = role ? (roleMap[role] || role) : 'Pengguna';
+      document.title = `${roleLabel} - RSIA Qurrata A'yun`;
+    }
+  }, [location]);
+
+  return null;
+};
+
 function App() {
   return (
     <BrowserRouter>
-<<<<<<< HEAD
-=======
       <DynamicDocumentTitle />
->>>>>>> 4c60d4cc61f9920c3e7807fa20e7b96c56a35161
       <Suspense fallback={<RouteSuspenseFallback />}>
         <Routes>
         {/* Saat pertama kali membuka web ('/'), selalu arahkan ke halaman Login */}
@@ -143,7 +162,7 @@ function App() {
             </Route>
 
             {/* 8. Laporan Kinerja / SLA */}
-            <Route element={<RoleProtectedRoute allowedRoles={['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR']} />}>
+            <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR']} />}>
               <Route path="/laporan-sla" element={<LaporanSLA />} />
             </Route>
 
@@ -162,6 +181,7 @@ function App() {
               <Route path="/detail-tugas/:id" element={<DetailTugas />} />
               <Route path="/riwayat-laporan" element={<RiwayatLaporan />} />
               <Route path="/detail-laporan/:id" element={<DetailLaporan />} />
+              <Route path="/daftar-eskalasi-kadiv" element={<Navigate to="/semua-tugas" replace />} />
             </Route>
           </Route>
         </Route>

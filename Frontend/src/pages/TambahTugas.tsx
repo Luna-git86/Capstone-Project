@@ -120,12 +120,6 @@ export default function TambahTugas() {
     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
   };
 
-  const getMinDateTimeLocal = () => {
-  const d = new Date();
-  const tzOffset = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
-};
-
   useEffect(() => {
     const loadInitialData = async () => {
       try {
@@ -302,12 +296,6 @@ export default function TambahTugas() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const targetDeadline = new Date(formData.deadline);
-    if (targetDeadline < new Date()) {
-      return setError('Batas waktu target tidak boleh diisi tanggal atau waktu yang sudah berlalu.');
-    }
-
     if (formData.pelaksanaIds.length === 0) {
       setError('Wajib menunjuk minimal 1 staf pelaksana untuk tugas ini.');
       return;
@@ -432,76 +420,12 @@ export default function TambahTugas() {
           </div>
         )}
 
-<<<<<<< HEAD
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Judul Tugas / Arahan *</label>
-            <input type="text" name="judul" value={formData.judul} onChange={handleChange} required placeholder="Contoh: Perbaikan & Cuci AC Ruang Nifas" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-slate-50" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Lokasi / Area</label>
-            <input type="text" name="lokasi" value={formData.lokasi} onChange={handleChange} placeholder="Contoh: Gedung Utama Lt. 2" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-slate-50" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tingkat Prioritas *</label>
-            <select name="prioritas" value={formData.prioritas} onChange={handleChange} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-600 focus:border-blue-600">
-              <option value="LOW">Biasa (Low)</option>
-              <option value="MEDIUM">Penting (Medium)</option>
-              <option value="HIGH">Darurat / Segera (High)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Batas Waktu Target *</label>
-            <input 
-              type="datetime-local" 
-              name="deadline" 
-              value={formData.deadline} 
-              onChange={handleChange} 
-              min={getMinDateTimeLocal()}
-              step="60"
-              required 
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-600 bg-slate-50 focus:border-blue-600" 
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Instruksi Detail Pekerjaan *</label>
-          <textarea name="deskripsi" rows={3} value={formData.deskripsi} onChange={handleChange} required placeholder="Tuliskan standar hasil kerja yang Anda harapkan..." className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 bg-slate-50 focus:border-blue-600 leading-relaxed" />
-        </div>
-
-        {/* ZONA UPLOAD FOTO REFERENSI/INSTRUKSI (DRAG & DROP) */}
-        <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-            Lampiran Foto Referensi / Instruksi (Opsional)
-          </label>
-          
-          <div 
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
-            className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-all ${
-              isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-slate-400'
-            }`}
-          >
-            {formData.fotoInstruksi ? (
-              <div className="w-full">
-                <img src={formData.fotoInstruksi} alt="Preview Bukti" className="h-40 mx-auto object-cover rounded-lg border border-slate-200 shadow-sm mb-3" />
-                <p className="text-xs font-bold text-slate-700 mb-2 truncate px-4">{previewName}</p>
-                <button type="button" onClick={hapusFoto} className="px-3 py-1 bg-rose-100 text-rose-700 text-[10px] font-bold uppercase rounded-lg hover:bg-rose-200 transition">
-                  Hapus & Ganti Foto
-                </button>
-=======
         {/* Sukses Alert */}
         {successCount > 0 && (
           <div className="p-6 bg-brand-deep text-white rounded-3xl shadow-lg shadow-brand-deep/20 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-6 h-6 text-white" />
->>>>>>> 4c60d4cc61f9920c3e7807fa20e7b96c56a35161
               </div>
               <div>
                 <h3 className="text-base font-extrabold">Penugasan Berhasil Diterbitkan!</h3>

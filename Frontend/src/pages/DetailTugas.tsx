@@ -317,60 +317,6 @@ export default function DetailTugas() {
     }
   };
 
-  // State untuk respons kendala
-  const [responKendalaNote, setResponKendalaNote] = useState('');
-  const [newDeadline, setNewDeadline] = useState(''); // <--- State baru
-  const [eskalasiLanjutNote, setEskalasiLanjutNote] = useState('');
-
-  const handleResponKendala = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!responKendalaNote.trim()) return alert('Tuliskan respons atau solusi untuk staf.');
-    
-    setIsSubmitting(true);
-    try {
-      const payload: any = { 
-        status: 'DIPROSES', 
-        catatanRevisi: `[Respons Koordinator]: ${responKendalaNote.trim()}` 
-      };
-
-      // Jika input deadline diisi, tambahkan ke payload
-      if (newDeadline) {
-        payload.deadline = new Date(newDeadline).toISOString();
-      }
-
-      await api.patch(`/tickets/${id}/status`, payload);
-      alert('Respons terkirim dan tugas dilanjutkan (DIPROSES).');
-      setResponKendalaNote('');
-      setNewDeadline(''); // Reset form
-      fetchDetail(true);
-    } catch (error: any) { 
-      alert(error.response?.data?.message || 'Gagal mengirim respons kendala.'); 
-    } finally { 
-      setIsSubmitting(false); 
-    }
-  };
-
-  const handleEskalasiLanjut = async () => {
-    if (!eskalasiLanjutNote.trim()) return alert('Tuliskan catatan eskalasi untuk atasan.');
-    setIsSubmitting(true);
-    try {
-      // Menggabungkan catatan staf lama dengan catatan dari atasan yang mengeskalasi
-      const payload = {
-        status: 'HOLD_ESKALASI',
-        catatanRevisi: `${ticket?.catatanRevisi || ''}\n\n[Eskalasi ${userRole}]: ${eskalasiLanjutNote.trim()}`
-      };
-
-      await api.patch(`/tickets/${id}/status`, payload);
-      alert('Kendala berhasil dieskalasikan ke tingkat selanjutnya.');
-      setEskalasiLanjutNote('');
-      fetchDetail(true);
-    } catch (error: any) {
-      alert(error.response?.data?.message || 'Gagal meneruskan eskalasi.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="py-20 text-center space-y-3">
@@ -864,78 +810,122 @@ export default function DetailTugas() {
                     <X className="w-4 h-4" />
                     <span>Minta Revisi Ulang</span>
                   </button>
-                ) : (
-                  <form onSubmit={handleDelegasiSubmit} className="space-y-3 mt-2 border-t border-slate-100 pt-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Divisi Pelaksana *</label>
-                      <select value={triageForm.divisiId} onChange={(e) => setTriageForm({ ...triageForm, divisiId: e.target.value, pelaksanaId: '' })} required className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs">
-                        <option value="">-- Pilih Divisi --</option>
-                        {divisiList.map((d) => (<option key={d.id} value={String(d.id)}>{d.nama}</option>))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Pilih Staf / Pelaksana *</label>
-                      <select value={triageForm.pelaksanaId} onChange={(e) => setTriageForm({ ...triageForm, pelaksanaId: e.target.value })} required className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs">
-                        <option value="">-- Pilih Pelaksana --</option>
-                        {staffList.filter((s) => !triageForm.divisiId || String(s.divisiId) === String(triageForm.divisiId)).map((s) => (<option key={s.id} value={String(s.id)}>{s.nama}</option>))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Batas Waktu *</label>
-                      <input type="datetime-local" value={triageForm.deadline} onChange={(e) => setTriageForm({ ...triageForm, deadline: e.target.value })} required className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs" />
-                    </div>
-                    <div className="flex justify-end gap-2 pt-2">
-                      <button type="button" onClick={() => setShowDelegasiForm(false)} className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg">Batal</button>
-                      <button type="submit" disabled={isSubmitting} className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm">
-                        {isSubmitting ? 'Menyimpan...' : 'Simpan Delegasi'}
-                      </button>
-                    </div>
-                  </form>
-                )
-              )}
-            </div>
-          )}
-
-          {/* C. ATASAN: EVALUASI HASIL KERJA */}
-          {isAtasan && ticket.status === 'MENUNGGU_VALIDASI' && (
-            <div className="bg-white p-5 rounded-2xl border-2 border-purple-200 shadow-sm">
-              <h3 className="text-sm font-bold text-purple-800 mb-2 border-b border-purple-100 pb-2">Evaluasi Akhir</h3>
-              <p className="text-[10px] text-slate-500 mb-3">Tinjau foto bukti sebelum memberikan persetujuan.</p>
-              
-              <textarea rows={2} value={evaluasiNote} onChange={(e) => setEvaluasiNote(e.target.value)} className="w-full p-2.5 border border-slate-200 bg-slate-50 rounded-xl text-xs mb-3" placeholder="Tuliskan alasan revisi di sini (jika menolak)..." />
-              
-              <div className="flex flex-col gap-2">
-                <button onClick={() => handleEvaluasi('SELESAI')} disabled={isSubmitting} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm">
-                  Setujui (Tugas Selesai)
-                </button>
-                <button onClick={() => handleEvaluasi('DIPROSES')} disabled={isSubmitting} className="w-full py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-xs rounded-xl transition">
-                  Tolak (Minta Direvisi)
-                </button>
+                </div>
               </div>
-            </div>
-          )}
-          
-          {/* D. KADIV/DIREKTUR: ESKALASI */}
-          {isKadivDir && ticket.status === 'HOLD_ESKALASI' && (
-             <div className="bg-amber-50 p-5 rounded-2xl border-2 border-amber-300 shadow-sm">
-               <div className="flex items-center gap-2 mb-2">
-                 <span className="flex h-3 w-3 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
-                 </span>
-                 <h3 className="text-sm font-bold text-amber-900">Perlu Keputusan Manajerial</h3>
-               </div>
-               
-               <p className="text-xs text-amber-800 mb-4 bg-amber-100/50 p-2.5 rounded-lg border border-amber-200/50">
-                 Tugas ini dilaporkan terkendala oleh pelaksana (Alat rusak / Butuh biaya).
-               </p>
-               
-               <button onClick={() => navigate('/semua-tugas')} className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm">
-                  Proses Pengajuan Eskalasi
-               </button>
-             </div>
-          )}
+            )}
 
+            {/* C. ATASAN: DELEGASI TUGAS */}
+            {(isKoor || isKadiv) &&
+              (ticket.status === 'MENUNGGU_TRIASE' || ticket.status === 'DIPROSES') && (
+                <div className="bg-clinical-surface p-5 rounded-3xl border border-clinical-border shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-extrabold text-clinical-ink">
+                      Pendelegasian Tugas
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowDelegasiForm((prev) => !prev)}
+                      className="text-xs font-bold text-brand-deep hover:underline"
+                    >
+                      {showDelegasiForm ? 'Tutup Form' : 'Ubah Pelaksana'}
+                    </button>
+                  </div>
+
+                  {showDelegasiForm ? (
+                    <form onSubmit={handleDelegasiSubmit} className="space-y-3 pt-2 border-t border-clinical-border/60">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                          Divisi Pelaksana *
+                        </label>
+                        <select
+                          value={triageForm.divisiId}
+                          onChange={(e) =>
+                            setTriageForm({ ...triageForm, divisiId: e.target.value, pelaksanaId: '' })
+                          }
+                          required
+                          className="w-full h-10 px-3 border border-clinical-border bg-slate-50 rounded-xl text-xs font-medium"
+                        >
+                          <option value="">-- Pilih Divisi --</option>
+                          {divisiList.map((d) => (
+                            <option key={d.id} value={String(d.id)}>
+                              {d.nama}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                          Pilih Staf Pelaksana *
+                        </label>
+                        <select
+                          value={triageForm.pelaksanaId}
+                          onChange={(e) => setTriageForm({ ...triageForm, pelaksanaId: e.target.value })}
+                          required
+                          className="w-full h-10 px-3 border border-clinical-border bg-slate-50 rounded-xl text-xs font-medium"
+                        >
+                          <option value="">-- Pilih Staf --</option>
+                          {staffList
+                            .filter(
+                              (s) => !triageForm.divisiId || String(s.divisiId) === String(triageForm.divisiId)
+                            )
+                            .map((s) => (
+                              <option key={s.id} value={String(s.id)}>
+                                {s.nama} ({s.role})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                          Batas Waktu (Deadline) *
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={triageForm.deadline}
+                          onChange={(e) => setTriageForm({ ...triageForm, deadline: e.target.value })}
+                          required
+                          className="w-full h-10 px-3 border border-clinical-border bg-slate-50 rounded-xl text-xs font-medium"
+                        />
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowDelegasiForm(false)}
+                          className="flex-1 h-10 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="flex-1 h-10 text-xs font-bold text-white bg-brand-deep hover:bg-brand-deeper rounded-xl shadow-xs"
+                        >
+                          {isSubmitting ? 'Menyimpan...' : 'Simpan'}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          `/tambah-tugas?parentId=${ticket.id}&parentTitle=${encodeURIComponent(
+                            ticket.judul
+                          )}`
+                        )
+                      }
+                      className="w-full h-12 bg-brand-deep hover:bg-brand-deeper active:scale-98 text-white font-extrabold text-xs rounded-2xl shadow-xs transition flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Buat Tiket Turunan Baru</span>
+                    </button>
+                  )}
+                </div>
+              )}
+          </div>
         </div>
       </div>
     </div>
