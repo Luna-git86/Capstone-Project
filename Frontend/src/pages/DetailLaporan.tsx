@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { getAuthRole, getAuthUserId } from '../utils/authStorage';
+import { getAuthRole, getAuthUserId, getAuthDivisiId } from '../utils/authStorage';
 
 interface TicketData {
   id: number;
@@ -52,6 +52,7 @@ export default function DetailLaporan() {
 // Data User Login
   const userRole = getAuthRole() || 'STAF';
   const userIdFromAuth = getAuthUserId();
+  const divisiIdFromAuth = getAuthDivisiId();
   const currentUserId = userIdFromAuth ? Number(userIdFromAuth) : null;
 
   // Modal Penolakan State
@@ -98,14 +99,24 @@ export default function DetailLaporan() {
     }
   };
 
-  const isAuthorizedKoor = userRole === 'KOORDINATOR' && ticket?.status === 'MENUNGGU_TRIASE';
-  
-  // Logika Otorisasi Revisi: 
+  // Logika Otorisasi Revisi & Kepemilikan:
   // HANYA berlaku jika user yang sedang login adalah BENAR-BENAR pembuat laporan tersebut.
   const isPembuatLaporan = Boolean(
     (currentUserId && Number(ticket?.pembuatId) === currentUserId) ||
     (currentUserId && Number(ticket?.pembuat?.id) === currentUserId)
   );
+
+  const isDivisiSama = Boolean(
+    divisiIdFromAuth &&
+    ticket?.divisiId &&
+    Number(ticket.divisiId) === Number(divisiIdFromAuth)
+  );
+
+  const isAuthorizedKoor =
+    userRole === 'KOORDINATOR' &&
+    ticket?.status === 'MENUNGGU_TRIASE' &&
+    !isPembuatLaporan &&
+    isDivisiSama;
 
   const handleTolakSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

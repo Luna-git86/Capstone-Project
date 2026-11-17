@@ -449,7 +449,7 @@ export default function RiwayatTugas() {
                           onClick={() => navigate(`/detail-tugas/${task.id}`)}
                           className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-white bg-[#0f5c43] hover:bg-[#0c4935] rounded-xl shadow-sm transition-all"
                         >
-                          <span>Tiket</span>
+                          <span> Lihat Detail </span>
                           <ExternalLink className="w-3.5 h-3.5" />
                         </button>
                       </div>

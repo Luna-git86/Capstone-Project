@@ -332,7 +332,7 @@ export default function LaporkanMasalah() {
             {/* Nama Masalah */}
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-clinical-ink">
-                Masalah / Kerusakan yang Ditemukan *
+                Judul : Masalah / Kerusakan yang Ditemukan *
               </label>
               <input
                 type="text"
@@ -470,7 +470,7 @@ export default function LaporkanMasalah() {
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>Ajukan Tiket Keluhan Sekarang</span>
+                    <span>Laporkan Masalah</span>
                   </>
                 )}
               </button>
