@@ -88,12 +88,12 @@ export const getAuthUserDivisiId = (): string => {
 export const getAuthDivisiId = getAuthUserDivisiId;
 
 const DIVISI_FALLBACK_MAP: Record<string, string> = {
-  '1': 'Pelayanan Medis',
-  '2': 'Penunjang Medis',
-  '3': 'Keperawatan & Kebidanan',
-  '4': 'Umum & IT',
-  '5': 'Administrasi & Keuangan',
-  '6': 'HRD & Marketing',
+  '1': 'Divisi Umum & Rumah Tangga',
+  '2': 'Divisi IT & SIMRS',
+  '3': 'Divisi Sarana & Prasarana (IPS-RS)',
+  '4': 'Divisi Pelayanan Medis & Keperawatan',
+  '5': 'Divisi Penunjang Medis',
+  '6': 'Divisi Administrasi & Keuangan',
 };
 
 /**

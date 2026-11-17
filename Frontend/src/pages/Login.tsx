@@ -49,7 +49,7 @@ const Login: React.FC = () => {
         userName: user.nama || user.noHp,
         telegramLinked: user.telegramLinked,
         userDivisiId: user.divisiId,
-        userDivisiNama: user.namaDivisi || null,
+        userDivisiNama: user.divisi || user.namaDivisi || null,
       });
 
       const target = getDashboardByRole(user.role);
@@ -58,7 +58,7 @@ const Login: React.FC = () => {
       setLoginSuccess({
         nama: user.nama || user.noHp,
         role: user.role,
-        divisi: user.namaDivisi || null,
+        divisi: user.divisi || user.namaDivisi || null,
         targetDashboard: target,
       });
 
