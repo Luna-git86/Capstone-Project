@@ -35,6 +35,7 @@ interface Ticket {
   pembuat?: { id: number; nama: string; role: string };
   pelaksana?: { id: number; nama: string; role: string };
   divisi?: { id: number; nama: string };
+  parentTicket?: { id: number; jenisTiket?: string; pembuat?: { role: string } } | null;
 }
 
 interface Divisi {
@@ -589,6 +590,9 @@ export default function SemuaTugas() {
                 const badge = getStatusBadge(t.status);
                 const dlDate = t.deadline ? new Date(t.deadline) : null;
                 const isOverdue = dlDate ? new Date() > dlDate : false;
+                const isArahanDivisi =
+                  ['KADIV', 'DIREKTUR'].includes(t.pembuat?.role || '') ||
+                  ['KADIV', 'DIREKTUR'].includes(t.parentTicket?.pembuat?.role || '');
 
                 const priorityBorder = isOverdue
                   ? 'border-l-rose-600'
@@ -630,6 +634,13 @@ export default function SemuaTugas() {
                         >
                           {t.prioritas}
                         </span>
+
+                        {isArahanDivisi && (
+                          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-md bg-purple-100 text-purple-800 border border-purple-200 uppercase tracking-wider">
+                            Arahan Divisi
+                          </span>
+                        )}
+                        
                       </div>
 
                       <div className="flex items-center gap-1.5">

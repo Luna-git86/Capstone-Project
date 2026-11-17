@@ -6,6 +6,7 @@ import {
   Check,
   CheckCircle2,
   MapPin,
+  Maximize2,
   MessageCircle,
   Plus,
   Upload,
@@ -119,6 +120,7 @@ export default function DetailTugas() {
   const [kendalaText, setKendalaText] = useState('');
   const [evaluasiNote, setEvaluasiNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const [showDelegasiForm, setShowDelegasiForm] = useState(false);
   const [triageForm, setTriageForm] = useState({
@@ -465,18 +467,27 @@ export default function DetailTugas() {
                   <p className="text-xs font-bold text-clinical-ink">
                     Foto Bukti Masalah / Panduan Awal:
                   </p>
-                  <a
-                    href={ticket.fotoInstruksi}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block group rounded-2xl overflow-hidden border border-clinical-border shadow-xs hover:shadow-md transition max-w-md"
+                  <div
+                    onClick={() => setPreviewImage(ticket.fotoInstruksi!)}
+                    className="relative group cursor-pointer rounded-2xl overflow-hidden border border-clinical-border shadow-xs hover:shadow-md transition max-w-md bg-slate-50"
                   >
                     <img
                       src={ticket.fotoInstruksi}
                       alt="Referensi Tugas"
                       className="w-full h-48 sm:h-60 object-cover group-hover:scale-102 transition duration-300"
                     />
-                  </a>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewImage(ticket.fotoInstruksi!);
+                      }}
+                      title="Perbesar Gambar"
+                      className="absolute top-3 right-3 p-2 bg-slate-900/75 hover:bg-slate-900 text-white rounded-xl shadow-md backdrop-blur-xs transition"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -552,18 +563,27 @@ export default function DetailTugas() {
                       <p className="text-[11px] font-bold text-slate-400 uppercase mb-2">
                         Foto Bukti Selesai
                       </p>
-                      <a
-                        href={ticket.fotoBukti}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded-2xl overflow-hidden border border-clinical-border shadow-xs"
+                      <div
+                        onClick={() => setPreviewImage(ticket.fotoBukti!)}
+                        className="relative group cursor-pointer rounded-2xl overflow-hidden border border-clinical-border shadow-xs bg-slate-50"
                       >
                         <img
                           src={ticket.fotoBukti}
                           alt="Bukti Selesai"
-                          className="h-44 w-full object-cover"
+                          className="h-44 w-full object-cover group-hover:scale-102 transition duration-300"
                         />
-                      </a>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewImage(ticket.fotoBukti!);
+                          }}
+                          title="Perbesar Gambar"
+                          className="absolute top-2.5 right-2.5 p-2 bg-slate-900/75 hover:bg-slate-900 text-white rounded-xl shadow-md backdrop-blur-xs transition"
+                        >
+                          <Maximize2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -643,7 +663,7 @@ export default function DetailTugas() {
                   <User className="w-5 h-5 text-slate-500" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">Pelapor / Pembuat</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">Ditugaskan Oleh</p>
                   <p className="text-xs font-bold text-clinical-ink truncate">
                     {ticket.pembuat?.nama || '-'}
                   </p>
@@ -709,11 +729,27 @@ export default function DetailTugas() {
                       className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-brand-deep"
                     />
                     {fotoBase64 && (
-                      <img
-                        src={fotoBase64}
-                        alt="Preview Selesai"
-                        className="mt-2 h-28 w-full object-cover rounded-2xl border border-clinical-border"
-                      />
+                      <div
+                        onClick={() => setPreviewImage(fotoBase64)}
+                        className="relative group cursor-pointer mt-2 rounded-2xl overflow-hidden border border-clinical-border"
+                      >
+                        <img
+                          src={fotoBase64}
+                          alt="Preview Selesai"
+                          className="h-28 w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewImage(fotoBase64);
+                          }}
+                          title="Perbesar Gambar"
+                          className="absolute top-2 right-2 p-1.5 bg-slate-900/75 hover:bg-slate-900 text-white rounded-lg shadow-xs transition"
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -928,6 +964,33 @@ export default function DetailTugas() {
           </div>
         </div>
       </div>
+
+      {/* Modal Lightbox Perbesar Gambar */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-xs"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div
+            className="relative max-w-4xl w-full bg-slate-900 rounded-2xl overflow-hidden p-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewImage(null)}
+              title="Tutup"
+              className="absolute top-4 right-4 z-10 p-2 bg-black/60 hover:bg-black text-white rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={previewImage}
+              alt="Pratinjau Gambar Diperbesar"
+              className="w-full max-h-[85vh] object-contain rounded-xl bg-white"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -420,7 +420,7 @@ export default function DetailLaporan() {
                         onClick={() => setIsEditing(true)}
                         className="mt-5 px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-sm transition"
                       >
-                        Revisi & Kirim Ulang Laporan Ini
+                        Revisi Laporan Ini
                       </button>
                     )}
                   </>
