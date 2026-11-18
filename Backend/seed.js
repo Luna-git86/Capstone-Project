@@ -69,6 +69,22 @@ async function main() {
       role: 'STAF',
       divisiId: divisiMap['Divisi IT & SIMRS'],
     },
+    {
+      nama: 'Penguji UAT RSIA / POLNES',
+      noHp: '081100000006',
+      email: 'penguji@rsia.com',
+      password: defaultPassword,
+      role: 'PENGUJI',
+      divisiId: null,
+    },
+    {
+      nama: 'Kepala Divisi Pelayanan Medis',
+      noHp: '081100000007',
+      email: 'kadiv.medis@rsia.com',
+      password: defaultPassword,
+      role: 'KADIV',
+      divisiId: divisiMap['Divisi Pelayanan Medis & Keperawatan'],
+    },
   ];
 
   for (const u of defaultUsers) {
@@ -85,7 +101,7 @@ async function main() {
     });
   }
 
-  console.log('✅ Seeding selesai! Seluruh Divisi dan 5 Akun Jabatan siap digunakan.');
+  console.log('✅ Seeding selesai! Seluruh Divisi dan 7 Akun Jabatan siap digunakan.');
   console.log('   Password default semua akun: password123');
 }
 

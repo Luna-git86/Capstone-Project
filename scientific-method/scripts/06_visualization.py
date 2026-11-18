@@ -293,8 +293,7 @@ def fig6_model_metrics_comparison(eval_metrics: dict, out_path: Path):
     point_m = eval_metrics["point_metrics"]
     models = list(point_m.keys())
     short_map = {
-        "Seasonal Naive": "Seasonal Naive",
-        "DOW Mean (4W)": "DOW Mean (4W)",
+        "Seasonal Naive": "Seasonal Naive (Lag-7)",
         "Negative Binomial GLM": "Negative Binomial GLM",
         "HistGradientBoosting": "HistGradientBoosting (L1)",
     }
@@ -302,8 +301,8 @@ def fig6_model_metrics_comparison(eval_metrics: dict, out_path: Path):
 
     mae_vals = [point_m[m]["MAE"] for m in models]
     rmse_vals = [point_m[m]["RMSE"] for m in models]
-    mase_vals = [point_m[m]["MASE"] for m in models]
     wape_vals = [point_m[m]["WAPE_pct"] for m in models]
+    bias_vals = [point_m[m]["Mean_Bias"] for m in models]
 
     x = np.arange(len(labels))
     width = 0.35
@@ -312,13 +311,13 @@ def fig6_model_metrics_comparison(eval_metrics: dict, out_path: Path):
     best_name = eval_metrics.get("best_model_total_h7", "Negative Binomial GLM")
     best_metrics = point_m.get(best_name, {})
     axes[0].bar(x - width/2, mae_vals, width, label="MAE (Rata-rata Galat Pasien)", color=COLORS["teal"])
-    axes[0].bar(x + width/2, rmse_vals, width, label="RMSE (Sensitif Lonjakan Galat)", color=COLORS["navy"])
+    axes[0].bar(x + width/2, rmse_vals, width, label="RMSE (Simpangan Kuadrat)", color=COLORS["navy"])
     axes[0].set_title(
         f"Perbandingan Galat Mutlak (MAE) dan Galat Kuadrat (RMSE)\n"
         f"Terbaik: {best_name} (MAE: {best_metrics.get('MAE', 0):.3f} | RMSE: {best_metrics.get('RMSE', 0):.3f})"
     )
     axes[0].set_xticks(x)
-    axes[0].set_xticklabels(labels, rotation=15, ha="right")
+    axes[0].set_xticklabels(labels, rotation=12, ha="right")
     axes[0].set_ylabel("Nilai Galat (Pasien / Hari)")
     axes[0].legend(loc="upper right")
 
@@ -326,26 +325,18 @@ def fig6_model_metrics_comparison(eval_metrics: dict, out_path: Path):
         axes[0].text(x[i] - width/2, mae_vals[i] + 0.15, f"{mae_vals[i]:.2f}", ha="center", fontsize=8)
         axes[0].text(x[i] + width/2, rmse_vals[i] + 0.15, f"{rmse_vals[i]:.2f}", ha="center", fontsize=8)
 
-    # Subplot B: MASE (Target < 1.0) dan WAPE (%)
+    # Subplot B: Persentase Kesalahan Relatif (WAPE %)
     ax2 = axes[1]
-    ax2_twin = ax2.twinx()
-
-    b1 = ax2.bar(x - width/2, mase_vals, width, label="MASE (Target < 1,0)", color=COLORS["primary"])
-    l1 = ax2_twin.plot(x + width/2, wape_vals, color=COLORS["danger"], marker="s", linewidth=2, label="WAPE (%)")
-
-    ax2.axhline(1.0, color="red", linestyle="--", alpha=0.7, label="Ambang Batas MASE = 1,0")
-    ax2.set_title("Skala Relatif: MASE & Persentase WAPE\nSemua Model Mengalahkan Seasonal Naive (MASE < 1,0)")
+    colors_wape = [COLORS["gray"] if m == "Seasonal Naive" else COLORS["primary"] for m in models]
+    bars_w = ax2.bar(x, wape_vals, width=0.5, color=colors_wape, alpha=0.9)
+    ax2.set_title("Persentase Kesalahan Relatif (WAPE %)\nSemakin Rendah Semakin Akurat")
     ax2.set_xticks(x)
-    ax2.set_xticklabels(labels, rotation=15, ha="right")
-    ax2.set_ylabel("Nilai MASE")
-    ax2_twin.set_ylabel("WAPE (%)")
-    ax2.set_ylim(0, 1.2)
-    ax2_twin.set_ylim(15, 35)
+    ax2.set_xticklabels(labels, rotation=12, ha="right")
+    ax2.set_ylabel("WAPE (%)")
+    ax2.set_ylim(0, max(wape_vals) * 1.25)
 
-    # Gabung legenda
-    lines, labels_leg = ax2.get_legend_handles_labels()
-    lines2, labels_leg2 = ax2_twin.get_legend_handles_labels()
-    ax2.legend(lines + lines2, labels_leg + labels_leg2, loc="upper right")
+    for i, wv in enumerate(wape_vals):
+        ax2.text(x[i], wv + 0.5, f"{wv:.2f}%\n(Bias {bias_vals[i]:+.2f})", ha="center", fontsize=8.5, fontweight="bold")
 
     plt.tight_layout()
     plt.savefig(out_path, dpi=300)
@@ -385,42 +376,19 @@ def fig7_feature_importance(eval_metrics: dict, model_meta: dict, out_path: Path
     for i, v in enumerate(f_vals):
         axes[0].text(v + 0.02, i, f"+{v:.2f}", va="center", fontsize=8.5)
 
-    # Subplot B: Efek Faktor Kalender & Libur (IRR Negative Binomial GLM)
-    irr_dict = eval_metrics.get("glm_nb_irr_table", {})
-    cal_factors = ["is_weekend", "is_holiday_weekday", "is_ramadan", "is_post_holiday_workday", "is_monday"]
-    cal_labels = [
-        "Akhir Pekan (Sabtu-Minggu)",
-        "Hari Libur Kerja",
-        "Bulan Puasa Ramadan",
-        "Hari Kerja Pasca-Libur",
-        "Hari Senin (Puncak Jadwal)",
-    ]
+    # Subplot B: Galat MAE per Hari dalam Pekan (Senin - Minggu)
+    dow_dict = eval_metrics.get("day_of_week_metrics", {})
+    day_order = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+    day_labels = [d for d in day_order if d in dow_dict]
+    day_maes = [dow_dict[d]["MAE"] for d in day_labels]
 
-    pct_effects = []
-    ci_lows = []
-    ci_highs = []
-    for cf in cal_factors:
-        info = irr_dict.get(cf, {"irr": 1.0, "irr_ci95_low": 1.0, "irr_ci95_high": 1.0})
-        irr = info["irr"]
-        pct = (irr - 1.0) * 100.0
-        pct_low = (info["irr_ci95_low"] - 1.0) * 100.0
-        pct_high = (info["irr_ci95_high"] - 1.0) * 100.0
-        pct_effects.append(pct)
-        ci_lows.append(pct - pct_low)
-        ci_highs.append(pct_high - pct)
+    axes[1].bar(day_labels, day_maes, color=COLORS["primary"], alpha=0.85)
+    axes[1].set_title("Rata-Rata Kesalahan Prediksi (MAE) per Hari\nModel Stabil di Hari Kerja Maupun Akhir Pekan")
+    axes[1].set_ylabel("MAE (Pasien / Hari)")
+    axes[1].set_ylim(0, max(day_maes) * 1.25 if day_maes else 10)
 
-    y_pos = np.arange(len(cal_factors))
-    colors_bar = [COLORS["danger"] if p < 0 else COLORS["success"] for p in pct_effects]
-
-    axes[1].barh(y_pos, pct_effects, xerr=[ci_lows, ci_highs], color=colors_bar, alpha=0.85, capsize=4)
-    axes[1].axvline(0, color="black", linestyle="--", linewidth=1.0)
-    axes[1].set_yticks(y_pos)
-    axes[1].set_yticklabels(cal_labels)
-    axes[1].set_title("Dampak Faktor Kalender & Libur (IRR Negative Binomial GLM)\nAkhir Pekan & Libur Kerja Menurun; Senin & Pasca-Libur Naik")
-    axes[1].set_xlabel("Persentase Pengaruh terhadap Kunjungan (%)")
-
-    for i, v in enumerate(pct_effects):
-        axes[1].text(v - 3.5 if v < 0 else v + 1.0, i, f"{v:+.1f}%", va="center", fontsize=8.5, fontweight="bold")
+    for i, v in enumerate(day_maes):
+        axes[1].text(i, v + 0.15, f"{v:.2f}", ha="center", fontsize=8.5, fontweight="bold")
 
     plt.tight_layout()
     plt.savefig(out_path, dpi=300)
@@ -513,20 +481,14 @@ def main():
                 "key_insight": (
                     f"{eval_metrics.get('best_model_total_h7', 'Negative Binomial GLM')} mencapai MAE "
                     f"{eval_metrics['point_metrics'][eval_metrics.get('best_model_total_h7', 'Negative Binomial GLM')]['MAE']} "
-                    f"dan RMSE {eval_metrics['point_metrics'][eval_metrics.get('best_model_total_h7', 'Negative Binomial GLM')]['RMSE']} "
-                    f"(MASE {eval_metrics['point_metrics'][eval_metrics.get('best_model_total_h7', 'Negative Binomial GLM')]['MASE']}), "
-                    f"mengalahkan Seasonal Naive secara signifikan (p < 0,05)."
+                    f"dan RMSE {eval_metrics['point_metrics'][eval_metrics.get('best_model_total_h7', 'Negative Binomial GLM')]['RMSE']}, "
+                    f"mengalahkan patokan manual Seasonal Naive (Lag-7)."
                 ),
             },
             {
                 "file": "06_faktor_berpengaruh_feature_importance.png",
                 "title": "Faktor-Faktor Paling Berpengaruh terhadap Kunjungan",
-                "key_insight": (
-                    f"Jadwal mingguan dokter (day_of_week) adalah fitur terpenting pada HistGB, sedangkan pada Negative Binomial GLM "
-                    f"hari Senin meningkatkan kunjungan {(eval_metrics['glm_nb_irr_table'].get('is_monday', {}).get('irr', 1.0) - 1.0) * 100.0:+.1f}%, "
-                    f"hari libur kerja {(eval_metrics['glm_nb_irr_table'].get('is_holiday_weekday', {}).get('irr', 1.0) - 1.0) * 100.0:+.1f}%, "
-                    f"dan akhir pekan {(eval_metrics['glm_nb_irr_table'].get('is_weekend', {}).get('irr', 1.0) - 1.0) * 100.0:+.1f}%."
-                ),
+                "key_insight": "Jadwal mingguan dokter (day_of_week), riwayat kunjungan minggu lalu (lag_7), serta penanda libur & Ramadan menjadi penentu utama akurasi prediksi.",
             },
         ],
     }

@@ -8,7 +8,7 @@ export default function Layout() {
   const location = useLocation();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  const isAnalyticsTerminal = location.pathname === '/analitik-kunjungan';
+  const isAnalyticsTerminal = location.pathname === '/analisis-kunjungan';
 
   useEffect(() => {
     setMobileSidebarOpen(false);
@@ -69,7 +69,7 @@ export default function Layout() {
       <div className="flex flex-col flex-1 min-w-0 w-full h-full overflow-hidden">
         <Topbar onToggleSidebar={() => setMobileSidebarOpen((prev) => !prev)} />
 
-        {/* Main Content: Terkunci 100% tanpa scroll vertikal pada desktop di /analitik-kunjungan */}
+        {/* Main Content: Terkunci 100% tanpa scroll vertikal pada desktop di /analisis-kunjungan */}
         <main
           className={
             isAnalyticsTerminal

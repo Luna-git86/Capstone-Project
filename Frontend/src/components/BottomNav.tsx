@@ -2,7 +2,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Menu } from 'lucide-react';
-import { getAuthRole } from '../utils/authStorage';
+import { getAuthDivisiNama, getAuthRole } from '../utils/authStorage';
 import { getMenuItems } from './navConfig';
 
 interface BottomNavProps {
@@ -13,7 +13,8 @@ const PRIORITY_PATHS = ['/semua-tugas', '/riwayat-laporan', '/menu-laporan', '/l
 
 const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
   const userRole = getAuthRole() || 'STAF';
-  const menus = getMenuItems(userRole);
+  const userDivisi = getAuthDivisiNama('');
+  const menus = getMenuItems(userRole, userDivisi);
 
   const [home, ...rest] = menus;
   const prioritized = PRIORITY_PATHS.map((p) => rest.find((m) => m.path === p)).filter(

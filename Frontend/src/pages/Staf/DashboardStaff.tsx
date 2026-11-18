@@ -95,11 +95,6 @@ export default function DashboardStaff() {
     );
   }, [tugasAktif]);
 
-  const tugasTerlambat = useMemo(() => {
-    const now = new Date();
-    return tugasAktif.filter((t) => Boolean(t.deadline && new Date(t.deadline) < now));
-  }, [tugasAktif]);
-
   const filteredList = useMemo(() => {
     return tugasAktif.filter((t) => {
       const matchSearch =

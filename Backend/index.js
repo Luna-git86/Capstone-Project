@@ -22,6 +22,7 @@ app.use(
     credentials: true,
   })
 );
+app.use('/api/uat-sm/check-excel', express.json({ limit: '6mb' }));
 app.use(express.json());
 
 const authRoutes = require('./routes/authRoute');
@@ -41,6 +42,9 @@ app.use('/api/config', configRoutes);
 
 const smRoutes = require('./routes/smRoute');
 app.use('/api/sm', smRoutes);
+
+const uatSmRoutes = require('./routes/uatSmRoute');
+app.use('/api/uat-sm', uatSmRoutes);
 
 app.get('/', (req, res) => {
   res.send('Server Backend E-Ticketing RSIA berjalan dengan baik!');
