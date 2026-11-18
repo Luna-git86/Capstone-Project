@@ -125,14 +125,24 @@ export default function SemuaTugas() {
   }, []);
 
   const activeTickets = useMemo(() => {
-    return tickets.filter((t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK');
+    return tickets.filter(
+      (t) =>
+        t.status !== 'SELESAI' &&
+        t.status !== 'DITOLAK' &&
+        t.status !== 'MENUNGGU_VALIDASI'
+    );
   }, [tickets]);
 
   const counts = useMemo(() => {
     return {
       active: activeTickets.length,
       total: tickets.length,
-      completed: tickets.filter((t) => t.status === 'SELESAI').length,
+      completed: tickets.filter(
+        (t) =>
+          t.status === 'SELESAI' ||
+          t.status === 'MENUNGGU_VALIDASI' ||
+          (t.status === 'DIPROSES' && Boolean(t.catatanRevisi))
+      ).length,
     };
   }, [tickets, activeTickets]);
 
@@ -154,7 +164,6 @@ export default function SemuaTugas() {
       createdByMe: activeTickets.filter((t) => Number(t.pembuat?.id) === currentUserId).length,
       belumDikerjakan: activeTickets.filter((t) => t.status === 'MENUNGGU_TRIASE').length,
       sedangDikerjakan: activeTickets.filter((t) => t.status === 'DIPROSES').length,
-      menungguValidasi: activeTickets.filter((t) => t.status === 'MENUNGGU_VALIDASI').length,
       adaKendala: activeTickets.filter((t) => t.status === 'HOLD_ESKALASI').length,
       overdue: activeTickets.filter((t) => Boolean(t.deadline && new Date(t.deadline) < now)).length,
       divisiMap,
@@ -470,7 +479,6 @@ export default function SemuaTugas() {
                   {[
                     { key: 'MENUNGGU_TRIASE', label: 'Belum Dikerjakan', count: sidebarCounts.belumDikerjakan },
                     { key: 'DIPROSES', label: 'Sedang Dikerjakan', count: sidebarCounts.sedangDikerjakan },
-                    { key: 'MENUNGGU_VALIDASI', label: 'Menunggu Validasi', count: sidebarCounts.menungguValidasi },
                     { key: 'HOLD_ESKALASI', label: 'Ada Kendala', count: sidebarCounts.adaKendala },
                     { key: 'OVERDUE', label: 'Lewat Tenggat', count: sidebarCounts.overdue },
                   ].map((item) => (

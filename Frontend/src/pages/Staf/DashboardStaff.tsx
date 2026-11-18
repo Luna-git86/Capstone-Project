@@ -77,7 +77,13 @@ export default function DashboardStaff() {
   );
 
   const tugasAktif = useMemo(
-    () => myTickets.filter((t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK'),
+    () =>
+      myTickets.filter(
+        (t) =>
+          t.status !== 'SELESAI' &&
+          t.status !== 'DITOLAK' &&
+          t.status !== 'MENUNGGU_VALIDASI'
+      ),
     [myTickets]
   );
 

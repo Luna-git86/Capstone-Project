@@ -90,9 +90,9 @@ export default function RiwayatLaporan() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'MENUNGGU_TRIASE': return { text: 'Belum Ditugaskan', bg: 'bg-slate-100 text-slate-700 border-slate-300' };
-      case 'DIPROSES': return { text: 'Sedang Dikerjakan', bg: 'bg-blue-100 text-blue-800 border-blue-200' };
-      case 'MENUNGGU_VALIDASI': return { text: 'Menunggu Evaluasi', bg: 'bg-purple-100 text-purple-800 border-purple-200' };
+      case 'MENUNGGU_TRIASE': return { text: 'Menunggu Evaluasi', bg: 'bg-amber-100 text-amber-800 border-amber-300' };
+      case 'DIPROSES': return { text: 'Diproses', bg: 'bg-blue-100 text-blue-800 border-blue-200' };
+      case 'MENUNGGU_VALIDASI': return { text: 'Menunggu Validasi', bg: 'bg-purple-100 text-purple-800 border-purple-200' };
       case 'HOLD_ESKALASI': return { text: 'Terkendala (Hold)', bg: 'bg-amber-100 text-amber-800 border-amber-200' };
       case 'SELESAI': return { text: 'Selesai', bg: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
       case 'DITOLAK': return { text: 'Ditolak', bg: 'bg-rose-100 text-rose-800 border-rose-200' };

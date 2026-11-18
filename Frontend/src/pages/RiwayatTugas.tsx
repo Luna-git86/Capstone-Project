@@ -148,20 +148,26 @@ export default function RiwayatTugas() {
     }).format(new Date(dateStr));
   };
 
-  const getMappedStatus = (t: TicketItem): 'Disetujui' | 'Sedang Dievaluasi' | 'Revisi' | null => {
+  const getMappedStatus = (t: TicketItem): 'Disetujui' | 'Menunggu Evaluasi' | 'Revisi' | null => {
     if (t.status === 'SELESAI') return 'Disetujui';
-    if (t.status === 'MENUNGGU_VALIDASI') return 'Sedang Dievaluasi';
+    if (t.status === 'MENUNGGU_VALIDASI') return 'Menunggu Evaluasi';
     if (t.status === 'DIPROSES' && Boolean(t.catatanRevisi)) return 'Revisi';
     return null;
   };
 
   // HITUNG ANGKA UNTUK MENU SAMPING
   const activeCount = useMemo(
-    () => allTickets.filter((t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK').length,
+    () =>
+      allTickets.filter(
+        (t) =>
+          t.status !== 'SELESAI' &&
+          t.status !== 'DITOLAK' &&
+          t.status !== 'MENUNGGU_VALIDASI'
+      ).length,
     [allTickets]
   );
   const completedCount = useMemo(
-    () => allTickets.filter((t) => t.status === 'SELESAI').length,
+    () => allTickets.filter((t) => getMappedStatus(t) !== null).length,
     [allTickets]
   );
   const totalCount = allTickets.length;
@@ -176,7 +182,7 @@ export default function RiwayatTugas() {
     [historyTickets]
   );
   const countEvaluasi = useMemo(
-    () => historyTickets.filter((t) => getMappedStatus(t) === 'Sedang Dievaluasi').length,
+    () => historyTickets.filter((t) => getMappedStatus(t) === 'Menunggu Evaluasi').length,
     [historyTickets]
   );
   const countRevisi = useMemo(
@@ -239,7 +245,7 @@ export default function RiwayatTugas() {
     setSelectedStatuses([]);
   };
 
-  const toggleQuickMetricFilter = (statusKey: 'Disetujui' | 'Sedang Dievaluasi' | 'Revisi') => {
+  const toggleQuickMetricFilter = (statusKey: 'Disetujui' | 'Menunggu Evaluasi' | 'Revisi') => {
     if (selectedStatuses.length === 1 && selectedStatuses[0] === statusKey) {
       setSelectedStatuses([]);
     } else {
@@ -503,7 +509,7 @@ export default function RiwayatTugas() {
                 <div className="mt-3 space-y-2.5">
                   {[
                     { key: 'Disetujui', label: 'Disetujui Selesai', count: sidebarCounts.disetujui },
-                    { key: 'Sedang Dievaluasi', label: 'Sedang Dievaluasi', count: sidebarCounts.evaluasi },
+                    { key: 'Menunggu Evaluasi', label: 'Menunggu Evaluasi', count: sidebarCounts.evaluasi },
                     { key: 'Revisi', label: 'Perlu Revisi', count: sidebarCounts.revisi },
                     { key: 'OVERDUE', label: 'Lewat Tenggat', count: sidebarCounts.overdue },
                   ].map((item) => (
@@ -579,36 +585,36 @@ export default function RiwayatTugas() {
           <div className="grid grid-cols-3 gap-3 md:gap-4">
             <button
               type="button"
-              onClick={() => toggleQuickMetricFilter('Disetujui')}
+              onClick={() => toggleQuickMetricFilter('Menunggu Evaluasi')}
               className={`p-4 rounded-2xl border text-left transition-all ${
-                selectedStatuses.includes('Disetujui')
-                  ? 'bg-emerald-500 text-white border-emerald-500 shadow-md scale-[1.02]'
-                  : 'bg-white border-slate-200 text-slate-800 hover:border-emerald-300'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className={`text-xs font-bold ${selectedStatuses.includes('Disetujui') ? 'text-emerald-100' : 'text-slate-500'}`}>
-                  Disetujui
-                </span>
-                <CheckCircle2 className={`w-4 h-4 ${selectedStatuses.includes('Disetujui') ? 'text-emerald-100' : 'text-emerald-600'}`} />
-              </div>
-              <div className="text-2xl md:text-3xl font-extrabold">{countDisetujui}</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => toggleQuickMetricFilter('Sedang Dievaluasi')}
-              className={`p-4 rounded-2xl border text-left transition-all ${
-                selectedStatuses.includes('Sedang Dievaluasi')
+                selectedStatuses.includes('Menunggu Evaluasi')
                   ? 'bg-amber-500 text-white border-amber-500 shadow-md scale-[1.02]'
                   : 'bg-white border-slate-200 text-slate-800 hover:border-amber-300'
               }`}
             >
               <div className="flex items-center justify-between mb-1">
-                <span className={`text-xs font-bold ${selectedStatuses.includes('Sedang Dievaluasi') ? 'text-amber-100' : 'text-slate-500'}`}>
+                <span className={`text-xs font-bold ${selectedStatuses.includes('Menunggu Evaluasi') ? 'text-amber-100' : 'text-slate-500'}`}>
+                  Menunggu Evaluasi
+                </span>
+                <Clock className={`w-4 h-4 ${selectedStatuses.includes('Menunggu Evaluasi') ? 'text-amber-100' : 'text-amber-600'}`} />
+              </div>
+              <div className="text-2xl md:text-3xl font-extrabold">{countEvaluasi}</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => toggleQuickMetricFilter('Menunggu Evaluasi')}
+              className={`p-4 rounded-2xl border text-left transition-all ${
+                selectedStatuses.includes('Menunggu Evaluasi')
+                  ? 'bg-amber-500 text-white border-amber-500 shadow-md scale-[1.02]'
+                  : 'bg-white border-slate-200 text-slate-800 hover:border-amber-300'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-xs font-bold ${selectedStatuses.includes('Menunggu Evaluasi') ? 'text-amber-100' : 'text-slate-500'}`}>
                   Dievaluasi
                 </span>
-                <Clock className={`w-4 h-4 ${selectedStatuses.includes('Sedang Dievaluasi') ? 'text-amber-100' : 'text-amber-600'}`} />
+                <Clock className={`w-4 h-4 ${selectedStatuses.includes('Menunggu Evaluasi') ? 'text-amber-100' : 'text-amber-600'}`} />
               </div>
               <div className="text-2xl md:text-3xl font-extrabold">{countEvaluasi}</div>
             </button>
@@ -711,10 +717,10 @@ export default function RiwayatTugas() {
                     label: 'Disetujui Selesai',
                     borderLeft: 'border-l-emerald-500'
                   },
-                  'Sedang Dievaluasi': {
+                  'Menunggu Evaluasi': {
                     bg: 'bg-amber-50 text-amber-800 border-amber-200',
                     dot: 'bg-amber-500',
-                    label: 'Sedang Dievaluasi',
+                    label: 'Menunggu Evaluasi',
                     borderLeft: 'border-l-amber-500'
                   },
                   'Revisi': {
@@ -879,14 +885,14 @@ export default function RiwayatTugas() {
                               <div className={`p-3 rounded-xl border text-xs md:text-sm leading-relaxed ${
                                 mappedStatus === 'Revisi'
                                   ? 'bg-rose-50 text-rose-800 border-rose-200'
-                                  : mappedStatus === 'Sedang Dievaluasi'
+                                  : mappedStatus === 'Menunggu Evaluasi'
                                   ? 'bg-amber-50 text-amber-800 border-amber-200'
                                   : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                               }`}>
                                 <div className="font-bold mb-1 flex items-center gap-1.5">
                                   {mappedStatus === 'Revisi' && <AlertCircle className="w-4 h-4 text-rose-600" />}
                                   {mappedStatus === 'Disetujui' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
-                                  {mappedStatus === 'Sedang Dievaluasi' && <Clock className="w-4 h-4 text-amber-600" />}
+                                  {mappedStatus === 'Menunggu Evaluasi' && <Clock className="w-4 h-4 text-amber-600" />}
                                   <span>Catatan Hasil Evaluasi:</span>
                                 </div>
                                 <p>
