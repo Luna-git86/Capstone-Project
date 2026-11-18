@@ -1,7 +1,12 @@
 // Frontend/src/App.tsx
 import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
-import { getAuthToken, getAuthRole } from './utils/authStorage';
+import {
+  getAuthToken,
+  getAuthRole,
+  getAuthDivisiNama,
+  canAccessAnalisisKunjungan,
+} from './utils/authStorage';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 
@@ -15,7 +20,7 @@ const LaporkanMasalah = lazy(() => import('./pages/LaporkanMasalah'));
 const DokumenSOP = lazy(() => import('./pages/DokumenSop'));
 const RiwayatTugas = lazy(() => import('./pages/RiwayatTugas'));
 const PeformaAnalisis = lazy(() => import('./pages/PeformaAnalisis'));
-const AnalitikKunjungan = lazy(() => import('./pages/AnalitikKunjungan'));
+const AnalisiKunjungan = lazy(() => import('./pages/AnalisiKunjungan'));
 const LaporanSLA = lazy(() => import('./pages/LaporanSLA'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const DetailTugas = lazy(() => import('./pages/DetailTugas'));
@@ -25,6 +30,7 @@ const DashboardStaff = lazy(() => import('./pages/Staf/DashboardStaff'));
 const DashboardKoordinator = lazy(() => import('./pages/Koordinator/DashboardKoordinator'));
 const MenuLaporan = lazy(() => import('./pages/Koordinator/MenuLaporan'));
 const DashboardKadiv = lazy(() => import('./pages/Kadiv/DashboardKadiv'));
+const HalamanPengujianSM = lazy(() => import('./pages/Penguji/HalamanPengujianSM'));
 
 const RouteSuspenseFallback = () => (
   <div className="h-full w-full min-h-[260px] flex items-center justify-center bg-[#F4F8F5] p-6">
@@ -46,6 +52,8 @@ export const getDashboardByRole = (role: string | null) => {
       return '/dashboard-kadiv';
     case 'KOORDINATOR':
       return '/dashboard-koordinator';
+    case 'PENGUJI':
+      return '/dashboard-penguji';
     case 'STAF':
     default:
       return '/dashboard-staff';
@@ -79,6 +87,24 @@ const RoleProtectedRoute = ({ allowedRoles }: { allowedRoles: string[] }) => {
   return <Outlet />;
 };
 
+// 2b. Penjaga Khusus Halaman Analisis Kunjungan (Hanya DIREKTUR & KADIV Pelayanan Medis)
+const AnalisisKunjunganProtectedRoute = () => {
+  const token = getAuthToken();
+  const role = getAuthRole();
+  const divisi = getAuthDivisiNama('');
+
+  if (!token || !role) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!canAccessAnalisisKunjungan(role, divisi)) {
+    alert('Akses Ditolak! Menu Analisis Kunjungan hanya tersedia untuk Direktur dan Kepala Divisi Pelayanan Medis.');
+    return <Navigate to={getDashboardByRole(role)} replace />;
+  }
+
+  return <Outlet />;
+};
+
 
 // Pengatur Judul Tab Browser Dinamis Sesuai Status Otentikasi dan Role
 const DynamicDocumentTitle = () => {
@@ -97,6 +123,7 @@ const DynamicDocumentTitle = () => {
         KADIV: 'Kepala Divisi',
         KOORDINATOR: 'Koordinator',
         STAF: 'Staf',
+        PENGUJI: 'Penguji UAT',
       };
       const roleLabel = role ? (roleMap[role] || role) : 'Pengguna';
       document.title = `${roleLabel} - RSIA Qurrata A'yun`;
@@ -151,6 +178,11 @@ function App() {
 
             </Route>
 
+            {/* 5b. Panel Pengujian UAT Scientific Method (Khusus Penguji) */}
+            <Route element={<RoleProtectedRoute allowedRoles={['PENGUJI']} />}>
+              <Route path="/dashboard-penguji" element={<HalamanPengujianSM />} />
+            </Route>
+
             {/* 6. Menu Buat Tugas dengan Batas Waktu Jam (Khusus Koordinator, Kadiv, Direktur) */}
             <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR']} />}>
               <Route path="/tambah-tugas" element={<TambahTugas />} />
@@ -166,9 +198,9 @@ function App() {
               <Route path="/laporan-sla" element={<LaporanSLA />} />
             </Route>
 
-            {/* 8b. Analitik Prediksi Kunjungan Rawat Jalan (Scientific Method) */}
-            <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV']} />}>
-              <Route path="/analitik-kunjungan" element={<AnalitikKunjungan />} />
+            {/* 8b. Analitik Prediksi Kunjungan Rawat Jalan (Khusus Direktur & Kadiv Pelayanan Medis) */}
+            <Route element={<AnalisisKunjunganProtectedRoute />}>
+              <Route path="/analisis-kunjungan" element={<AnalisiKunjungan />} />
             </Route>
 
             {/* 9. Rute Umum Lintas Role (Daftar Tugas, Riwayat, Panduan SOP) */}

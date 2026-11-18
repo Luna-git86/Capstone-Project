@@ -43,12 +43,15 @@ const login = async (req, res) => {
       });
     }
 
+    const divisiNama = user.divisi?.nama || null;
+
     const token = jwt.sign(
       {
         id: user.id,
         nama: user.nama,
         role: user.role,
         divisiId: user.divisiId,
+        divisi: divisiNama,
       },
       JWT_SECRET,
       { expiresIn: '1d' }
@@ -74,7 +77,8 @@ const login = async (req, res) => {
         email: user.email,
         role: user.role,
         divisiId: user.divisiId,
-        divisi: user.divisi?.nama || null,
+        divisi: divisiNama,
+        namaDivisi: divisiNama,
       },
     });
   } catch (error) {

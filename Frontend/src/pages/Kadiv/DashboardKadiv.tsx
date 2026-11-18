@@ -1,4 +1,9 @@
-import { getAuthUserName, getAuthRole, getAuthDivisiNama } from '../../utils/authStorage';
+import {
+  getAuthUserName,
+  getAuthRole,
+  getAuthDivisiNama,
+  isKadivPelayananMedis,
+} from '../../utils/authStorage';
 // Frontend/src/pages/Kadiv/DashboardKadiv.tsx
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -28,6 +33,7 @@ const DashboardKadiv: React.FC = () => {
   const userName = getAuthUserName('Kepala Divisi');
   const userRole = getAuthRole();
   const userDivisi = getAuthDivisiNama();
+  const canViewMedisAnalytics = isKadivPelayananMedis(userDivisi);
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -41,6 +47,7 @@ const DashboardKadiv: React.FC = () => {
       }
     };
     const fetchSmSummary = async () => {
+      if (!canViewMedisAnalytics) return;
       try {
         const res = await api.get('/sm/summary');
         setSmKadiv(res.data?.data || null);
@@ -50,7 +57,7 @@ const DashboardKadiv: React.FC = () => {
     };
     fetchTickets();
     fetchSmSummary();
-  }, []);
+  }, [canViewMedisAnalytics]);
 
   const kadivPoliEntries = Object.entries(smKadiv?.by_poliklinik || {});
   const kadivSmTotalVisits = kadivPoliEntries.reduce((acc, [, v]) => acc + v.total_visits, 0);
@@ -96,8 +103,8 @@ const DashboardKadiv: React.FC = () => {
         </Link>
       </div>
 
-      {/* Banner Akses Cepat Analitik Kunjungan Divisi */}
-      {smKadiv && (
+      {/* Banner Akses Cepat Analitik Kunjungan Divisi (Khusus Kadiv Pelayanan Medis) */}
+      {canViewMedisAnalytics && smKadiv && (
         <div className="bg-clinical-surface border border-clinical-border rounded-2xl p-4 sm:px-5 sm:py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-xs">
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
@@ -132,10 +139,10 @@ const DashboardKadiv: React.FC = () => {
           </div>
 
           <Link
-            to="/analitik-kunjungan"
+            to="/analisis-kunjungan"
             className="px-4 py-2.5 bg-clinical-primary hover:opacity-95 text-white text-xs sm:text-sm font-semibold rounded-xl transition shadow-xs text-center shrink-0"
           >
-            Buka Analitik & Proyeksi Kunjungan
+            Buka Analisis Kunjungan
           </Link>
         </div>
       )}

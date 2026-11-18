@@ -109,9 +109,6 @@ class TestPipelineIntegrity(unittest.TestCase):
         expected_roll7_h7 = float(np.mean(y[t - 13 : t - 6]))
         self.assertAlmostEqual(float(df_feat.loc[t, "rolling_mean_7d"]), expected_roll7_h7, places=6)
 
-        expected_roll7_h14 = float(np.mean(y[t - 20 : t - 13]))
-        self.assertAlmostEqual(float(df_feat.loc[t, "rolling_mean_7d_h14"]), expected_roll7_h14, places=6)
-
     def test_06_chronological_splits_and_feature_exclusion(self):
         """Verify chronological non-overlapping splits and exclusion of is_outlier from model features."""
         meta_path = config.MODELS_DIR / "model_metadata.json"
@@ -120,7 +117,6 @@ class TestPipelineIntegrity(unittest.TestCase):
             meta = json.load(f)
 
         self.assertNotIn("is_outlier", meta["h7_features"])
-        self.assertNotIn("is_outlier", meta["h14_features"])
         self.assertNotIn("active_doctors_total", meta["h7_features"])
         self.assertEqual(meta["train_days"], 878)
         self.assertEqual(meta["val_days"], 184)
@@ -129,11 +125,9 @@ class TestPipelineIntegrity(unittest.TestCase):
     def test_07_outputs_and_tables_schema(self):
         """Verify all output tables and prediction files exist and match expected lengths."""
         preds_h7 = pd.read_parquet(config.MODELS_DIR / "test_predictions.parquet")
-        preds_h14 = pd.read_parquet(config.MODELS_DIR / "test_predictions_h14.parquet")
         preds_poli = pd.read_parquet(config.MODELS_DIR / "test_predictions_by_poli.parquet")
 
         self.assertEqual(len(preds_h7), 181)
-        self.assertEqual(len(preds_h14), 181)
         self.assertEqual(len(preds_poli), 181 * 4)
 
         for table_name in ["01_data_profile.json", "03_feature_summary.json", "05_evaluation_metrics.json"]:
@@ -143,11 +137,11 @@ class TestPipelineIntegrity(unittest.TestCase):
             self.assertIn("timestamp", data)
 
     def test_08_comparative_architecture_clean(self):
-        """Verify comparative 2-method architecture with zero Tweedie, Stacking, SLSQP, or version strings."""
+        """Verify simplified D3 3-candidate architecture (Seasonal Naive, Negative Binomial GLM, HistGradientBoosting)."""
         preds_h7 = pd.read_parquet(config.MODELS_DIR / "test_predictions.parquet")
-        for col in ["naive", "dow_mean", "nb_glm", "hgb_poisson", "pred_best", "best_model_name"]:
+        for col in ["naive", "nb_glm", "hgb_poisson", "pred_best", "best_model_name"]:
             self.assertIn(col, preds_h7.columns)
-        for forbidden_col in ["tweedie_glm", "ensemble"]:
+        for forbidden_col in ["tweedie_glm", "ensemble", "dow_mean"]:
             self.assertNotIn(forbidden_col, preds_h7.columns)
 
         meta_text = (config.MODELS_DIR / "model_metadata.json").read_text(encoding="utf-8")
@@ -161,7 +155,7 @@ class TestPipelineIntegrity(unittest.TestCase):
         eval_data = json.loads((config.TABLES_DIR / "05_evaluation_metrics.json").read_text(encoding="utf-8"))
         self.assertEqual(
             set(eval_data["point_metrics"].keys()),
-            {"Seasonal Naive", "DOW Mean (4W)", "Negative Binomial GLM", "HistGradientBoosting"},
+            {"Seasonal Naive", "Negative Binomial GLM", "HistGradientBoosting"},
         )
 
 
