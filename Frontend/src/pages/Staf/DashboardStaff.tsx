@@ -1,6 +1,8 @@
 // Frontend/src/pages/Staf/DashboardStaff.tsx
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
+import { getAuthUserName, getAuthRole, getAuthDivisiNama, getAuthUserId } from '../../utils/authStorage';
 import {
   AlertTriangle,
   ArrowRight,
@@ -11,8 +13,7 @@ import {
   Search,
   Sparkles,
 } from 'lucide-react';
-import api from '../../services/api';
-import { getAuthUserName, getAuthRole, getAuthDivisiNama } from '../../utils/authStorage';
+
 
 interface Ticket {
   id: number;
@@ -22,6 +23,8 @@ interface Ticket {
   prioritas: 'LOW' | 'MEDIUM' | 'HIGH';
   status: 'MENUNGGU_TRIASE' | 'DIPROSES' | 'MENUNGGU_VALIDASI' | 'HOLD_ESKALASI' | 'SELESAI' | 'DITOLAK';
   deadline: string | null;
+  pelaksanaId?: number | null;
+  pelaksana?: { id: number; nama: string };
   divisi?: { nama: string };
   pembuat?: { nama: string };
   fotoInstruksi?: string | null;
@@ -37,6 +40,7 @@ export default function DashboardStaff() {
   const userName = getAuthUserName('Rekan Staf');
   const userRole = getAuthRole() || 'STAF';
   const userDivisi = getAuthDivisiNama() || 'Operasional RS';
+  const currentUserId = Number(getAuthUserId() || 0);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -49,7 +53,7 @@ export default function DashboardStaff() {
   const fetchTickets = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/tickets');
+      const response = await api.get('/tickets?jenis=TUGAS');
       setTickets(response.data.data || response.data || []);
     } catch (error) {
       console.error('Gagal mengambil daftar tugas staf:', error);
@@ -62,20 +66,34 @@ export default function DashboardStaff() {
     fetchTickets();
   }, []);
 
+  const myTickets = useMemo(
+    () =>
+      tickets.filter(
+        (t) =>
+          currentUserId > 0 &&
+          (Number(t.pelaksanaId) === currentUserId || Number(t.pelaksana?.id) === currentUserId)
+      ),
+    [tickets, currentUserId]
+  );
+
   const tugasAktif = useMemo(
-    () => tickets.filter((t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK'),
-    [tickets]
+    () => myTickets.filter((t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK'),
+    [myTickets]
   );
 
   const tugasSelesai = useMemo(
-    () => tickets.filter((t) => t.status === 'SELESAI'),
-    [tickets]
+    () => myTickets.filter((t) => t.status === 'SELESAI'),
+    [myTickets]
   );
 
-  const tugasDarurat = useMemo(
-    () => tugasAktif.filter((t) => t.prioritas === 'HIGH'),
-    [tugasAktif]
-  );
+  const tugasPrioritasAtauTerlambat = useMemo(() => {
+    const now = new Date();
+    return tugasAktif.filter(
+      (t) =>
+        t.prioritas === 'HIGH' ||
+        Boolean(t.deadline && new Date(t.deadline) < now)
+    );
+  }, [tugasAktif]);
 
   const filteredList = useMemo(() => {
     return tugasAktif.filter((t) => {
@@ -85,7 +103,12 @@ export default function DashboardStaff() {
         `t-${t.id}`.includes(searchQuery.toLowerCase());
 
       if (!matchSearch) return false;
-      if (filterPrioritas === 'HIGH') return t.prioritas === 'HIGH';
+      if (filterPrioritas === 'HIGH') {
+        return (
+          t.prioritas === 'HIGH' ||
+          Boolean(t.deadline && new Date(t.deadline) < new Date())
+        );
+      }
       if (filterPrioritas === 'DIPROSES') return t.status === 'DIPROSES';
       return true;
     });
@@ -226,6 +249,8 @@ export default function DashboardStaff() {
         </div>
 
         {/* Prioritas Mendesak */}
+        {/* Tugas Terlambat */}
+        {/* Prioritas Tinggi */}
         <div className="col-span-2 md:col-span-1 bg-white p-5 rounded-3xl border border-clinical-border shadow-xs hover:shadow-md transition flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -238,16 +263,11 @@ export default function DashboardStaff() {
           <div className="mt-3">
             <div className="flex items-baseline gap-2">
               <p className="text-3xl sm:text-4xl font-extrabold text-rose-600 tracking-tight">
-                {tugasDarurat.length}
+                {tugasPrioritasAtauTerlambat.length}
               </p>
-              {tugasDarurat.length > 0 && (
-                <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full uppercase">
-                  Perhatian
-                </span>
-              )}
             </div>
             <p className="text-[11px] font-medium text-slate-500 mt-1 truncate">
-              SLA ketat, kerjakan dahulu
+              Urgensi tinggi & lewat batas waktu
             </p>
           </div>
         </div>
@@ -304,7 +324,7 @@ export default function DashboardStaff() {
             }`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            <span>Mendesak ({tugasDarurat.length})</span>
+            <span>Mendesak ({tugasPrioritasAtauTerlambat.length})</span>
           </button>
           <button
             type="button"

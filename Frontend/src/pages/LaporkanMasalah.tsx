@@ -20,10 +20,22 @@ interface Divisi {
 
 const getKategoriMeta = (namaDivisi: string) => {
   const lower = namaDivisi.toLowerCase();
-  if (lower.includes('umum') || lower.includes('it')) {
+  if (lower.includes('it') || lower.includes('simrs')) {
     return {
-      label: 'Fasilitas Gedung, AC, Listrik & IT',
-      sub: 'Divisi Umum & IT',
+      label: 'Sistem Informasi, SIMRS, Komputer & Jaringan',
+      sub: 'Divisi IT & SIMRS',
+    };
+  }
+  if (lower.includes('umum') || lower.includes('rumah tangga')) {
+    return {
+      label: 'Logistik Umum, Kebersihan & Rumah Tangga',
+      sub: 'Divisi Umum & Rumah Tangga',
+    };
+  }
+  if (lower.includes('sarana') || lower.includes('prasarana') || lower.includes('ips')) {
+    return {
+      label: 'Fasilitas Gedung, AC, Listrik & Air',
+      sub: 'Divisi Sarana & Prasarana (IPS-RS)',
     };
   }
   if (lower.includes('penunjang')) {
@@ -32,22 +44,16 @@ const getKategoriMeta = (namaDivisi: string) => {
       sub: 'Divisi Penunjang Medis',
     };
   }
-  if (lower.includes('keperawatan') || lower.includes('kebidanan')) {
+  if (lower.includes('keperawatan') || lower.includes('kebidanan') || lower.includes('pelayanan medis')) {
     return {
-      label: 'Rawat Inap, Kebidanan & IGD',
-      sub: 'Divisi Keperawatan',
-    };
-  }
-  if (lower.includes('pelayanan medis')) {
-    return {
-      label: 'Poliklinik & Ruang Operasi',
-      sub: 'Divisi Layanan Medis',
+      label: 'Poliklinik, Rawat Inap, Kebidanan & IGD',
+      sub: 'Divisi Pelayanan Medis & Keperawatan',
     };
   }
   if (lower.includes('administrasi') || lower.includes('keuangan')) {
     return {
       label: 'Kasir, Tagihan, BPJS & Administrasi',
-      sub: 'Divisi Keuangan & Kasir',
+      sub: 'Divisi Administrasi & Keuangan',
     };
   }
   return {
@@ -332,7 +338,7 @@ export default function LaporkanMasalah() {
             {/* Nama Masalah */}
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-clinical-ink">
-                Masalah / Kerusakan yang Ditemukan *
+                Judul : Masalah / Kerusakan yang Ditemukan *
               </label>
               <input
                 type="text"
@@ -470,7 +476,7 @@ export default function LaporkanMasalah() {
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>Ajukan Tiket Keluhan Sekarang</span>
+                    <span>Laporkan Masalah</span>
                   </>
                 )}
               </button>

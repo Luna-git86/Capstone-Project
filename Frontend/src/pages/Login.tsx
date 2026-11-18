@@ -42,7 +42,7 @@ const Login: React.FC = () => {
       const response = await api.post('/auth/login', formData);
       const { token, user } = response.data;
 
-      const resolvedDivisi = user.namaDivisi || user.divisi || null;
+      const resolvedDivisi = user.divisi || user.namaDivisi || null;
 
       setAuthSession({
         token,
