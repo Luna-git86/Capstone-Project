@@ -285,7 +285,7 @@ export default function LaporkanMasalah() {
                 <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
                   1
                 </span>
-                <span>Bagian / Divisi yang Berwenang *</span>
+                <span>Divisi Tujuan*</span>
               </label>
               <span className="text-[11px] font-semibold text-slate-400">Wajib dipilih</span>
             </div>

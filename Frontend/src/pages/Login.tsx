@@ -228,7 +228,7 @@ const Login: React.FC = () => {
                   <span>Memverifikasi Akun...</span>
                 </>
               ) : (
-                <span>Masuk ke Sistem</span>
+                <span> Login </span>
               )}
             </button>
           </form>

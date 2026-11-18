@@ -436,7 +436,7 @@ export default function DashboardStaff() {
                         }}
                         className="h-10 px-3.5 bg-brand-deep group-hover:bg-brand-orange text-white rounded-2xl text-xs font-bold transition flex items-center gap-1 shrink-0"
                       >
-                        <span>Kerjakan</span>
+                        <span>Lihat</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
