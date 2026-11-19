@@ -1,28 +1,28 @@
-// Frontend/src/pages/Penguji/Tab2PolaFaktor.tsx
+// Frontend/src/pages/Penguji/Tab3PolaFaktor.tsx
 import React, { useMemo, useState } from 'react';
 import { CalendarDays, Clock } from 'lucide-react';
 import { ApaArtinyaBox, PanduanPengujiBox, StepSectionCard } from './UatSharedBlocks';
-import { formatNumId, getUatHeatmapCellClass, type Tab2Data } from './uatSmTypes';
+import { formatNumId, getUatHeatmapCellClass, type Tab3Data } from './uatSmTypes';
 
-interface Tab2Props {
-  data: Tab2Data | null;
-  unlockedStep: number;
+interface Tab3Props {
+  data: Tab3Data | null;
+  viewStep: number;
   liveNotes: Record<string, string>;
 }
 
-export const Tab2PolaFaktor: React.FC<Tab2Props> = ({ data, unlockedStep, liveNotes }) => {
+export const Tab3PolaFaktor: React.FC<Tab3Props> = ({ data, viewStep, liveNotes }) => {
   const [selectedYear, setSelectedYear] = useState<string>('2026');
   const [selectedHeatmapUnit, setSelectedHeatmapUnit] = useState<string>('TOTAL');
   const [showFullDay, setShowFullDay] = useState<boolean>(false);
 
   const holidaysFiltered = useMemo(() => {
-    if (!data) return [];
-    return data.holidaysList.filter((h) => selectedYear === 'ALL' || h.year === selectedYear);
+    const list = Array.isArray(data?.holidaysList) ? data.holidaysList : [];
+    return list.filter((h) => selectedYear === 'ALL' || h.year === selectedYear);
   }, [data, selectedYear]);
 
   const heatmapRows = useMemo(() => {
-    if (!data) return [];
-    return data.heatmapByUnit[selectedHeatmapUnit] || data.heatmapByUnit.TOTAL || [];
+    const byUnit = data?.heatmapByUnit ?? {};
+    return byUnit[selectedHeatmapUnit] || byUnit.TOTAL || [];
   }, [data, selectedHeatmapUnit]);
 
   const hoursList = useMemo(
@@ -34,38 +34,43 @@ export const Tab2PolaFaktor: React.FC<Tab2Props> = ({ data, unlockedStep, liveNo
     let m = 1;
     for (const r of heatmapRows) {
       for (const h of hoursList) {
-        const v = r.hours[String(h)] || 0;
+        const v = r.hours?.[String(h)] || 0;
         if (v > m) m = v;
       }
     }
     return m;
   }, [heatmapRows, hoursList]);
 
-  if (!data || unlockedStep < 1) {
+  if (!data || !data.calendarAverages || viewStep < 1) {
     return (
       <div className="tvlk-card rounded-2xl p-6 text-center space-y-2">
-        <p className="text-sm font-extrabold text-[#18201c]">Tahap 2 Belum Dimulai</p>
+        <p className="text-sm font-extrabold text-[#18201c]">Tab 3 Belum Dimulai</p>
         <p className="text-xs text-[#6b7770]">
-          Klik tombol hijau <strong className="text-[#0f5c43]">Mulai Hitung (0/3)</strong> untuk melihat pola hari kerja, jam sibuk, dan 14 faktor penentu prediksi.
+          Klik tombol hijau <strong className="text-[#0f5c43]">Lihat Pola Hari &amp; Libur (1/3)</strong> di kanan atas untuk melihat pengaruh hari kerja, tanggal merah, dan peta jam sibuk RSIA.
         </p>
       </div>
     );
   }
 
+  const features = Array.isArray(data.features) ? data.features : [];
+  const sampleEngineeredRows = Array.isArray(data.sampleEngineeredRows) ? data.sampleEngineeredRows : [];
+  const heatmapUnits = Array.isArray(data.heatmapUnits) ? data.heatmapUnits : [];
+
   return (
     <div className="space-y-4">
-      {/* Langkah 2.1 */}
-      <StepSectionCard
-        stepCode="Langkah 2.1"
-        title="Pola Kunjungan Hari Kerja vs Akhir Pekan & Hari Libur"
-        subtitle="Melihat perbedaan rata-rata kunjungan harian yang dipengaruhi jadwal praktik dokter dan tanggal merah."
-        done={unlockedStep >= 1}
-      >
+      {/* Langkah 3.1 */}
+      {viewStep === 1 && (
+        <StepSectionCard
+          stepCode="Langkah 3.1"
+          title="Pola Kunjungan Hari Kerja vs Akhir Pekan & Hari Libur"
+          subtitle="Membandingkan kepadatan pasien saat jadwal praktik rutin dibanding hari libur."
+          done={viewStep >= 1}
+        >
         <PanduanPengujiBox
-          whatHappens="Sistem membandingkan rata-rata jumlah pasien per hari saat Hari Kerja (Senin–Jumat), Akhir Pekan (Sabtu–Minggu), dan Hari Libur Nasional."
+          whatHappens="Membuktikan jumlah pasien sangat dipengaruhi hari praktik dokter dan tanggal merah."
           stepsToCheck={[
-            'Bandingkan angka rata-rata pada tabel: Hari Kerja (33,31 pasien), Akhir Pekan (23,75 pasien), dan Hari Libur Nasional (26,62 pasien).',
-            'Pastikan tampak perbedaan jelas antara hari praktik dokter reguler dengan hari libur.',
+            'Bandingkan 3 angka rata-rata pada tabel: Hari Kerja (33,31 pasien) lebih ramai daripada Akhir Pekan (23,75) dan Hari Libur (26,62).',
+            'Klik "Susun 14 Faktor Prediksi →" di kanan atas.',
           ]}
         />
         <div className="overflow-x-auto rounded-2xl border border-[#dce7e0]">
@@ -90,7 +95,7 @@ export const Tab2PolaFaktor: React.FC<Tab2Props> = ({ data, unlockedStep, liveNo
                 <td className="py-2.5 px-3 text-right font-extrabold text-[#18201c] tabular-nums">
                   {formatNumId(data.calendarAverages.weekend, 2)} pasien
                 </td>
-                <td className="py-2.5 px-3 text-[#3c4641]">Layanan didominasi IGD & poliklinik terbatas</td>
+                <td className="py-2.5 px-3 text-[#3c4641]">Layanan didominasi IGD &amp; poliklinik terbatas</td>
               </tr>
               <tr className="bg-[#fff6f1]/70">
                 <td className="py-2.5 px-3 font-extrabold text-[#d95d28]">Hari Libur Nasional / Cuti</td>
@@ -104,22 +109,24 @@ export const Tab2PolaFaktor: React.FC<Tab2Props> = ({ data, unlockedStep, liveNo
         </div>
 
         <ApaArtinyaBox text="Jumlah pasien sangat bergantung pada jadwal hari praktik dokter dan tanggal merah. Karena itu faktor kalender wajib menjadi bagian utama perhitungan prediksi." />
-      </StepSectionCard>
+        </StepSectionCard>
+      )}
 
-      {/* Langkah 2.2 */}
-      {unlockedStep >= 2 && (
+      {/* Langkah 3.2 */}
+      {viewStep === 2 && (
         <StepSectionCard
-          stepCode="Langkah 2.2"
-          title={`Pembuatan ${data.featureCount} Faktor Kalender & Riwayat Bebas Contek (Horizon ${data.horizonDays} Hari)`}
-          subtitle="Skrip menyusun daftar faktor kalender dan riwayat kunjungan 7–28 hari ke belakang tanpa pernah mengintip data hari berikutnya."
-          done={unlockedStep >= 2}
+          stepCode="Langkah 3.2"
+          title={`${data.featureCount ?? 14} Faktor Kalender & Riwayat Bebas Contek (Horizon ${data.horizonDays ?? 7} Hari)`}
+          subtitle="Menyusun faktor kalender dan riwayat kunjungan minimal 7 hari ke belakang."
+          done={viewStep >= 2}
           ranLiveInfo={liveNotes.stage3_features}
         >
           <PanduanPengujiBox
-            whatHappens="Sistem menyusun 14 angka penentu dari kalender, libur nasional, dan catatan kunjungan minimal 7 hari ke belakang (H-7 s.d. H-28) agar siap dipakai melatih model perkiraan."
+            whatHappens="Menyiapkan 14 informasi penentu prediksi dari kalender, libur nasional, dan data minggu-minggu sebelumnya (tanpa mencontek hari besok)."
             stepsToCheck={[
-              'Periksa Tabel 14 Faktor Penentu dan kotak orange Jaminan Tidak Mencontek Data Besok (kolom jumlah dokter hari-H tidak dipakai sebagai input model).',
-              'Lihat Tabel Contoh Data Olahan Lengkap dengan Faktor Penentu (10 Hari) di bawah untuk mengecek angka riil hasil olahan tiap tanggal (Pasien H-7, Rata-Rata 7H, dll.).',
+              'Cek tabel 14 Faktor Penentu dan kotak peringatan orange di bawahnya (jumlah dokter hari-H sengaja dikecualikan).',
+              'Cek tabel 10 baris contoh di bagian bawah untuk memastikan seluruh kolom faktor terisi angka.',
+              'Klik "Lihat Libur & Jam Sibuk →" di kanan atas.',
             ]}
           />
           <div className="overflow-x-auto rounded-2xl border border-[#dce7e0]">
@@ -133,7 +140,7 @@ export const Tab2PolaFaktor: React.FC<Tab2Props> = ({ data, unlockedStep, liveNo
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#eef1ef]">
-                {data.features.map((ft) => (
+                {features.map((ft) => (
                   <tr key={ft.code} className="hover:bg-[#edf8f2]/40">
                     <td className="py-2 px-3 text-center font-extrabold text-[#0f5c43] tabular-nums">{ft.no}</td>
                     <td className="py-2 px-3 font-extrabold text-[#18201c]">{ft.label}</td>
@@ -149,9 +156,9 @@ export const Tab2PolaFaktor: React.FC<Tab2Props> = ({ data, unlockedStep, liveNo
             </table>
           </div>
 
-          <ApaArtinyaBox variant="orange" title="Jaminan Tidak Mencontek Data Besok" text={data.excludedColumnsNote} />
+          <ApaArtinyaBox variant="orange" title="Jaminan Tidak Mencontek Data Besok" text={data.excludedColumnsNote || ''} />
 
-          {data.sampleEngineeredRows.length > 0 && (
+          {sampleEngineeredRows.length > 0 && (
             <div className="overflow-x-auto rounded-2xl border border-[#dce7e0]">
               <div className="bg-[#f6f8f7] px-3.5 py-2.5 border-b border-[#dce7e0] text-xs font-extrabold text-[#18201c]">
                 Tabel Contoh Data Olahan Lengkap dengan Faktor Penentu (10 Hari Terakhir yang Masuk ke Model)
@@ -172,7 +179,7 @@ export const Tab2PolaFaktor: React.FC<Tab2Props> = ({ data, unlockedStep, liveNo
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#eef1ef]">
-                  {data.sampleEngineeredRows.map((r) => (
+                  {sampleEngineeredRows.map((r) => (
                     <tr key={r.date} className="hover:bg-[#edf8f2]/40">
                       <td className="py-2 px-3 font-bold tabular-nums whitespace-nowrap">{r.date}</td>
                       <td className="py-2 px-3 font-semibold text-[#3c4641]">{r.dayName}</td>
@@ -199,54 +206,25 @@ export const Tab2PolaFaktor: React.FC<Tab2Props> = ({ data, unlockedStep, liveNo
         </StepSectionCard>
       )}
 
-      {/* Langkah 2.3 */}
-      {unlockedStep >= 3 && (
+      {/* Langkah 3.3 */}
+      {viewStep === 3 && (
         <StepSectionCard
-          stepCode="Langkah 2.3"
-          title="Uji Daftar Libur Nasional Otomatis & Pola Jam Sibuk per Unit"
-          subtitle="Penguji dapat memfilter tahun untuk melihat daftar tanggal merah Indonesia (SKB 3 Menteri) dan memilih unit untuk melihat jam padatnya."
-          done={unlockedStep >= 3}
+          stepCode="Langkah 3.3"
+          title="Peta Jam Sibuk per Unit & Daftar Libur Nasional"
+          subtitle="Menguji filter jam kunjungan 24 jam per unit dan kalender tanggal merah."
+          done={viewStep >= 3}
         >
           <PanduanPengujiBox
-            whatHappens="Sistem memuat daftar tanggal merah resmi Indonesia (2023–2026) dan mengelompokkan kedatangan pasien berdasarkan hari dan jam kunjungan."
+            whatHappens="Mengecek jam padat kunjungan per poliklinik dan daftar hari libur resmi tahun 2023–2026."
             stepsToCheck={[
-              'Di panel kiri, ubah dropdown tahun dari "Tahun 2026" ke "Semua Tahun (2023–2026)" untuk mengecek daftar tanggal merah.',
-              'Di panel kanan, pilih unit pada dropdown "Semua Unit RSIA" (misalnya POLIKLINIK OBGYN atau UNIT IGD) dan tekan tombol "Tampilkan 24 Jam" / "Fokus Jam 07–21".',
+              'Pada Matriks Jam Kedatangan: pilih unit di dropdown (mis. UNIT IGD atau OBGYN), lalu klik "Tampilkan 24 Jam".',
+              'Pada panel Daftar Tanggal Merah di bawahnya: ubah dropdown Tahun Libur (mis. ke "Semua Tahun").',
+              'Klik "Lanjut ke Tab 4 →" di kanan atas.',
             ]}
           />
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-            {/* Daftar Libur */}
-            <div className="xl:col-span-5 rounded-2xl border border-[#dce7e0] p-3.5 space-y-3 bg-white">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-extrabold text-[#18201c] flex items-center gap-1.5">
-                  <CalendarDays className="w-4 h-4 text-[#0f5c43]" />
-                  Tanggal Merah & Cuti Terdeteksi ({holidaysFiltered.length})
-                </span>
-                <select
-                  aria-label="Filter Tahun Libur"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="text-xs font-bold bg-[#f6f8f7] border border-[#dce7e0] rounded-lg px-2.5 py-1 text-[#18201c]"
-                >
-                  <option value="2026">Tahun 2026</option>
-                  <option value="2025">Tahun 2025</option>
-                  <option value="2024">Tahun 2024</option>
-                  <option value="2023">Tahun 2023</option>
-                  <option value="ALL">Semua Tahun (2023–2026)</option>
-                </select>
-              </div>
-              <div className="max-h-60 overflow-y-auto tvlk-scroll divide-y divide-[#eef1ef] text-xs pr-1">
-                {holidaysFiltered.map((h) => (
-                  <div key={`${h.date}-${h.name}`} className="py-1.5 flex items-center justify-between gap-2">
-                    <span className="font-semibold text-[#18201c]">{h.name}</span>
-                    <span className="font-bold text-[#0f5c43] tabular-nums shrink-0">{h.date}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Peta Jam Sibuk */}
-            <div className="xl:col-span-7 rounded-2xl border border-[#dce7e0] p-3.5 space-y-3 bg-white">
+          <div className="space-y-4">
+            {/* Peta Jam Sibuk - Full Width agar 24 kolom jam lega & terbaca jelas */}
+            <div className="rounded-2xl border border-[#dce7e0] p-4 space-y-3 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-extrabold text-[#18201c] flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-[#0f5c43]" />
@@ -260,7 +238,7 @@ export const Tab2PolaFaktor: React.FC<Tab2Props> = ({ data, unlockedStep, liveNo
                     className="text-xs font-bold bg-[#f6f8f7] border border-[#dce7e0] rounded-lg px-2.5 py-1 text-[#18201c]"
                   >
                     <option value="TOTAL">Semua Unit RSIA</option>
-                    {data.heatmapUnits
+                    {heatmapUnits
                       .filter((u) => u !== 'TOTAL')
                       .map((u) => (
                         <option key={u} value={u}>
@@ -293,16 +271,16 @@ export const Tab2PolaFaktor: React.FC<Tab2Props> = ({ data, unlockedStep, liveNo
                   <tbody className="divide-y divide-[#eef1ef]">
                     {heatmapRows.map((row) => (
                       <tr key={row.day_name}>
-                        <td className="p-1 pr-2 text-[11px] font-bold text-[#18201c] text-left whitespace-nowrap">
+                        <td className="p-1.5 pr-3 text-[11px] font-bold text-[#18201c] text-left whitespace-nowrap">
                           {row.day_name}
                         </td>
                         {hoursList.map((h) => {
-                          const val = row.hours[String(h)] || 0;
+                          const val = row.hours?.[String(h)] || 0;
                           return (
                             <td
                               key={h}
                               title={`${row.day_name} ${String(h).padStart(2, '0')}:00 — ${formatNumId(val)} pasien`}
-                              className={`p-1 text-[10px] border border-white rounded-xs tabular-nums ${getUatHeatmapCellClass(
+                              className={`p-1.5 text-[11px] border border-white rounded-xs tabular-nums ${getUatHeatmapCellClass(
                                 val,
                                 maxHeatVal
                               )}`}
@@ -315,6 +293,36 @@ export const Tab2PolaFaktor: React.FC<Tab2Props> = ({ data, unlockedStep, liveNo
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            {/* Daftar Libur - Full Width di bawah */}
+            <div className="rounded-2xl border border-[#dce7e0] p-4 space-y-3 bg-white">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-extrabold text-[#18201c] flex items-center gap-1.5">
+                  <CalendarDays className="w-4 h-4 text-[#0f5c43]" />
+                  Tanggal Merah &amp; Cuti Terdeteksi ({holidaysFiltered.length})
+                </span>
+                <select
+                  aria-label="Filter Tahun Libur"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="text-xs font-bold bg-[#f6f8f7] border border-[#dce7e0] rounded-lg px-2.5 py-1 text-[#18201c]"
+                >
+                  <option value="2026">Tahun 2026</option>
+                  <option value="2025">Tahun 2025</option>
+                  <option value="2024">Tahun 2024</option>
+                  <option value="2023">Tahun 2023</option>
+                  <option value="ALL">Semua Tahun (2023–2026)</option>
+                </select>
+              </div>
+              <div className="max-h-60 overflow-y-auto tvlk-scroll divide-y divide-[#eef1ef] text-xs pr-1">
+                {holidaysFiltered.map((h) => (
+                  <div key={`${h.date}-${h.name}`} className="py-1.5 flex items-center justify-between gap-2">
+                    <span className="font-semibold text-[#18201c]">{h.name}</span>
+                    <span className="font-bold text-[#0f5c43] tabular-nums shrink-0">{h.date}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

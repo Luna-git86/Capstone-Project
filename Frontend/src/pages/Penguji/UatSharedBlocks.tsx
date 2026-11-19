@@ -147,19 +147,18 @@ export const PanduanPengujiBox: React.FC<PanduanPengujiBoxProps> = ({
   whatHappens,
   stepsToCheck,
 }) => (
-  <div className="rounded-2xl bg-[#f6f8f7] border border-[#dce7e0] p-3.5 space-y-2 text-xs">
+  <div className="rounded-2xl bg-[#f6f8f7] border border-[#dce7e0] px-4 py-3 space-y-2 text-xs">
     <div className="flex items-start gap-2">
       <span className="mt-0.5 p-1 rounded-lg bg-[#e3f2ea] text-[#0f5c43] shrink-0">
         <ClipboardCheck className="w-3.5 h-3.5" />
       </span>
-      <div className="space-y-0.5">
-        <p className="font-extrabold text-[#0f5c43]">Apa yang Sedang Dikerjakan Sistem?</p>
-        <p className="text-[#3c4641] leading-relaxed">{whatHappens}</p>
-      </div>
+      <p className="text-[#18201c] leading-relaxed">
+        <strong className="text-[#0f5c43]">Fokus:</strong> {whatHappens}
+      </p>
     </div>
     <div className="pl-7 space-y-1">
-      <p className="font-extrabold text-[#18201c]">Yang Perlu Dilakukan &amp; Dicek Penguji:</p>
-      <ol className="list-decimal pl-4 space-y-0.5 text-[#3c4641] leading-relaxed">
+      <p className="font-extrabold text-[#18201c]">Langkah Penguji:</p>
+      <ol className="list-decimal pl-4 space-y-1 text-[#3c4641] leading-relaxed">
         {stepsToCheck.map((item, idx) => (
           <li key={idx}>{item}</li>
         ))}

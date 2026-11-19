@@ -1,6 +1,6 @@
 // Frontend/src/pages/Penguji/uatSmTypes.ts
 
-export type TabId = 'tab1' | 'tab2' | 'tab3' | 'tab4' | 'tab5';
+export type TabId = 'tab1' | 'tab2' | 'tab3' | 'tab4' | 'tab5' | 'tab6';
 
 export const RSIA_UAT_COLORS = {
   actual: '#0f5c43',
@@ -36,26 +36,45 @@ export function formatNumId(val: number | null | undefined, digits = 0): string 
 }
 
 export interface Tab1Data {
-  kpi: {
-    totalVisits: number;
-    totalDays: number;
-    duplicates: number;
-    missingDays: number;
-    primaryUnitsSharePct: number;
-    rareUnitsSharePct: number;
+  loadSummary: {
+    status: string;
+    filesExpected: number;
+    filesLoaded: number;
+    totalRowsLoaded: number;
+    totalColumns: number;
+    allColumnsMatched: boolean;
     dateStart: string;
     dateEnd: string;
-    meanDaily: number;
-    maxDaily: number;
-    minDaily: number;
+    totalDays: number;
+    totalMonths: number;
+    preprocessingApplied: boolean;
+    hashingApplied: boolean;
+    saltingApplied: boolean;
+    labelNormalizationApplied: boolean;
   };
   files: Array<{
     fileName: string;
+    status: string;
+    fileSizeKb?: number | null;
+    columnsCount: number;
     rows: number;
     dateMin: string;
     dateMax: string;
     natDates: number;
+    nullCells: number;
     columnsVerified: boolean;
+  }>;
+  rawColumns: Array<{
+    name: string;
+    dtype: string;
+    nullCount: number;
+    roleInRaw: string;
+    status: string;
+  }>;
+  rawPoliklinikDistribution: Array<{
+    poliklinik: string;
+    count: number;
+    sharePct: number;
   }>;
   penjaminDistribution: Array<{
     penjamin: string;
@@ -69,15 +88,42 @@ export interface Tab1Data {
   }>;
   sampleRawRows: Array<{
     sumberBerkas: string;
-    noRawatMask: string;
+    noRawatRaw: string;
     tglReg: string;
     jam: string;
-    noRmMask: string;
-    pasienMask: string;
-    dokterMask: string;
+    noRmRaw: string;
+    pasienRaw: string;
+    dokterRaw: string;
     poliklinikRaw: string;
     penjaminRaw: string;
     jenisKunjungan: string;
+  }>;
+}
+
+export interface Tab2Data {
+  stage2Summary: {
+    rowsProcessed: number;
+    totalDays: number;
+    duplicates: number;
+    missingDays: number;
+    meanDaily: number;
+    maxDaily: number;
+    minDaily: number;
+    igdMergedCount: number;
+    penjaminDashReplacedCount: number;
+    uniquePatientsHashed: number;
+    uniqueDoctorsAnonymized: number;
+    outlierDaysFlagged: number;
+    primaryUnitsSharePct: number;
+    rareUnitsSharePct: number;
+  };
+  preprocessingSteps: Array<{
+    stepNo: number;
+    stepKey: string;
+    title: string;
+    affectedColumns: string;
+    rowsAfter: number;
+    resultNote: string;
   }>;
   sampleAnonymizedRows: Array<{
     tanggal: string;
@@ -119,7 +165,7 @@ export interface Tab1Data {
   }>;
 }
 
-export interface Tab2Data {
+export interface Tab3Data {
   calendarAverages: { workday: number; weekend: number; holiday: number };
   featureCount: number;
   horizonDays: number;
@@ -149,7 +195,7 @@ export interface Tab2Data {
   heatmapByUnit: Record<string, Array<{ day_of_week: number; day_name: string; hours: Record<string, number> }>>;
 }
 
-export interface Tab3Data {
+export interface Tab4Data {
   bestModel: string;
   testPeriod: { start: string; end: string; total_days: number };
   maeReductionPct: number;
@@ -185,7 +231,7 @@ export interface Tab3Data {
   >;
 }
 
-export interface Tab4Data {
+export interface Tab5Data {
   hypotheses: Array<{
     code: string;
     title: string;
@@ -223,7 +269,7 @@ export interface Tab4Data {
   latestIntegrityTests: Array<{ name: string; status: string }>;
 }
 
-export interface Tab5Data {
+export interface Tab6Data {
   projection2026: {
     h1Actual: number;
     h2Projected: number;
@@ -258,22 +304,4 @@ export interface Tab5Data {
     metricShown: string;
     targetPage: string;
   }>;
-}
-
-export interface ExcelInspectionResult {
-  totalRows: number;
-  matchedColumns: string[];
-  missingRequiredColumns: string[];
-  isFormatCompatible: boolean;
-  dateMin: string | null;
-  dateMax: string | null;
-  poliklinikDetected: string[];
-  sampleRows?: Array<{
-    tanggal: string;
-    jam: string;
-    poliklinik: string;
-    penjamin: string;
-    jenisKunjungan: string;
-  }>;
-  privacyNote: string;
 }
