@@ -26,15 +26,15 @@ PRIVACY: No personal identifiable information is processed or generated.
 from __future__ import annotations
 
 import json
+import re
 import sys
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
 from hijri_converter import Gregorian
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.metrics import mean_absolute_error
 
 # Project imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -55,6 +55,125 @@ HOLIDAY_SOURCES = {
     "2025": "SKB 3 Menteri No. 1017/2024, No. 2/2024, No. 2/2024",
     "2026": "SKB 3 Menteri tentang Hari Libur Nasional dan Cuti Bersama Tahun 2026 (ditetapkan 19 September 2025)",
 }
+
+GOOGLE_HOLIDAY_ICS_URL = (
+    "https://calendar.google.com/calendar/ical/"
+    "id.indonesian%23holiday%40group.v.calendar.google.com/public/basic.ics"
+)
+NAGER_HOLIDAY_API_URL = "https://date.nager.at/api/v3/PublicHolidays/{year}/ID"
+_OBSERVANCE_EXCLUDE_KEYWORDS = (
+    "1 ramadan",
+    "malam tahun baru",
+    "hari kedua muharram",
+    "valentine",
+    "hari ibu",
+)
+_RUNTIME_HOLIDAY_CACHE: dict[str, str] | None = None
+_RUNTIME_HOLIDAY_SOURCE_INFO: dict[str, str] = {}
+
+
+def _fetch_google_calendar_ics(target_years: set[int]) -> dict[str, str]:
+    """Fetch Indonesian holidays & Cuti Bersama automatically from Google Calendar public ICS."""
+    req = urllib.request.Request(GOOGLE_HOLIDAY_ICS_URL, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        text = resp.read().decode("utf-8", errors="replace")
+
+    events = re.findall(
+        r"BEGIN:VEVENT.*?DTSTART;VALUE=DATE:(\d{8}).*?SUMMARY:(.*?)\r?\n.*?END:VEVENT",
+        text,
+        re.S,
+    )
+    parsed: dict[str, str] = {}
+    for raw_date, raw_summary in events:
+        yr = int(raw_date[:4])
+        if yr not in target_years:
+            continue
+        summary = raw_summary.strip()
+        if any(kw in summary.lower() for kw in _OBSERVANCE_EXCLUDE_KEYWORDS):
+            continue
+        iso_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
+        parsed[iso_date] = summary
+    return parsed
+
+
+def _fetch_nager_api(target_years: set[int]) -> dict[str, str]:
+    """Fallback public holiday API (date.nager.at) for Indonesia."""
+    parsed: dict[str, str] = {}
+    for yr in sorted(target_years):
+        url = NAGER_HOLIDAY_API_URL.format(year=yr)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            items = json.loads(resp.read().decode("utf-8"))
+        for item in items:
+            if item.get("date"):
+                parsed[item["date"]] = item.get("localName") or item.get("name") or "Hari Libur Nasional"
+    return parsed
+
+
+def get_indonesian_holidays_auto(target_years: list[int] | None = None) -> tuple[dict[str, str], dict[str, str]]:
+    """
+    Ambil kalender libur nasional & cuti bersama secara otomatis:
+      1. Google Calendar Public Indonesian Holidays ICS (otomatis + termasuk Cuti Bersama)
+      2. Fallback API date.nager.at (jika Google Calendar gagal)
+      3. Cache lokal (`holidays_auto_cache.json`) & baseline SKB 3 Menteri 2023-2026 (jika offline)
+    """
+    global _RUNTIME_HOLIDAY_CACHE, _RUNTIME_HOLIDAY_SOURCE_INFO
+    years_set = set(target_years or [2023, 2024, 2025, 2026])
+
+    if _RUNTIME_HOLIDAY_CACHE is not None and all(
+        any(d.startswith(f"{y}-") for d in _RUNTIME_HOLIDAY_CACHE) for y in years_set
+    ):
+        return _RUNTIME_HOLIDAY_CACHE, _RUNTIME_HOLIDAY_SOURCE_INFO
+
+    cache_path = config.DATA_PROCESSED / "holidays_auto_cache.json"
+    merged: dict[str, str] = dict(INDONESIAN_HOLIDAYS_MAP)
+    source_info: dict[str, str] = {"baseline_2023_2026": "SKB 3 Menteri (Terverifikasi Offline)"}
+
+    if cache_path.exists():
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                cached_data = json.load(f)
+            if isinstance(cached_data.get("holidays"), dict):
+                merged = {**cached_data["holidays"], **merged}
+        except Exception:
+            pass
+
+    api_holidays: dict[str, str] = {}
+    try:
+        api_holidays = _fetch_google_calendar_ics(years_set)
+        if api_holidays:
+            source_info["auto_api_primary"] = "Google Calendar Public ICS (id.indonesian#holiday)"
+    except Exception as exc_gcal:
+        source_info["auto_api_primary_warning"] = f"Google ICS offline/error: {exc_gcal}"
+        try:
+            api_holidays = _fetch_nager_api(years_set)
+            if api_holidays:
+                source_info["auto_api_fallback"] = "Nager.Date Public Holidays API (ID)"
+        except Exception as exc_nager:
+            source_info["auto_api_fallback_warning"] = f"Nager API offline/error: {exc_nager}"
+
+    if api_holidays:
+        # API fills any new/future years automatically, while verified SKB 3 Menteri takes precedence for 2023-2026
+        merged = {**api_holidays, **merged}
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "updated_at": datetime.now().isoformat(),
+                        "sources": source_info,
+                        "holidays": dict(sorted(merged.items())),
+                    },
+                    f,
+                    indent=2,
+                    ensure_ascii=False,
+                )
+        except Exception:
+            pass
+
+    _RUNTIME_HOLIDAY_CACHE = dict(sorted(merged.items()))
+    _RUNTIME_HOLIDAY_SOURCE_INFO = source_info
+    return _RUNTIME_HOLIDAY_CACHE, _RUNTIME_HOLIDAY_SOURCE_INFO
 
 INDONESIAN_HOLIDAYS_MAP: dict[str, str] = {
     # 2023
@@ -171,42 +290,20 @@ INDONESIAN_HOLIDAYS_MAP: dict[str, str] = {
 }
 
 FEATURE_HYPOTHESES = {
-    "day_of_week": "Volume poliklinik terjadwal mengikuti jadwal praktik mingguan dokter (puncak Senin & Rabu, lembah Minggu).",
-    "day_of_month": "Menangkap variasi siklus tanggal gajian/administrasi rujukan bulanan.",
-    "month": "Menangkap variasi musiman cuaca/penyakit tahunan.",
-    "week_of_year": "Menangkap pergeseran gelombang musiman tahunan secara granular.",
-    "is_weekend": "Kunjungan poliklinik spesialis turun signifikan pada akhir pekan (Sabtu-Minggu).",
-    "is_month_start": "Efek awal bulan pada pembaruan kuota/administrasi penjamin.",
-    "is_month_end": "Efek akhir bulan pada penyelesaian kontrol pasien.",
-    "sin_dow": "Komponen sinus siklus 7 hari agar transisi Minggu->Senin kontinu bagi model linier.",
-    "cos_dow": "Komponen cosinus siklus 7 hari pasangan ortogonal sin_dow.",
-    "sin_month": "Komponen sinus siklus 12 bulan agar transisi Des->Jan kontinu.",
-    "cos_month": "Komponen cosinus siklus 12 bulan pasangan ortogonal sin_month.",
-    "is_holiday": "Hari libur nasional/cuti bersama menurunkan kunjungan poliklinik terjadwal.",
-    "is_ramadan": "Bulan puasa Ramadan (bulan ke-9 Hijriah) menggeser pola kunjungan rawat jalan.",
-    "is_eid_period": "Periode 1–7 Syawal (Idulfitri & arus mudik/balik) menurunkan drastis kunjungan poliklinik reguler.",
-    "days_to_next_holiday": "Mengukur efek antisipasi pasien menjelang libur nasional.",
-    "days_from_last_holiday": "Mengukur efek penumpukan kunjungan (rebound) tepat setelah hari libur usai.",
-    "lag_7": "Kunjungan pada hari yang sama 1 minggu lalu (ACF lag 7 = 0.577).",
-    "lag_14": "Kunjungan pada hari yang sama 2 minggu lalu (ACF lag 14 = 0.566).",
-    "lag_21": "Kunjungan pada hari yang sama 3 minggu lalu (ACF lag 21 = 0.531).",
-    "lag_28": "Kunjungan pada hari yang sama 4 minggu lalu (ACF lag 28 = 0.532).",
-    "rolling_mean_7d": "Tingkat rata-rata kunjungan 7 hari terakhir yang tersedia saat prediksi (t-7 s.d. t-13) untuk menangkap tren lokal.",
-    "rolling_mean_14d": "Tingkat rata-rata kunjungan 14 hari (t-7 s.d. t-20) untuk stabilisasi tren menengah.",
-    "rolling_mean_28d": "Tingkat rata-rata kunjungan 28 hari (t-7 s.d. t-34) sebagai jangkar rezim volume bulanan.",
-    "rolling_std_7d": "Volatilitas lokal kunjungan 7 hari terakhir (t-7 s.d. t-13).",
-    "ratio_lag7_to_rolling28": "Rasio hari yang sama minggu lalu terhadap level 28 hari (mengukur kekuatan hari spesifik relatif terhadap tren saat ini).",
-    "dow_mean_4w": "Rata-rata kunjungan pada hari kerja yang sama selama 4 minggu terakhir (lag 7, 14, 21, 28).",
-    "ratio_dow_to_rm28": "Rasio rata-rata 4 minggu hari yang sama terhadap level rezim 28 hari (indikator kekuatan spesifik hari kerja bebas pergeseran rezim).",
-    "is_monday": "Indikator biner hari Senin (jadwal praktik dokter spesialis terbanyak, puncak mingguan).",
-    "is_sunday": "Indikator biner hari Minggu (poliklinik spesialis tutup, layanan mayoritas Unit IGD).",
-    "sin_dow_2": "Harmonik Fourier orde-2 sinus siklus 7 hari untuk menangkap ketajaman puncak Senin & lembah Minggu.",
-    "cos_dow_2": "Harmonik Fourier orde-2 cosinus siklus 7 hari pasangan ortogonal sin_dow_2.",
-    "is_holiday_weekday": "Interaksi tanggal merah pada hari kerja (Senin-Jumat), saat poliklinik terjadwal tutup mendadak.",
-    "is_post_holiday_workday": "Indikator 1-2 hari kerja pertama setelah hari libur nasional (efek rebound/akumulasi pasien kontrol).",
-    "ewma_dow_4w": "Rata-rata tertimbang eksponensial hari yang sama 4 minggu terakhir (40% lag_7 + 30% lag_14 + 20% lag_21 + 10% lag_28).",
-    "ratio_ewma_dow_to_rm28": "Rasio EWMA hari yang sama terhadap rata-rata 28 hari untuk adaptasi cepat perubahan tren.",
-    "rolling_median_28d": "Median bergulir 28 hari (t-7 s.d. t-34) sebagai jangkar rezim yang tahan terhadap pencilan pekan Lebaran.",
+    "day_of_week": "Hari dalam pekan (0=Senin s.d. 6=Minggu) mengikuti jadwal praktik dokter.",
+    "month": "Bulan dalam tahun (1-12) untuk menangkap variasi musiman.",
+    "is_weekend": "Penanda akhir pekan (Sabtu-Minggu) saat poliklinik terjadwal berkurang/tutup.",
+    "is_holiday": "Hari libur nasional atau cuti bersama menurunkan kunjungan poliklinik terjadwal.",
+    "is_ramadan": "Bulan puasa Ramadan menggeser pola kunjungan rawat jalan.",
+    "is_eid_period": "Periode 1-7 Syawal (Idulfitri) menurunkan drastis kunjungan reguler.",
+    "lag_7": "Jumlah kunjungan pada hari yang sama 1 minggu lalu (t-7).",
+    "lag_14": "Jumlah kunjungan pada hari yang sama 2 minggu lalu (t-14).",
+    "lag_21": "Jumlah kunjungan pada hari yang sama 3 minggu lalu (t-21).",
+    "lag_28": "Jumlah kunjungan pada hari yang sama 4 minggu lalu (t-28).",
+    "rolling_mean_7d": "Rata-rata kunjungan 7 hari terakhir yang tersedia saat prediksi (t-7 s.d. t-13).",
+    "rolling_mean_28d": "Rata-rata kunjungan 28 hari terakhir (t-7 s.d. t-34) sebagai jangkar tren bulanan.",
+    "ewma_dow_4w": "Rata-rata tertimbang hari yang sama 4 minggu terakhir (40% lag_7 + 30% lag_14 + 20% lag_21 + 10% lag_28).",
+    "ratio_ewma_dow_to_rm28": "Rasio rata-rata tertimbang hari yang sama terhadap rata-rata 28 hari.",
 }
 
 
@@ -224,65 +321,26 @@ def compute_hijri_flags(dates: pd.Series) -> tuple[np.ndarray, np.ndarray]:
 
 
 def create_calendar_features(df_input: pd.DataFrame) -> pd.DataFrame:
-    """Add calendar, cyclic, verified holiday, and Hijri features."""
+    """Add simplified calendar, automatic holiday, and Hijri features."""
     df = df_input.copy()
     date_col = "date" if "date" in df.columns else "tgl_reg"
     dates = pd.to_datetime(df[date_col])
 
     df["day_of_week"] = dates.dt.dayofweek
-    df["day_of_month"] = dates.dt.day
     df["month"] = dates.dt.month
-    df["week_of_year"] = dates.dt.isocalendar().week.astype(int)
     df["is_weekend"] = df["day_of_week"].isin([5, 6]).astype(int)
-    df["is_monday"] = (df["day_of_week"] == 0).astype(int)
-    df["is_sunday"] = (df["day_of_week"] == 6).astype(int)
-    df["is_month_start"] = (df["day_of_month"] <= 3).astype(int)
-    df["is_month_end"] = (df["day_of_month"] >= dates.dt.days_in_month - 2).astype(int)
 
-    # Cyclic encoding (order 1 & order 2 for weekly harmonic)
-    df["sin_dow"] = np.sin(2 * np.pi * df["day_of_week"] / 7.0)
-    df["cos_dow"] = np.cos(2 * np.pi * df["day_of_week"] / 7.0)
-    df["sin_dow_2"] = np.sin(4 * np.pi * df["day_of_week"] / 7.0)
-    df["cos_dow_2"] = np.cos(4 * np.pi * df["day_of_week"] / 7.0)
-    df["sin_month"] = np.sin(2 * np.pi * (df["month"] - 1) / 12.0)
-    df["cos_month"] = np.cos(2 * np.pi * (df["month"] - 1) / 12.0)
-
-    # Verified Indonesian holidays
-    holiday_dates = set(INDONESIAN_HOLIDAYS_MAP.keys())
+    # Automatic Indonesian holidays (Google Calendar ICS -> Nager API -> local cache + SKB 3 Menteri fallback)
+    target_years = sorted(dates.dt.year.unique().tolist())
+    holidays_map, _ = get_indonesian_holidays_auto(target_years)
+    holiday_dates = set(holidays_map.keys())
     date_strs = dates.dt.strftime("%Y-%m-%d")
     df["is_holiday"] = date_strs.isin(holiday_dates).astype(int)
-    df["is_holiday_weekday"] = (df["is_holiday"] * (1 - df["is_weekend"])).astype(int)
 
     # Hijri Ramadan & Eid week via hijri_converter
     ramadan_arr, eid_arr = compute_hijri_flags(dates)
     df["is_ramadan"] = ramadan_arr
     df["is_eid_period"] = eid_arr
-
-    # Distance to/from nearest holiday (capped at 30 days)
-    all_holidays_dt = pd.to_datetime( sorted(list(holiday_dates)) )
-    days_to_next = []
-    days_from_last = []
-    for cur_dt in dates:
-        future_diffs = (all_holidays_dt - cur_dt).total_seconds() / 86400.0
-        past_diffs = (cur_dt - all_holidays_dt).total_seconds() / 86400.0
-
-        pos_future = future_diffs[future_diffs >= 0]
-        pos_past = past_diffs[past_diffs >= 0]
-
-        next_d = int(pos_future.min()) if len(pos_future) > 0 else 30
-        prev_d = int(pos_past.min()) if len(pos_past) > 0 else 30
-
-        days_to_next.append(min(next_d, 30))
-        days_from_last.append(min(prev_d, 30))
-
-    df["days_to_next_holiday"] = days_to_next
-    df["days_from_last_holiday"] = days_from_last
-    df["is_post_holiday_workday"] = (
-        (df["days_from_last_holiday"] >= 1)
-        & (df["days_from_last_holiday"] <= 2)
-        & (df["is_holiday"] == 0)
-        & (df["is_weekend"] == 0)
-    ).astype(int)
 
     return df
 
@@ -291,10 +349,7 @@ def create_lag_and_rolling_features(
     df_input: pd.DataFrame, target_col: str = "visit_count"
 ) -> pd.DataFrame:
     """
-    Create lag and rolling features WITHOUT DATA LEAKAGE.
-    - Primary horizon H = 7 days: uses shift(7) and lags >= 7.
-    - Sensitivity horizon H = 14 days: also computes shift(14) rolling stats (`_h14`)
-      so H=14 evaluation only uses information from t-14 and earlier.
+    Create core lag and rolling features WITHOUT DATA LEAKAGE (shift >= 7 days).
     """
     df = df_input.copy()
     s = df[target_col]
@@ -308,90 +363,13 @@ def create_lag_and_rolling_features(
     # Horizon H = 7 rolling statistics (shifted by 7 days first!)
     s_shift7 = s.shift(7)
     df["rolling_mean_7d"] = s_shift7.rolling(window=7, min_periods=7).mean()
-    df["rolling_mean_14d"] = s_shift7.rolling(window=14, min_periods=14).mean()
     df["rolling_mean_28d"] = s_shift7.rolling(window=28, min_periods=28).mean()
-    df["rolling_median_28d"] = s_shift7.rolling(window=28, min_periods=28).median()
-    df["rolling_std_7d"] = s_shift7.rolling(window=7, min_periods=7).std()
-    df["ratio_lag7_to_rolling28"] = df["lag_7"] / (df["rolling_mean_28d"] + 1e-5)
-    df["dow_mean_4w"] = df[["lag_7", "lag_14", "lag_21", "lag_28"]].mean(axis=1)
-    df["ratio_dow_to_rm28"] = df["dow_mean_4w"] / (df["rolling_mean_28d"] + 1e-5)
     df["ewma_dow_4w"] = (
         0.40 * df["lag_7"] + 0.30 * df["lag_14"] + 0.20 * df["lag_21"] + 0.10 * df["lag_28"]
     )
     df["ratio_ewma_dow_to_rm28"] = df["ewma_dow_4w"] / (df["rolling_mean_28d"] + 1e-5)
 
-    # Horizon H = 14 rolling statistics (shifted by 14 days first!)
-    s_shift14 = s.shift(14)
-    df["rolling_mean_7d_h14"] = s_shift14.rolling(window=7, min_periods=7).mean()
-    df["rolling_mean_28d_h14"] = s_shift14.rolling(window=28, min_periods=28).mean()
-    df["rolling_median_28d_h14"] = s_shift14.rolling(window=28, min_periods=28).median()
-    df["rolling_std_7d_h14"] = s_shift14.rolling(window=7, min_periods=7).std()
-    df["ratio_lag14_to_rolling28_h14"] = df["lag_14"] / (df["rolling_mean_28d_h14"] + 1e-5)
-    df["dow_mean_3w_h14"] = df[["lag_14", "lag_21", "lag_28"]].mean(axis=1)
-    df["ratio_dow_to_rm28_h14"] = df["dow_mean_3w_h14"] / (df["rolling_mean_28d_h14"] + 1e-5)
-    df["ewma_dow_3w_h14"] = 0.50 * df["lag_14"] + 0.30 * df["lag_21"] + 0.20 * df["lag_28"]
-    df["ratio_ewma_dow_to_rm28_h14"] = df["ewma_dow_3w_h14"] / (df["rolling_mean_28d_h14"] + 1e-5)
-
     return df
-
-
-def run_feature_ablation(df_feat_total: pd.DataFrame) -> dict:
-    """
-    Evaluate feature group usefulness via ablation on Train (<=2025-06-30) -> Val (Jul-Dec 2025).
-    Test set (2026) is untouched.
-    """
-    df_clean = df_feat_total.dropna().reset_index(drop=True)
-    train_df = df_clean[df_clean["date"] <= config.TRAIN_END]
-    val_df = df_clean[(df_clean["date"] > config.TRAIN_END) & (df_clean["date"] <= config.VALIDATION_END)]
-
-    cal_cols = [
-        "day_of_week", "day_of_month", "month", "week_of_year",
-        "is_weekend", "is_monday", "is_sunday", "is_month_start", "is_month_end",
-        "sin_dow", "cos_dow", "sin_dow_2", "cos_dow_2", "sin_month", "cos_month",
-    ]
-    hol_cols = [
-        "is_holiday", "is_holiday_weekday", "is_post_holiday_workday",
-        "is_ramadan", "is_eid_period",
-        "days_to_next_holiday", "days_from_last_holiday",
-    ]
-    lag_cols = [
-        "lag_7", "lag_14", "lag_21", "lag_28",
-        "rolling_mean_7d", "rolling_mean_14d", "rolling_mean_28d", "rolling_median_28d",
-        "rolling_std_7d", "ratio_lag7_to_rolling28",
-        "dow_mean_4w", "ratio_dow_to_rm28",
-        "ewma_dow_4w", "ratio_ewma_dow_to_rm28",
-    ]
-
-    configs = {
-        "only_calendar": cal_cols,
-        "calendar_plus_holiday": cal_cols + hol_cols,
-        "only_lags_and_rolling": lag_cols,
-        "calendar_plus_lags": cal_cols + lag_cols,
-        "all_h7_features": cal_cols + hol_cols + lag_cols,
-    }
-
-    results = {}
-    y_tr = train_df["visit_count"].values
-    y_va = val_df["visit_count"].values
-    base_tr = np.maximum(1.0, train_df["rolling_mean_28d"].values)
-    base_va = np.maximum(1.0, val_df["rolling_mean_28d"].values)
-
-    for name, cols in configs.items():
-        model = HistGradientBoostingRegressor(
-            loss="poisson", learning_rate=0.03, max_iter=120,
-            max_depth=4, min_samples_leaf=20, l2_regularization=5.0, random_state=config.SEED,
-        )
-        if "rolling_mean_28d" in cols:
-            model.fit(train_df[cols].values, y_tr / base_tr, sample_weight=base_tr)
-            preds = model.predict(val_df[cols].values) * base_va
-        else:
-            model.fit(train_df[cols].values, y_tr)
-            preds = model.predict(val_df[cols].values)
-        results[name] = {
-            "num_features": len(cols),
-            "val_mae": round(float(mean_absolute_error(y_va, preds)), 3),
-        }
-    return results
 
 
 def run_feature_engineering():
@@ -432,20 +410,9 @@ def run_feature_engineering():
         "source_file", "day_name", "year", "poliklinik", "is_outlier",
     ]
     h7_feature_cols = list(FEATURE_HYPOTHESES.keys())
-    h14_extra_cols = [
-        "rolling_mean_7d_h14", "rolling_mean_28d_h14", "rolling_median_28d_h14",
-        "rolling_std_7d_h14", "ratio_lag14_to_rolling28_h14",
-        "dow_mean_3w_h14", "ratio_dow_to_rm28_h14",
-        "ewma_dow_3w_h14", "ratio_ewma_dow_to_rm28_h14",
-    ]
-    all_engineered_cols = h7_feature_cols + h14_extra_cols
+    all_engineered_cols = h7_feature_cols
 
-    print("\n[3] Uji Ablasi Kelompok Fitur pada Validation Set (Jul-Des 2025):")
-    ablation_results = run_feature_ablation(df_feat_total)
-    for k_ab, v_ab in ablation_results.items():
-        print(f"  - {k_ab:25s} ({v_ab['num_features']:2d} fitur): Val MAE = {v_ab['val_mae']:.3f}")
-
-    print(f"\n[4] Ringkasan Fitur (H=7: {len(h7_feature_cols)} fitur, +H=14: {len(h14_extra_cols)} fitur):")
+    print(f"\n[3] Ringkasan Fitur (Horizon H=7: {len(h7_feature_cols)} fitur):")
     print(f"  Dimensi features_total.parquet   : {df_feat_total.shape[0]} baris x {df_feat_total.shape[1]} kolom")
     print(f"  Dimensi features_by_poli.parquet : {df_feat_poli.shape[0]} baris x {df_feat_poli.shape[1]} kolom")
 
@@ -457,12 +424,16 @@ def run_feature_engineering():
     df_feat_total.to_parquet(out_total, index=False)
     df_feat_poli.to_parquet(out_poli, index=False)
 
+    all_years = sorted(pd.to_datetime(df_feat_total[date_col]).dt.year.unique().tolist())
+    holidays_map, auto_holiday_sources = get_indonesian_holidays_auto(all_years)
+    combined_sources = {**HOLIDAY_SOURCES, **auto_holiday_sources}
+
     with open(out_holidays, "w", encoding="utf-8") as f:
         json.dump(
             {
-                "sources": HOLIDAY_SOURCES,
-                "total_dates": len(INDONESIAN_HOLIDAYS_MAP),
-                "holidays": INDONESIAN_HOLIDAYS_MAP,
+                "sources": combined_sources,
+                "total_dates": len(holidays_map),
+                "holidays": holidays_map,
             },
             f,
             indent=2,
@@ -476,22 +447,19 @@ def run_feature_engineering():
         "total_poli_rows": int(len(df_feat_poli)),
         "total_columns_poli_df": int(df_feat_poli.shape[1]),
         "forecast_horizon_default": config.HORIZON,
-        "forecast_horizon_sensitivity": config.HORIZON_SENSITIVITY,
         "h7_feature_count": len(h7_feature_cols),
         "h7_features": h7_feature_cols,
-        "h14_extra_features": h14_extra_cols,
         "excluded_non_feature_columns": [c for c in non_feature_cols if c in df_feat_total.columns],
-        "holiday_sources": HOLIDAY_SOURCES,
+        "holiday_sources": combined_sources,
         "holiday_dates_count_by_year": {
-            yr: sum(1 for dt_s in INDONESIAN_HOLIDAYS_MAP if dt_s.startswith(yr))
-            for yr in ["2023", "2024", "2025", "2026"]
+            str(yr): sum(1 for dt_s in holidays_map if dt_s.startswith(str(yr)))
+            for yr in all_years
         },
-        "ablation_study_val_mae": ablation_results,
         "features_detail": {
             col: {
                 "dtype": str(df_feat_total[col].dtype),
                 "null_count": int(df_feat_total[col].isna().sum()),
-                "hypothesis": FEATURE_HYPOTHESES.get(col, "Fitur khusus sensitivitas horizon H=14 (shift >= 14 hari)."),
+                "description": FEATURE_HYPOTHESES.get(col, ""),
                 "sample_range": [
                     round(float(df_feat_total[col].dropna().min()), 4),
                     round(float(df_feat_total[col].dropna().max()), 4),

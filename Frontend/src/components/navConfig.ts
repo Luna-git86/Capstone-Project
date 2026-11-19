@@ -4,6 +4,7 @@ import {
   BarChart3,
   BellRing,
   BookOpen,
+  ClipboardCheck,
   ClipboardList,
   FileText,
   Home,
@@ -13,6 +14,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
+import { canAccessAnalisisKunjungan } from '../utils/authStorage';
 
 export interface MenuItem {
   title: string;
@@ -32,19 +34,21 @@ export const getDashboardPath = (role: string) => {
       return '/dashboard-kadiv';
     case 'KOORDINATOR':
       return '/dashboard-koordinator';
+    case 'PENGUJI':
+      return '/dashboard-penguji';
     default:
       return '/dashboard-staff';
   }
 };
 
-export const getMenuItems = (userRole: string): MenuItem[] => {
+export const getMenuItems = (userRole: string, userDivisi?: string | null): MenuItem[] => {
   const menuItems: MenuItem[] = [
     {
-      title: userRole === 'ADMIN' ? 'Kelola Akun Pegawai' : 'Beranda',
-      shortTitle: userRole === 'ADMIN' ? 'Akun' : 'Beranda',
+      title: userRole === 'ADMIN' ? 'Kelola Akun Pegawai' : userRole === 'PENGUJI' ? 'Simulasi & Uji Sistem' : 'Beranda',
+      shortTitle: userRole === 'ADMIN' ? 'Akun' : userRole === 'PENGUJI' ? 'Uji SM' : 'Beranda',
       path: getDashboardPath(userRole),
-      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF'],
-      icon: userRole === 'ADMIN' ? Users : Home,
+      allowedRoles: ['ADMIN', 'DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF', 'PENGUJI'],
+      icon: userRole === 'ADMIN' ? Users : userRole === 'PENGUJI' ? ClipboardCheck : Home,
     },
     {
       title: 'Menu Laporan',
@@ -78,9 +82,9 @@ export const getMenuItems = (userRole: string): MenuItem[] => {
       icon: BarChart3,
     },
     {
-      title: 'Analitik Kunjungan',
-      shortTitle: 'Analitik',
-      path: '/analitik-kunjungan',
+      title: 'Analisis Kunjungan',
+      shortTitle: 'Analisis',
+      path: '/analisis-kunjungan',
       allowedRoles: ['DIREKTUR', 'KADIV'],
       icon: Activity,
     },
@@ -117,5 +121,11 @@ export const getMenuItems = (userRole: string): MenuItem[] => {
     },
   ];
 
-  return menuItems.filter((item) => item.allowedRoles.includes(userRole));
+  return menuItems.filter((item) => {
+    if (!item.allowedRoles.includes(userRole)) return false;
+    if (item.path === '/analisis-kunjungan') {
+      return canAccessAnalisisKunjungan(userRole, userDivisi);
+    }
+    return true;
+  });
 };

@@ -101,7 +101,8 @@ def export_summary(
     h1_2026_total = int(annual_summary.get(2026, {}).get("sum", 0))
     h2_2026_proj_total = int(round(float(df_future_h2["pred_best"].sum())))
     full_2026_est_total = h1_2026_total + h2_2026_proj_total
-    full_2026_est_mean = round(full_2026_est_total / 365.0, 2)
+    days_in_2026 = float(pd.Timestamp(2026, 12, 31).dayofyear)  # otomatis 365 atau 366 saat kabisat
+    full_2026_est_mean = round(full_2026_est_total / days_in_2026, 2)
 
     best_name = eval_metrics.get("best_model_total_h7", "Negative Binomial GLM")
     best_test = eval_metrics["point_metrics"][best_name]
@@ -132,10 +133,7 @@ def export_summary(
                 "mae": best_test["MAE"],
                 "rmse": best_test["RMSE"],
                 "wape_pct": best_test["WAPE_pct"],
-                "mase": best_test["MASE"],
                 "mean_bias": best_test["Mean_Bias"],
-                "r2": best_test["R2"],
-                "mase_status": "LULUS_OPTIMAL (< 1.0)",
             },
         },
         "by_poliklinik": {},
@@ -407,7 +405,8 @@ def _df_to_fva_points(df_sub: pd.DataFrame) -> list[dict]:
             "is_future": bool(row["is_future"]),
             "actual": act_val,
             "pred_best": round(float(row["pred_best"]), 2),
-            "pred_dow_mean": round(float(row["pred_dow_mean"]), 2),
+            "pred_nb_glm": round(float(row["pred_nb_glm"]), 2) if "pred_nb_glm" in row and pd.notna(row["pred_nb_glm"]) else round(float(row["pred_best"]), 2),
+            "pred_dow_mean": round(float(row["pred_dow_mean"]), 2) if "pred_dow_mean" in row and pd.notna(row["pred_dow_mean"]) else round(float(row["pred_best"]), 2),
             "ci80_low": round(float(row["ci80_low"]), 2),
             "ci80_high": round(float(row["ci80_high"]), 2),
         })
@@ -430,7 +429,6 @@ def export_forecast_vs_actual(df_full_series: pd.DataFrame) -> dict:
 
 def export_model_comparison(eval_metrics: dict, model_meta: dict) -> dict:
     point_m = eval_metrics["point_metrics"]
-    dm_tests = eval_metrics["diebold_mariano_tests"]
 
     rows = []
     for model_name, m in point_m.items():
@@ -439,10 +437,7 @@ def export_model_comparison(eval_metrics: dict, model_meta: dict) -> dict:
             "mae": m["MAE"],
             "rmse": m["RMSE"],
             "wape_pct": m["WAPE_pct"],
-            "smape_pct": m["sMAPE_pct"],
-            "mase": m["MASE"],
             "mean_bias": m["Mean_Bias"],
-            "r2": m["R2"],
         })
 
     best_name = eval_metrics.get("best_model_total_h7", "Negative Binomial GLM")
@@ -453,30 +448,19 @@ def export_model_comparison(eval_metrics: dict, model_meta: dict) -> dict:
     return {
         "best_model": best_name,
         "models": rows,
-        "diebold_mariano_tests": dm_tests,
+        "hypothesis_tests": eval_metrics.get("hypothesis_tests", {}),
         "comparative_study_leaderboard": model_meta.get("comparative_study_leaderboard", {}),
         "feasibility_assessment": {
-            "verdict": f"LAYAK DIGUNAKAN OPERASIONAL RS ({best_name.upper()} + HYBRID EXPOSURE ANCHOR)",
-            "theoretical_noise_floor_mae": 4.84,
-            "theoretical_noise_floor_rmse": 6.07,
+            "verdict": f"LAYAK DIGUNAKAN OPERASIONAL RS ({best_name.upper()})",
             "achieved_test_mae": best_metrics["MAE"],
             "achieved_workday_mae": workday_mae,
             "achieved_test_rmse": best_metrics["RMSE"],
-            "achieved_test_mase": best_metrics["MASE"],
             "achieved_test_bias": best_metrics["Mean_Bias"],
-            "why_not_deep_learning": (
-                f"Pada deret waktu harian berukuran N=1.249 hari dengan proses stokastik Negative Binomial "
-                f"(rata-rata 22,34 pasien/hari pada H1 2026), batas bawah galat acak teoretis (Poisson/NB noise floor) adalah "
-                f"MAE = 4,84 pasien/hari dan RMSE = 6,07 pasien/hari. Model tunggal terbaik ({best_name}) "
-                f"mencapai MAE = {best_metrics['MAE']} (Hari Kerja MAE = {workday_mae}) dan RMSE = {best_metrics['RMSE']} — "
-                f"mendekati batas fisik stokastik tanpa overfitting Deep Learning serta tetap transparan dan mudah diaudit."
-            ),
         },
         "conclusion": (
-            f"Dari hasil komparasi objektif, {best_name} berbasis Hybrid Exposure Anchor & fitur kalender-EWMA "
-            f"ditetapkan sebagai Best Single Model dengan MAE = {best_metrics['MAE']}, RMSE = {best_metrics['RMSE']}, "
-            f"WAPE = {best_metrics['WAPE_pct']}%, MASE = {best_metrics['MASE']}, serta bias {bias_sign}{best_metrics['Mean_Bias']} "
-            f"pasien/hari pada Test Set riil Jan-Jun 2026."
+            f"Dari hasil komparasi objektif, {best_name} ditetapkan sebagai Best Single Model dengan "
+            f"MAE = {best_metrics['MAE']}, RMSE = {best_metrics['RMSE']}, WAPE = {best_metrics['WAPE_pct']}%, "
+            f"serta bias {bias_sign}{best_metrics['Mean_Bias']} pasien/hari pada Test Set Jan-Jun 2026."
         ),
     }
 
@@ -556,8 +540,8 @@ def export_insights(eval_metrics: dict) -> dict:
                 "title": "Penerapan Hybrid Exposure Anchor & Ambang Kepadatan Adaptif 28 Hari",
                 "target_division": "Divisi IT & SIMRS",
                 "evidence": (
-                    f"{best_name} dengan Hybrid Exposure Anchor mencapai MAE = {best_m.get('MAE', 0):.3f} "
-                    f"({workday_mae:.3f} pada hari kerja) dan MASE = {best_m.get('MASE', 0):.3f} pada Test Set H1 2026."
+                    f"{best_name} mencapai MAE = {best_m.get('MAE', 0):.3f} "
+                    f"({workday_mae:.3f} pada hari kerja) dan RMSE = {best_m.get('RMSE', 0):.3f} pada Test Set H1 2026."
                 ),
                 "action": "Gunakan jangkar eksposur hibrida 28-hari dan EWMA hari kerja pada mesin peramalan SIMRS.",
                 "confidence": "KUAT",

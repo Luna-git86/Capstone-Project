@@ -42,6 +42,8 @@ const Login: React.FC = () => {
       const response = await api.post('/auth/login', formData);
       const { token, user } = response.data;
 
+      const resolvedDivisi = user.divisi || user.namaDivisi || null;
+
       setAuthSession({
         token,
         userId: user.id,
@@ -49,7 +51,7 @@ const Login: React.FC = () => {
         userName: user.nama || user.noHp,
         telegramLinked: user.telegramLinked,
         userDivisiId: user.divisiId,
-        userDivisiNama: user.namaDivisi || null,
+        userDivisiNama: resolvedDivisi,
       });
 
       const target = getDashboardByRole(user.role);
@@ -58,7 +60,7 @@ const Login: React.FC = () => {
       setLoginSuccess({
         nama: user.nama || user.noHp,
         role: user.role,
-        divisi: user.namaDivisi || null,
+        divisi: resolvedDivisi,
         targetDashboard: target,
       });
 
@@ -66,11 +68,12 @@ const Login: React.FC = () => {
       setTimeout(() => {
         navigate(target, { replace: true });
       }, 950);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = err as { response?: { data?: { message?: string } } };
       setError(
-        !err.response
+        !apiErr.response
           ? 'Tidak dapat terhubung ke server backend. Pastikan server Backend (port 3000) dan database PostgreSQL sudah berjalan.'
-          : (err.response?.data?.message || 'Gagal login. Periksa kembali Nomor HP dan password Anda.')
+          : (apiErr.response?.data?.message || 'Gagal login. Periksa kembali Nomor HP dan password Anda.')
       );
       setLoading(false);
     }
@@ -228,7 +231,7 @@ const Login: React.FC = () => {
                   <span>Memverifikasi Akun...</span>
                 </>
               ) : (
-                <span>Masuk ke Sistem</span>
+                <span> Login </span>
               )}
             </button>
           </form>

@@ -1,6 +1,7 @@
 // Backend/controllers/smController.js
 const fs = require('fs');
 const path = require('path');
+const prisma = require('../db');
 
 // Direktori dashboard default
 const DEFAULT_DASHBOARD_DIR = path.resolve(__dirname, '../../scientific-method/outputs/dashboard');
@@ -31,12 +32,25 @@ const DEFAULT_ID_TO_DIVISI = {
   6: 'Divisi Administrasi & Keuangan',
 };
 
+const DEFAULT_PELAYANAN_MEDIS_POLIKLINIK = [
+  'POLIKLINIK OBGYN',
+  'POLIKLINIK UMUM',
+  'UNIT IGD',
+  'POLIKLINIK ANAK',
+  'POLIKLINIK BEDAH',
+  'BBL (BAYI BARU LAHIR)',
+];
+
 // Cache memory sederhana
 const cache = new Map();
 const CACHE_TTL_MS = 60 * 1000; // 1 menit
 
 function getDashboardDir() {
   return process.env.SM_DASHBOARD_DIR || DEFAULT_DASHBOARD_DIR;
+}
+
+function isPelayananMedisDivisi(divisiName) {
+  return String(divisiName || '').trim().toLowerCase().includes('pelayanan medis');
 }
 
 function loadDivisiMapping() {
@@ -54,17 +68,10 @@ function loadDivisiMapping() {
   } catch (err) {
     console.warn('[SM] Gagal memuat pemetaan poliklinik_divisi:', err.message);
   }
-  // Fallback standar RSIA
+  // Fallback standar RSIA: hanya Divisi Pelayanan Medis yang memperoleh akses poliklinik
   return {
-    'Divisi Pelayanan Medis & Keperawatan': [
-      'POLIKLINIK OBGYN',
-      'POLIKLINIK UMUM',
-      'UNIT IGD',
-      'POLIKLINIK ANAK',
-      'POLIKLINIK BEDAH',
-      'BBL (BAYI BARU LAHIR)',
-    ],
-    'Divisi Penunjang Medis': ['LABORATORIUM'],
+    'Divisi Pelayanan Medis & Keperawatan': [...DEFAULT_PELAYANAN_MEDIS_POLIKLINIK],
+    'Divisi Penunjang Medis': [],
     'Divisi IT & SIMRS': [],
     'Divisi Umum & Rumah Tangga': [],
     'Divisi Sarana & Prasarana (IPS-RS)': [],
@@ -72,14 +79,25 @@ function loadDivisiMapping() {
   };
 }
 
-function resolveDivisiName(user) {
+async function resolveDivisiName(user) {
   if (!user) return null;
   if (user.divisi && typeof user.divisi === 'string') {
     return user.divisi;
   }
   if (user.divisiId) {
     const idNum = Number(user.divisiId);
-    return DEFAULT_ID_TO_DIVISI[idNum] || null;
+    if (Number.isInteger(idNum) && idNum > 0) {
+      try {
+        const div = await prisma.divisi.findUnique({
+          where: { id: idNum },
+          select: { nama: true },
+        });
+        if (div?.nama) return div.nama;
+      } catch {
+        // Fallback aman bila DB tidak aktif pada skenario pengujian unit
+      }
+      return DEFAULT_ID_TO_DIVISI[idNum] || null;
+    }
   }
   return null;
 }
@@ -243,10 +261,21 @@ const getDashboardData = async (req, res) => {
     }
 
     if (role === 'KADIV') {
-      // Kadiv hanya melihat poliklinik divisinya sendiri
+      // Hanya Kepala Divisi Pelayanan Medis yang berwenang mengakses Analisis Kunjungan
       const divisiMap = loadDivisiMapping();
-      const divisiName = resolveDivisiName(user);
-      const allowedPolis = (divisiName && divisiMap[divisiName]) || [];
+      const divisiName = await resolveDivisiName(user);
+
+      if (!isPelayananMedisDivisi(divisiName)) {
+        return res.status(403).json({
+          message:
+            'Akses ditolak. Analisis Kunjungan hanya dapat diakses oleh Direktur dan Kepala Divisi Pelayanan Medis.',
+        });
+      }
+
+      const allowedPolis =
+        divisiMap[divisiName] ||
+        divisiMap['Divisi Pelayanan Medis & Keperawatan'] ||
+        DEFAULT_PELAYANAN_MEDIS_POLIKLINIK;
 
       const filteredData = filterForKadiv(requestedFile, data, allowedPolis, divisiName);
 
@@ -273,6 +302,7 @@ module.exports = {
   getDashboardData,
   loadDivisiMapping,
   resolveDivisiName,
+  isPelayananMedisDivisi,
   filterForKadiv,
   getDashboardDir,
   ALLOWED_FILES,

@@ -20,10 +20,22 @@ interface Divisi {
 
 const getKategoriMeta = (namaDivisi: string) => {
   const lower = namaDivisi.toLowerCase();
-  if (lower.includes('umum') || lower.includes('it')) {
+  if (lower.includes('it') || lower.includes('simrs')) {
     return {
-      label: 'Fasilitas Gedung, AC, Listrik & IT',
-      sub: 'Divisi Umum & IT',
+      label: 'Sistem Informasi, SIMRS, Komputer & Jaringan',
+      sub: 'Divisi IT & SIMRS',
+    };
+  }
+  if (lower.includes('umum') || lower.includes('rumah tangga')) {
+    return {
+      label: 'Logistik Umum, Kebersihan & Rumah Tangga',
+      sub: 'Divisi Umum & Rumah Tangga',
+    };
+  }
+  if (lower.includes('sarana') || lower.includes('prasarana') || lower.includes('ips')) {
+    return {
+      label: 'Fasilitas Gedung, AC, Listrik & Air',
+      sub: 'Divisi Sarana & Prasarana (IPS-RS)',
     };
   }
   if (lower.includes('penunjang')) {
@@ -32,22 +44,16 @@ const getKategoriMeta = (namaDivisi: string) => {
       sub: 'Divisi Penunjang Medis',
     };
   }
-  if (lower.includes('keperawatan') || lower.includes('kebidanan')) {
+  if (lower.includes('keperawatan') || lower.includes('kebidanan') || lower.includes('pelayanan medis')) {
     return {
-      label: 'Rawat Inap, Kebidanan & IGD',
-      sub: 'Divisi Keperawatan',
-    };
-  }
-  if (lower.includes('pelayanan medis')) {
-    return {
-      label: 'Poliklinik & Ruang Operasi',
-      sub: 'Divisi Layanan Medis',
+      label: 'Poliklinik, Rawat Inap, Kebidanan & IGD',
+      sub: 'Divisi Pelayanan Medis & Keperawatan',
     };
   }
   if (lower.includes('administrasi') || lower.includes('keuangan')) {
     return {
       label: 'Kasir, Tagihan, BPJS & Administrasi',
-      sub: 'Divisi Keuangan & Kasir',
+      sub: 'Divisi Administrasi & Keuangan',
     };
   }
   return {
@@ -82,6 +88,11 @@ const compressImageToBase64 = (file: File): Promise<string> => {
 export default function LaporkanMasalah() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const successAlertRef = useRef<HTMLDivElement>(null);
+  const divisiSectionRef = useRef<HTMLDivElement>(null);
+  const judulInputRef = useRef<HTMLInputElement>(null);
+  const lokasiInputRef = useRef<HTMLInputElement>(null);
+  const deskripsiInputRef = useRef<HTMLTextAreaElement>(null);
 
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
   const [formData, setFormData] = useState({
@@ -91,6 +102,12 @@ export default function LaporkanMasalah() {
     deskripsi: '',
     fotoInstruksi: '',
   });
+  const [fieldErrors, setFieldErrors] = useState<{
+    divisiId?: string;
+    judul?: string;
+    lokasi?: string;
+    deskripsi?: string;
+  }>({});
 
   const [isDragging, setIsDragging] = useState(false);
   const [previewName, setPreviewName] = useState('');
@@ -115,10 +132,21 @@ export default function LaporkanMasalah() {
     fetchDivisi();
   }, []);
 
+  useEffect(() => {
+    if (createdTicket && successAlertRef.current) {
+      successAlertRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      successAlertRef.current.focus({ preventScroll: true });
+    }
+  }, [createdTicket]);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (value.trim() && fieldErrors[name as keyof typeof fieldErrors]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+    }
   };
 
   const handleFileProcess = async (file: File) => {
@@ -171,19 +199,38 @@ export default function LaporkanMasalah() {
     setError('');
     setCreatedTicket(null);
 
-    if (!formData.divisiId) {
-      setError('Silakan tentukan divisi tujuan penanganan.');
+    const errors: typeof fieldErrors = {};
+    if (!formData.divisiId) errors.divisiId = 'Kolom ini wajib diisi';
+    if (!formData.judul.trim()) errors.judul = 'Kolom ini wajib diisi';
+    if (!formData.lokasi.trim()) errors.lokasi = 'Kolom ini wajib diisi';
+    if (!formData.deskripsi.trim()) errors.deskripsi = 'Kolom ini wajib diisi';
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      if (errors.divisiId && divisiSectionRef.current) {
+        divisiSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (errors.judul && judulInputRef.current) {
+        judulInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        judulInputRef.current.focus({ preventScroll: true });
+      } else if (errors.lokasi && lokasiInputRef.current) {
+        lokasiInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        lokasiInputRef.current.focus({ preventScroll: true });
+      } else if (errors.deskripsi && deskripsiInputRef.current) {
+        deskripsiInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        deskripsiInputRef.current.focus({ preventScroll: true });
+      }
       return;
     }
 
+    setFieldErrors({});
     setLoading(true);
     try {
       const res = await api.post('/tickets', {
         tipe: 'LAPORAN_MASALAH',
         divisiId: Number(formData.divisiId),
-        judul: formData.judul,
-        lokasi: formData.lokasi,
-        deskripsi: formData.deskripsi,
+        judul: formData.judul.trim(),
+        lokasi: formData.lokasi.trim(),
+        deskripsi: formData.deskripsi.trim(),
         fotoInstruksi: formData.fotoInstruksi || null,
       });
 
@@ -196,7 +243,7 @@ export default function LaporkanMasalah() {
         fotoInstruksi: '',
       }));
       setPreviewName('');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err: any) {
       setError(err.response?.data?.message || 'Gagal mengajukan tiket laporan masalah.');
     } finally {
@@ -225,7 +272,11 @@ export default function LaporkanMasalah() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-6 space-y-6">
         {/* Pesan Sukses Tiket Dibuat */}
         {createdTicket && (
-          <div className="p-6 bg-brand-deep text-white rounded-3xl shadow-lg shadow-brand-deep/20 space-y-4">
+          <div
+            ref={successAlertRef}
+            tabIndex={-1}
+            className="p-6 bg-brand-deep text-white rounded-3xl shadow-lg shadow-brand-deep/20 space-y-4 outline-none"
+          >
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-7 h-7 text-white" />
@@ -248,7 +299,7 @@ export default function LaporkanMasalah() {
                 onClick={() => navigate('/riwayat-laporan')}
                 className="h-11 px-5 bg-white text-brand-deep font-bold text-xs rounded-2xl shadow-sm hover:bg-slate-100 active:scale-95 transition flex items-center justify-center gap-2"
               >
-                <span>Lihat Status di Riwayat Laporan</span>
+                <span>Lihat Status di Laporan Saya</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button
@@ -271,17 +322,30 @@ export default function LaporkanMasalah() {
         )}
 
         {/* Form Input */}
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="space-y-6">
           {/* STEP 1: Pilih Kategori / Divisi */}
-          <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
+          <div
+            ref={divisiSectionRef}
+            className={`bg-clinical-surface p-5 sm:p-7 rounded-3xl border shadow-xs space-y-4 transition ${
+              fieldErrors.divisiId
+                ? 'border-rose-500 ring-2 ring-rose-500/20'
+                : 'border-clinical-border'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
               <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
                   1
                 </span>
-                <span>Bagian / Divisi yang Berwenang *</span>
+                <span>Kategori Masalah & Divisi Tujuan*</span>
               </label>
-              <span className="text-[11px] font-semibold text-slate-400">Wajib dipilih</span>
+              {fieldErrors.divisiId ? (
+                <span className="text-[11px] font-bold text-rose-600">
+                  {fieldErrors.divisiId}
+                </span>
+              ) : (
+                <span className="text-[11px] font-semibold text-slate-400">Wajib dipilih</span>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -293,7 +357,12 @@ export default function LaporkanMasalah() {
                   <button
                     key={d.id}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, divisiId: String(d.id) }))}
+                    onClick={() => {
+                      setFormData((prev) => ({ ...prev, divisiId: String(d.id) }));
+                      if (fieldErrors.divisiId) {
+                        setFieldErrors((prev) => ({ ...prev, divisiId: undefined }));
+                      }
+                    }}
                     className={`p-4 rounded-2xl border-2 text-left transition-all active:scale-98 flex items-start gap-3 ${
                       isSelected
                         ? 'border-brand-deep bg-blue-50/60 shadow-xs'
@@ -331,52 +400,89 @@ export default function LaporkanMasalah() {
 
             {/* Nama Masalah */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-clinical-ink">
-                Masalah / Kerusakan yang Ditemukan *
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-bold text-clinical-ink">
+                  Judul : Masalah / Kerusakan yang Ditemukan *
+                </label>
+                {fieldErrors.judul && (
+                  <span className="text-[11px] font-bold text-rose-600">
+                    {fieldErrors.judul}
+                  </span>
+                )}
+              </div>
               <input
+                ref={judulInputRef}
                 type="text"
                 name="judul"
                 value={formData.judul}
                 onChange={handleChange}
-                required
                 placeholder="Contoh: AC Bocor / Komputer Poli Mati"
-                className="w-full h-12 px-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
+                className={`w-full h-12 px-4 rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none transition ${
+                  fieldErrors.judul
+                    ? 'bg-rose-50/40 border-2 border-rose-500 focus:ring-2 focus:ring-rose-500/30'
+                    : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-brand-deep focus:bg-white'
+                }`}
               />
             </div>
 
             {/* Lokasi Ruangan */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-clinical-ink">
-                Lokasi Ruangan / Nama Alat *
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-bold text-clinical-ink">
+                  Lokasi Ruangan / Nama Alat *
+                </label>
+                {fieldErrors.lokasi && (
+                  <span className="text-[11px] font-bold text-rose-600">
+                    {fieldErrors.lokasi}
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <input
+                  ref={lokasiInputRef}
                   type="text"
                   name="lokasi"
                   value={formData.lokasi}
                   onChange={handleChange}
-                  required
                   placeholder="Contoh: Ruang Poli Anak - Unit 1"
-                  className="w-full h-12 pl-11 pr-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
+                  className={`w-full h-12 pl-11 pr-4 rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none transition ${
+                    fieldErrors.lokasi
+                      ? 'bg-rose-50/40 border-2 border-rose-500 focus:ring-2 focus:ring-rose-500/30'
+                      : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-brand-deep focus:bg-white'
+                  }`}
                 />
-                <MapPin className="w-4 h-4 text-slate-400 absolute left-4 top-4" />
+                <MapPin
+                  className={`w-4 h-4 absolute left-4 top-4 ${
+                    fieldErrors.lokasi ? 'text-rose-500' : 'text-slate-400'
+                  }`}
+                />
               </div>
             </div>
 
             {/* Deskripsi */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-clinical-ink">
-                Keterangan Detail Masalah *
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-bold text-clinical-ink">
+                  Keterangan Detail Masalah *
+                </label>
+                {fieldErrors.deskripsi && (
+                  <span className="text-[11px] font-bold text-rose-600">
+                    {fieldErrors.deskripsi}
+                  </span>
+                )}
+              </div>
               <textarea
+                ref={deskripsiInputRef}
                 name="deskripsi"
                 rows={4}
                 value={formData.deskripsi}
                 onChange={handleChange}
-                required
                 placeholder="Jelaskan kondisi secara detail agar atasan dan teknisi mudah memahami situasinya..."
-                className="w-full p-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition leading-relaxed"
+                className={`w-full p-4 rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none transition leading-relaxed ${
+                  fieldErrors.deskripsi
+                    ? 'bg-rose-50/40 border-2 border-rose-500 focus:ring-2 focus:ring-rose-500/30'
+                    : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-brand-deep focus:bg-white'
+                }`}
               />
             </div>
           </div>
@@ -470,7 +576,7 @@ export default function LaporkanMasalah() {
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>Ajukan Tiket Keluhan Sekarang</span>
+                    <span>Laporkan Masalah</span>
                   </>
                 )}
               </button>

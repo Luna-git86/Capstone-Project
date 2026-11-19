@@ -43,7 +43,16 @@ const kadivMedisToken = generateTestToken({
   divisi: 'Divisi Pelayanan Medis & Keperawatan',
 });
 
-// Kadiv IT: divisiId 2 -> Divisi IT & SIMRS (tidak membawahi poliklinik)
+// Kadiv Penunjang Medis: divisiId 5 -> ditolak 403 karena bukan Pelayanan Medis
+const kadivPenunjangToken = generateTestToken({
+  id: 8,
+  nama: 'Kadiv Penunjang Medis',
+  role: 'KADIV',
+  divisiId: 5,
+  divisi: 'Divisi Penunjang Medis',
+});
+
+// Kadiv IT: divisiId 2 -> Divisi IT & SIMRS (ditolak 403)
 const kadivItToken = generateTestToken({
   id: 6,
   nama: 'Kadiv IT',
@@ -170,18 +179,17 @@ describe('MODUL SCIENTIFIC METHOD – DASHBOARD ANALITIK API (/api/sm/*)', () =>
     );
   });
 
-  it('8. KADIV tanpa poliklinik terpetakan (Kadiv IT) menerima respons aman dengan poliklinik kosong', async () => {
-    const res = await mockRequest(app, { url: '/api/sm/summary', token: kadivItToken });
-    assert.strictEqual(res.statusCode, 200);
-    assert.strictEqual(res.body.data.kpi_total_rs, undefined);
-    assert.deepStrictEqual(res.body.data.by_poliklinik, {}, 'Kadiv tanpa poli menerima by_poliklinik kosong');
+  it('8. KADIV di luar Pelayanan Medis (Kadiv IT & Kadiv Penunjang Medis) ditolak dengan HTTP 403 Forbidden', async () => {
+    const resIt = await mockRequest(app, { url: '/api/sm/summary', token: kadivItToken });
+    assert.strictEqual(resIt.statusCode, 403);
+
+    const resPenunjang = await mockRequest(app, { url: '/api/sm/summary', token: kadivPenunjangToken });
+    assert.strictEqual(resPenunjang.statusCode, 403);
   });
 
-  it('9. KADIV dengan divisiId null menerima respons kosong yang aman', async () => {
+  it('9. KADIV dengan divisiId null ditolak dengan HTTP 403 Forbidden', async () => {
     const res = await mockRequest(app, { url: '/api/sm/summary', token: kadivNoDivisiToken });
-    assert.strictEqual(res.statusCode, 200);
-    assert.strictEqual(res.body.data.kpi_total_rs, undefined);
-    assert.deepStrictEqual(res.body.data.by_poliklinik, {});
+    assert.strictEqual(res.statusCode, 403);
   });
 
   it('10. Request berkas yang tidak ada mengembalikan HTTP 404', async () => {

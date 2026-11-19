@@ -25,7 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onNavigate, onClose }) => {
   const userName = getAuthUserName('Pegawai RSIA');
   const userDivisi = getAuthDivisiNama();
 
-  const visibleMenus = getMenuItems(userRole);
+  const visibleMenus = getMenuItems(userRole, userDivisi);
 
   const handleLogout = () => {
     clearAuthSession();
@@ -70,7 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onNavigate, onClose }) => {
             <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-white text-brand-deep rounded-full uppercase tracking-wide truncate max-w-full">
               {userRole}
             </span>
-            {userRole !== 'ADMIN' && (
+            {userRole !== 'ADMIN' && userDivisi && (
               <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-white/15 text-white rounded-full truncate max-w-full">
                 {userDivisi}
               </span>

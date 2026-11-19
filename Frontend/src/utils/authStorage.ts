@@ -88,12 +88,18 @@ export const getAuthUserDivisiId = (): string => {
 export const getAuthDivisiId = getAuthUserDivisiId;
 
 const DIVISI_FALLBACK_MAP: Record<string, string> = {
-  '1': 'Pelayanan Medis',
-  '2': 'Penunjang Medis',
-  '3': 'Keperawatan & Kebidanan',
-  '4': 'Umum & IT',
-  '5': 'Administrasi & Keuangan',
-  '6': 'HRD & Marketing',
+  '1': 'Divisi Umum & Rumah Tangga',
+  '2': 'Divisi IT & SIMRS',
+  '3': 'Divisi Sarana & Prasarana (IPS-RS)',
+  '4': 'Divisi Pelayanan Medis & Keperawatan',
+  '5': 'Divisi Penunjang Medis',
+  '6': 'Divisi Administrasi & Keuangan',
+  '7': 'Divisi Umum & Rumah Tangga',
+  '8': 'Divisi IT & SIMRS',
+  '9': 'Divisi Sarana & Prasarana (IPS-RS)',
+  '10': 'Divisi Pelayanan Medis & Keperawatan',
+  '11': 'Divisi Penunjang Medis',
+  '12': 'Divisi Administrasi & Keuangan',
 };
 
 /**
@@ -113,6 +119,24 @@ export const getAuthDivisiNama = (fallback?: string): string => {
   }
 
   return fallback || (role === 'DIREKTUR' ? 'Seluruh Divisi' : 'Lintas Divisi');
+};
+
+/**
+ * Memeriksa apakah divisi merupakan Divisi Pelayanan Medis.
+ */
+export const isKadivPelayananMedis = (divisiNama?: string | null): boolean => {
+  const normalized = (divisiNama ?? getAuthDivisiNama('')).trim().toLowerCase();
+  return normalized.includes('pelayanan medis');
+};
+
+/**
+ * Hanya DIREKTUR dan KADIV Pelayanan Medis yang berwenang melihat Analisis Kunjungan.
+ */
+export const canAccessAnalisisKunjungan = (role?: string | null, divisiNama?: string | null): boolean => {
+  const activeRole = role ?? getAuthRole();
+  if (activeRole === 'DIREKTUR') return true;
+  if (activeRole === 'KADIV') return isKadivPelayananMedis(divisiNama);
+  return false;
 };
 
 /**
