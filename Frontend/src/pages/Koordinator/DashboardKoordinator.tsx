@@ -28,18 +28,24 @@ const DashboardKoordinator: React.FC = () => {
   const userRole = getAuthRole();
   const userDivisi = getAuthDivisiNama();
 
+  const fetchTickets = async (isBackground = false) => {
+    try {
+      if (!isBackground) setLoading(true);
+      const response = await api.get('/tickets');
+      setTickets(response.data.data || response.data || []);
+    } catch (error) {
+      console.error('Gagal mengambil data tiket Koordinator:', error);
+    } finally {
+      if (!isBackground) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        const response = await api.get('/tickets');
-        setTickets(response.data.data || response.data || []);
-      } catch (error) {
-        console.error('Gagal mengambil data tiket Koordinator:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTickets();
+    fetchTickets(false);
+    const interval = setInterval(() => {
+      fetchTickets(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const daftarTugas = useMemo(

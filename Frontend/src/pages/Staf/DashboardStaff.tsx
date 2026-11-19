@@ -50,20 +50,24 @@ export default function DashboardStaff() {
     return 'Selamat Malam';
   };
 
-  const fetchTickets = async () => {
+  const fetchTickets = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       const response = await api.get('/tickets?jenis=TUGAS');
       setTickets(response.data.data || response.data || []);
     } catch (error) {
       console.error('Gagal mengambil daftar tugas staf:', error);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTickets();
+    fetchTickets(false);
+    const interval = setInterval(() => {
+      fetchTickets(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const myTickets = useMemo(

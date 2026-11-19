@@ -283,11 +283,16 @@ const getMyNotifications = async (req, res) => {
 
     let where = { recipientId: userId };
 
-    // Jika ADMIN dan belum memiliki notifikasi personal, ambil log notifikasi sistem terkini
-    if (userRole === 'ADMIN') {
+    // Jika ADMIN atau DIREKTUR dan belum memiliki notifikasi personal, ambil notifikasi sistem terkini
+    if (userRole === 'ADMIN' || userRole === 'DIREKTUR') {
       const personalCount = await prisma.notificationLog.count({ where: { recipientId: userId } });
       if (personalCount === 0) {
         where = {};
+      }
+    } else if (userRole === 'KADIV') {
+      const personalCount = await prisma.notificationLog.count({ where: { recipientId: userId } });
+      if (personalCount === 0) {
+        where = req.user.divisiId ? { ticket: { divisiId: Number(req.user.divisiId) } } : {};
       }
     }
 

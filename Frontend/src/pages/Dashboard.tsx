@@ -74,29 +74,34 @@ export default function Dashboard() {
     return 'Selamat Malam';
   };
 
+  const fetchTickets = async (isBackground = false) => {
+    try {
+      if (!isBackground) setLoading(true);
+      const response = await api.get('/tickets');
+      setTickets(response.data.data || response.data || []);
+    } catch (error) {
+      console.error('Gagal memuat data dasbor eksekutif:', error);
+    } finally {
+      if (!isBackground) setLoading(false);
+    }
+  };
+
+  const fetchSmSummary = async () => {
+    try {
+      const res = await api.get('/sm/summary');
+      setSmSummary(res.data?.data || null);
+    } catch {
+      // Ringkasan analitik bersifat tambahan
+    }
+  };
+
   useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        const response = await api.get('/tickets');
-        setTickets(response.data.data || response.data || []);
-      } catch (error) {
-        console.error('Gagal memuat data dasbor eksekutif:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const fetchSmSummary = async () => {
-      try {
-        const res = await api.get('/sm/summary');
-        setSmSummary(res.data?.data || null);
-      } catch {
-        // Ringkasan analitik bersifat tambahan
-      }
-    };
-
-    fetchTickets();
+    fetchTickets(false);
     fetchSmSummary();
+    const interval = setInterval(() => {
+      fetchTickets(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   // Ambil daftar divisi unik secara dinamis dari data tiket

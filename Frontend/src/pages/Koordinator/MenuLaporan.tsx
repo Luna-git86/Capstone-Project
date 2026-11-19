@@ -23,18 +23,24 @@ export default function AntreanLaporan() {
 
   const navigate = useNavigate();
 
+  const fetchTickets = async (isBackground = false) => {
+    try {
+      if (!isBackground) setLoading(true);
+      const response = await api.get('/tickets?jenis=LAPORAN');
+      setDaftarLaporan(response.data.data || response.data || []);
+    } catch (error) {
+      console.error('Gagal mengambil data laporan:', error);
+    } finally {
+      if (!isBackground) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        const response = await api.get('/tickets?jenis=LAPORAN');
-        setDaftarLaporan(response.data.data || response.data || []);
-      } catch (error) {
-        console.error('Gagal mengambil data laporan:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTickets();
+    fetchTickets(false);
+    const interval = setInterval(() => {
+      fetchTickets(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const getStatusBadge = (status: string) => {

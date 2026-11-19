@@ -119,3 +119,9 @@ scientific-method/Penjelasan_SM_Detail.txt
 scientific-method/**/*.md
 scientific-method/**/*.txt
 !scientific-method/requirements.txt
+
+# ==============================================================================
+# 8. LOCAL DATABASE DUMPS & UAT TEST ASSETS
+# ==============================================================================
+*.sql
+data-uji-foto/

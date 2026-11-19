@@ -105,6 +105,25 @@ router.put(
   triageTicket
 );
 
+// Pelaporan Penyelesaian Tugas oleh Staf (dapat dipanggil via /:id/selesai maupun /:id/status)
+router.patch(
+  '/:id/selesai',
+  checkRole(['STAF', 'KOORDINATOR', 'KADIV', 'DIREKTUR']),
+  (req, res, next) => {
+    req.body.status = 'MENUNGGU_VALIDASI';
+    return updateTicketStatus(req, res, next);
+  }
+);
+
+router.put(
+  '/:id/selesai',
+  checkRole(['STAF', 'KOORDINATOR', 'KADIV', 'DIREKTUR']),
+  (req, res, next) => {
+    req.body.status = 'MENUNGGU_VALIDASI';
+    return updateTicketStatus(req, res, next);
+  }
+);
+
 // Ubah Status Tugas & Evaluasi Foto
 router.patch(
   '/:id/status',

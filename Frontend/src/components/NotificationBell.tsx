@@ -91,6 +91,15 @@ export default function NotificationBell() {
       const response = await api.get('/notifications/my-notifications');
       const data: NotificationItem[] = response.data?.data || [];
       setNotifications(data);
+
+      // Jika riwayat dibersihkan/direset, sinkronkan lastReadId agar notifikasi baru tetap terdeteksi
+      if (data.length > 0) {
+        const maxNotifId = Math.max(...data.map((n) => n.id));
+        if (lastReadId > maxNotifId) {
+          setLastReadId(0);
+          localStorage.removeItem(`rsia_last_read_notif_${userId}`);
+        }
+      }
     } catch (err) {
       // Gagal memuat tidak mengganggu fungsionalitas topbar
       console.warn('Gagal menyinkronkan notifikasi akun:', err);

@@ -346,8 +346,11 @@ const createTelegramLink = async (req, res) => {
     }
 
     if (user.telegramChatId) {
+      const cleanUsername = (botUsername || '').replace(/^@/, '');
       return res.status(409).json({
         message: 'Akun Telegram pengguna sudah terhubung.',
+        botUrl: cleanUsername ? `https://t.me/${cleanUsername}` : null,
+        botUsername: cleanUsername || null,
       });
     }
 
@@ -384,6 +387,8 @@ const createTelegramLink = async (req, res) => {
     return res.status(200).json({
       message: 'Tautan penghubung Telegram berhasil dibuat.',
       link: `https://t.me/${cleanUsername}?start=${rawToken}`,
+      botUrl: `https://t.me/${cleanUsername}`,
+      botUsername: cleanUsername,
       expiresIn: 600,
     });
   } catch (error) {
@@ -411,8 +416,12 @@ const getTelegramStatus = async (req, res) => {
       return res.status(404).json({ message: 'Pengguna tidak ditemukan.' });
     }
 
+    const botUsername = (process.env.TELEGRAM_BOT_USERNAME || 'QurrataBot').replace(/^@/, '');
+
     return res.status(200).json({
       linked: Boolean(user.telegramChatId),
+      botUsername,
+      botUrl: `https://t.me/${botUsername}`,
     });
   } catch (error) {
     console.error('Gagal membaca status Telegram:', error);

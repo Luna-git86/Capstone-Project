@@ -95,7 +95,7 @@ describe('Telegram Auth Endpoints (/api/auth/telegram/*)', () => {
     assert.equal(res.statusCode, 401);
   });
 
-  it('2. GET /api/auth/telegram/status dengan token mengembalikan status linked', async () => {
+  it('2. GET /api/auth/telegram/status dengan token mengembalikan status linked dan botUrl', async () => {
     if (!testUser) return;
     const res = await mockRequest(app, {
       method: 'GET',
@@ -104,6 +104,8 @@ describe('Telegram Auth Endpoints (/api/auth/telegram/*)', () => {
     });
     assert.equal(res.statusCode, 200);
     assert.equal(typeof res.body.linked, 'boolean');
+    assert.ok(res.body.botUrl);
+    assert.match(res.body.botUrl, /^https:\/\/t\.me\//);
   });
 
   it('3. POST /api/auth/telegram/link-token dengan token mengembalikan tautan atau status conflict jika sudah linked', async () => {

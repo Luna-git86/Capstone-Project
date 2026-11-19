@@ -139,7 +139,7 @@ export default function LaporanSLA() {
       }
 
       // Gunakan URL endpoint yang didukung otentikasi query parameter & native browser download
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      const baseUrl = import.meta.env.VITE_API_URL || '/api';
       const downloadUrl = `${baseUrl}/laporan-sla/export/${type}?${params.toString()}`;
 
       const link = document.createElement('a');

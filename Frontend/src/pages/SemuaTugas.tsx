@@ -1,5 +1,6 @@
 // Frontend/src/pages/SemuaTugas.tsx
 import React, { useEffect, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -8,10 +9,14 @@ import {
   MapPin,
   Plus,
   Search,
+  Filter,
+  Upload,
   X,
   Building2,
   UserCheck,
   AlertTriangle,
+  Camera,
+  RotateCcw,
   ChevronUp,
   ChevronDown,
   SlidersHorizontal
@@ -36,6 +41,8 @@ interface Ticket {
   pelaksana?: { id: number; nama: string; role: string };
   divisi?: { id: number; nama: string };
   parentTicket?: { id: number; jenisTiket?: string; pembuat?: { role: string } } | null;
+  divisiId?: number | null;
+  fotoInstruksi?: string | null;
 }
 
 interface Divisi {
@@ -43,6 +50,35 @@ interface Divisi {
   nama: string;
 }
 
+interface StaffUser {
+  id: number;
+  nama: string;
+  role: string;
+  divisiId?: number;
+}
+
+const compressImageToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 800;
+        const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
 export default function SemuaTugas() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -51,10 +87,31 @@ export default function SemuaTugas() {
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
+  const [staffList, setStaffList] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filter State Utama
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<
+    'SEMUA_AKTIF' | 'MENUNGGU_TRIASE' | 'DIPROSES' | 'MENUNGGU_VALIDASI' | 'HOLD_ESKALASI'
+  >('SEMUA_AKTIF');
+
+  const [selectedTriage, setSelectedTriage] = useState<Ticket | null>(null);
+  const [triageForm, setTriageForm] = useState({
+    divisiId: '',
+    prioritas: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH',
+    pelaksanaId: '',
+    deadline: '',
+    catatanRevisi: '',
+  });
+  const [reportTarget, setReportTarget] = useState<Ticket | null>(null);
+  const [reportText, setReportText] = useState('');
+  const [reportPhoto, setReportPhoto] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [evalTarget, setEvalTarget] = useState<Ticket | null>(null);
+  const [evalNote, setEvalNote] = useState('');
+  const [escalateTarget, setEscalateTarget] = useState<Ticket | null>(null);
+  const [escalateNote, setEscalateNote] = useState('');
 
   // Filter State Sidebar (Checkbox Akordion)
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
@@ -71,6 +128,50 @@ export default function SemuaTugas() {
 
   // Modal Preview Foto
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+
+  // Kunci scroll halaman belakang dan tangani ESC agar modal dinamis & tidak ikut tergeser
+  useEffect(() => {
+    const isAnyModalOpen = Boolean(
+      selectedTriage || reportTarget || evalTarget || escalateTarget || previewPhoto
+    );
+    if (isAnyModalOpen) {
+      const originalBodyOverflow = document.body.style.overflow;
+      const originalBodyTouchAction = document.body.style.touchAction;
+      const mainEl = document.querySelector('main');
+      const originalMainOverflow = mainEl?.style.overflow || '';
+      const originalMainTouchAction = mainEl?.style.touchAction || '';
+
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      if (mainEl) {
+        mainEl.style.overflow = 'hidden';
+        mainEl.style.touchAction = 'none';
+      }
+
+      return () => {
+        document.body.style.overflow = originalBodyOverflow;
+        document.body.style.touchAction = originalBodyTouchAction;
+        if (mainEl) {
+          mainEl.style.overflow = originalMainOverflow;
+          mainEl.style.touchAction = originalMainTouchAction;
+        }
+      };
+    }
+  }, [selectedTriage, reportTarget, evalTarget, escalateTarget, previewPhoto]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (previewPhoto) setPreviewPhoto(null);
+        else if (reportTarget) setReportTarget(null);
+        else if (selectedTriage) setSelectedTriage(null);
+        else if (evalTarget) setEvalTarget(null);
+        else if (escalateTarget) setEscalateTarget(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewPhoto, reportTarget, selectedTriage, evalTarget, escalateTarget]);
 
   const getUserId = (): number => {
     const stored = getAuthUserId();
@@ -91,6 +192,7 @@ export default function SemuaTugas() {
 
   const userRole = getAuthRole() || 'STAF';
   const currentUserId = getUserId();
+  const isAdmin = userRole === 'ADMIN';
   const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(userRole);
 
   const fetchData = async (isBackground = false) => {
@@ -109,6 +211,13 @@ export default function SemuaTugas() {
       } catch (e) {
         console.warn('Gagal memuat divisi:', e);
       }
+
+      try {
+        const staffRes = await api.get('/tickets/staff');
+        setStaffList(staffRes.data?.data || staffRes.data || []);
+      } catch (e) {
+        console.warn('Gagal memuat staf:', e);
+      }
     } catch (error) {
       console.error('Gagal memuat data tugas:', error);
     } finally {
@@ -126,10 +235,7 @@ export default function SemuaTugas() {
 
   const activeTickets = useMemo(() => {
     return tickets.filter(
-      (t) =>
-        t.status !== 'SELESAI' &&
-        t.status !== 'DITOLAK' &&
-        t.status !== 'MENUNGGU_VALIDASI'
+      (t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK'
     );
   }, [tickets]);
 
@@ -143,6 +249,10 @@ export default function SemuaTugas() {
           t.status === 'MENUNGGU_VALIDASI' ||
           (t.status === 'DIPROSES' && Boolean(t.catatanRevisi))
       ).length,
+      triase: activeTickets.filter((t) => t.status === 'MENUNGGU_TRIASE').length,
+      diproses: activeTickets.filter((t) => t.status === 'DIPROSES').length,
+      validasi: tickets.filter((t) => t.status === 'MENUNGGU_VALIDASI').length,
+      eskalasi: activeTickets.filter((t) => t.status === 'HOLD_ESKALASI').length,
     };
   }, [tickets, activeTickets]);
 
@@ -164,6 +274,7 @@ export default function SemuaTugas() {
       createdByMe: activeTickets.filter((t) => Number(t.pembuat?.id) === currentUserId).length,
       belumDikerjakan: activeTickets.filter((t) => t.status === 'MENUNGGU_TRIASE').length,
       sedangDikerjakan: activeTickets.filter((t) => t.status === 'DIPROSES').length,
+      menungguValidasi: activeTickets.filter((t) => t.status === 'MENUNGGU_VALIDASI').length,
       adaKendala: activeTickets.filter((t) => t.status === 'HOLD_ESKALASI').length,
       overdue: activeTickets.filter((t) => Boolean(t.deadline && new Date(t.deadline) < now)).length,
       divisiMap,
@@ -197,9 +308,27 @@ export default function SemuaTugas() {
     setSelectedStatuses([]);
   };
 
+  // Tombol filter kategori pengerjaan (label bahasa Indonesia, gampang dipahami)
+  const filterTabs = [
+    { id: 'SEMUA_AKTIF' as const, label: 'Semua Aktif', color: 'bg-slate-400', count: counts.active },
+    { id: 'MENUNGGU_TRIASE' as const, label: 'Perlu Petugas', color: 'bg-amber-400', count: counts.triase },
+    { id: 'DIPROSES' as const, label: 'Sedang Dikerjakan', color: 'bg-blue-400', count: counts.diproses },
+    { id: 'MENUNGGU_VALIDASI' as const, label: 'Menunggu Validasi', color: 'bg-indigo-400', count: counts.validasi },
+    { id: 'HOLD_ESKALASI' as const, label: 'Ada Kendala', color: 'bg-rose-400', count: counts.eskalasi },
+  ];
+
+  const matchingStaff = staffList.filter(
+    (staff) => !triageForm.divisiId || String(staff.divisiId) === String(triageForm.divisiId)
+  );
+  const availableStaffForModal = matchingStaff.length > 0 ? matchingStaff : staffList;
+
   const filteredActiveTickets = useMemo(() => {
     const now = new Date();
     return activeTickets.filter((t) => {
+      if (activeTab !== 'SEMUA_AKTIF' && t.status !== activeTab) {
+        return false;
+      }
+
       // 1. Filter Sidebar: Prioritas
       if (selectedPriorities.length > 0 && !selectedPriorities.includes(t.prioritas)) {
         return false;
@@ -241,7 +370,10 @@ export default function SemuaTugas() {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTitle = t.judul.toLowerCase().includes(q);
-        const matchId = `t-${String(t.id).padStart(3, '0')}`.includes(q);
+        const matchId =
+          `t-${String(t.id).padStart(3, '0')}`.includes(q) ||
+          `#t-${String(t.id).padStart(3, '0')}`.includes(q) ||
+          String(t.id).includes(q);
         const matchLoc = (t.lokasi || '').toLowerCase().includes(q);
         const matchPelaksana = (t.pelaksana?.nama || '').toLowerCase().includes(q);
         const matchDivisi = (t.divisi?.nama || '').toLowerCase().includes(q);
@@ -260,6 +392,7 @@ export default function SemuaTugas() {
     selectedDivisiIds,
     selectedOwnership,
     selectedStatuses,
+    activeTab,
     currentUserId,
     userRole,
   ]);
@@ -272,6 +405,115 @@ export default function SemuaTugas() {
       hour: '2-digit',
       minute: '2-digit',
     }).format(new Date(dateStr));
+  };
+
+  const toDateTimeLocalInput = (dateStr: string | null): string => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+      date.getHours()
+    )}:${pad(date.getMinutes())}`;
+  };
+
+  // Simpan Triase / Pendelegasian
+  const handleSaveTriage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTriage) return;
+    try {
+      await api.patch(`/tickets/${selectedTriage.id}/triage`, {
+        divisiId: triageForm.divisiId ? Number(triageForm.divisiId) : null,
+        prioritas: triageForm.prioritas,
+        pelaksanaId: triageForm.pelaksanaId ? Number(triageForm.pelaksanaId) : null,
+        deadline: triageForm.deadline ? new Date(triageForm.deadline).toISOString() : null,
+        catatanRevisi: triageForm.catatanRevisi || null,
+      });
+      setSelectedTriage(null);
+      fetchData();
+    } catch {
+      alert('Gagal memperbarui pengaturan tugas.');
+    }
+  };
+
+  // Kirim Laporan Selesai (Staf)
+  const handleSubmitReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportTarget) return;
+
+    if (!reportPhoto) {
+      alert('Wajib melampirkan foto bukti penyelesaian.');
+      return;
+    }
+
+    setSubmittingReport(true);
+    try {
+      await api.patch(`/tickets/${reportTarget.id}/selesai`, {
+        status: 'MENUNGGU_VALIDASI',
+        laporanPenyelesaian: reportText,
+        fotoBukti: reportPhoto,
+      });
+      alert('Laporan penyelesaian berhasil dikirim untuk dievaluasi atasan!');
+      setReportTarget(null);
+      setReportText('');
+      setReportPhoto('');
+      fetchData();
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Gagal mengirimkan laporan selesai.');
+    } finally {
+      setSubmittingReport(false);
+    }
+  };
+
+  // Evaluasi Atasan (Setujui atau Minta Revisi)
+  const handleApprove = async () => {
+    if (!evalTarget) return;
+    try {
+      await api.patch(`/tickets/${evalTarget.id}/status`, {
+        status: 'SELESAI',
+        catatanRevisi: evalNote || 'Tugas telah divalidasi dan disetujui.',
+      });
+      setEvalTarget(null);
+      setEvalNote('');
+      fetchData();
+    } catch {
+      alert('Gagal menyetujui tugas.');
+    }
+  };
+
+  const handleRejectToRevision = async () => {
+    if (!evalTarget) return;
+    if (!evalNote.trim()) {
+      alert('Wajib mengisi catatan perbaikan/revisi untuk staf.');
+      return;
+    }
+    try {
+      await api.patch(`/tickets/${evalTarget.id}/status`, {
+        status: 'DIPROSES',
+        catatanRevisi: evalNote,
+      });
+      setEvalTarget(null);
+      setEvalNote('');
+      fetchData();
+    } catch {
+      alert('Gagal mengembalikan tugas untuk revisi.');
+    }
+  };
+
+  // Lapor Kendala
+  const handleReportEscalation = async () => {
+    if (!escalateTarget) return;
+    try {
+      await api.patch(`/tickets/${escalateTarget.id}/status`, {
+        status: 'HOLD_ESKALASI',
+        catatanRevisi: escalateNote,
+      });
+      setEscalateTarget(null);
+      setEscalateNote('');
+      alert('Laporan kendala berhasil diajukan (Status: Tertahan).');
+      fetchData();
+    } catch {
+      alert('Gagal mengajukan laporan kendala.');
+    }
   };
 
   const getStatusBadge = (status: Ticket['status']) => {
@@ -479,6 +721,7 @@ export default function SemuaTugas() {
                   {[
                     { key: 'MENUNGGU_TRIASE', label: 'Belum Dikerjakan', count: sidebarCounts.belumDikerjakan },
                     { key: 'DIPROSES', label: 'Sedang Dikerjakan', count: sidebarCounts.sedangDikerjakan },
+                    { key: 'MENUNGGU_VALIDASI', label: 'Menunggu Validasi', count: sidebarCounts.menungguValidasi },
                     { key: 'HOLD_ESKALASI', label: 'Ada Kendala', count: sidebarCounts.adaKendala },
                     { key: 'OVERDUE', label: 'Lewat Tenggat', count: sidebarCounts.overdue },
                   ].map((item) => (
@@ -551,26 +794,62 @@ export default function SemuaTugas() {
         {/* KONTEN KANAN: Pencarian + Kartu Tugas */}
         <div className="flex-1 w-full space-y-4">
           
-          {/* BAR PENCARIAN */}
-          <div className="bg-white p-3.5 sm:p-4 rounded-3xl border border-slate-200/90 shadow-xs">
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Ketik judul tugas, nomor tiket #T-..., lokasi, atau nama staf..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-11 sm:h-12 pl-11 pr-9 bg-slate-50 border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0f5c43] focus:bg-white transition"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
+          {/* 1. Cari Tugas */}
+          <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-xs space-y-5">
+            <div className="space-y-2">
+              <h2 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 text-slate-400" />
+                Cari Tugas
+              </h2>
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Cari judul tugas, #T-xxx, lokasi, atau nama staf..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full h-12 pl-10 pr-9 bg-slate-50 border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 2. Filter Pengerjaan (kategori pengerjaan tugas) */}
+            <div className="space-y-2">
+              <h2 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                Filter Pengerjaan
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                {filterTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center justify-center gap-2 h-12 px-3 rounded-xl text-xs font-bold transition-all active:scale-95 ${tab.id === activeTab ? 'bg-brand-deep text-white shadow-sm shadow-brand-deep/20' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${tab.id === activeTab ? 'bg-white/20' : tab.color}`} />
+                    <span>{tab.label}</span>
+                    <span className={`text-[11px] font-extrabold tabular-nums ${tab.id === activeTab ? 'text-white/80' : 'text-slate-400'}`}>
+                      {tab.count}
+                    </span>
+                    {/* Titik merah berkala (blinking) → muncul kalau ada kendala */}
+                    {tab.id === 'HOLD_ESKALASI' && tab.count > 0 && (
+                      <span className="flex items-center gap-1 pl-1">
+                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-blink-dot" />
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -728,8 +1007,99 @@ export default function SemuaTugas() {
                       </div>
                     )}
 
-                    {/* Baris 4: ACTION BAR (Hanya Tombol Lihat Detail Tiket) */}
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
+                    {/* Baris 4: ACTION BAR RAMAH USER AWAM (Tombol Berukuran Besar & Sangat Jelas) */}
+                    <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      {/* Kelompok Tombol Aksi Utama */}
+                      <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+
+                        {/* Aksi Koordinator / Atasan: Triase Petugas */}
+                        {isAtasan && t.status === 'MENUNGGU_TRIASE' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedTriage(t);
+                              setTriageForm({
+                                divisiId: t.divisi?.id ? String(t.divisi.id) : '',
+                                prioritas: t.prioritas,
+                                pelaksanaId: t.pelaksana?.id ? String(t.pelaksana.id) : '',
+                                deadline: toDateTimeLocalInput(t.deadline),
+                                catatanRevisi: t.catatanRevisi || '',
+                              });
+                            }}
+                            className="flex-1 sm:flex-none h-11 px-5 bg-[#0f5c43] hover:bg-[#0c4935] active:scale-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition flex items-center justify-center gap-2"
+                          >
+                            <UserCheck className="w-4 h-4" />
+                            <span>Delegasikan ke Staf</span>
+                          </button>
+                        )}
+
+                        {/* Aksi Koordinator / Atasan: Atur Ulang Tugas yang Sedang Berjalan */}
+                        {isAtasan && t.status === 'DIPROSES' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedTriage(t);
+                              setTriageForm({
+                                divisiId: t.divisi?.id ? String(t.divisi.id) : '',
+                                prioritas: t.prioritas,
+                                pelaksanaId: t.pelaksana?.id ? String(t.pelaksana.id) : '',
+                                deadline: toDateTimeLocalInput(t.deadline),
+                                catatanRevisi: t.catatanRevisi || '',
+                              });
+                            }}
+                            className="flex-1 sm:flex-none h-11 px-4 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
+                          >
+                            <span>Ubah Delegasi Staf</span>
+                          </button>
+                        )}
+
+                        {/* Aksi Koordinator / Atasan: Evaluasi Foto */}
+                        {isAtasan && t.status === 'MENUNGGU_VALIDASI' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEvalTarget(t);
+                              setEvalNote(t.catatanRevisi || '');
+                            }}
+                            className="flex-1 sm:flex-none h-11 px-5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition flex items-center justify-center gap-2"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Periksa & Setujui Hasil</span>
+                          </button>
+                        )}
+
+                        {/* Aksi Staf: Lapor Selesai (Foto) */}
+                        {!isAdmin && (t.status === 'DIPROSES' || t.status === 'HOLD_ESKALASI') && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReportTarget(t);
+                                setReportText(t.laporanPenyelesaian || '');
+                                setReportPhoto(t.fotoBukti || '');
+                              }}
+                              className="flex-1 sm:flex-none h-11 px-5 bg-[#f47a45] hover:bg-[#e06934] active:scale-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition flex items-center justify-center gap-2"
+                            >
+                              <Camera className="w-4 h-4" />
+                              <span>Lapor Selesai (Foto)</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEscalateTarget(t);
+                                setEscalateNote(t.catatanRevisi || '');
+                              }}
+                              className="flex-1 sm:flex-none h-11 px-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              <span>Lapor Kendala</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Tombol Lihat Detail Tiket (Selalu Rapi di Kanan) */}
                       <button
                         type="button"
                         onClick={() => navigate(`/detail-tugas/${t.id}`)}
@@ -747,23 +1117,454 @@ export default function SemuaTugas() {
         </div>
       </div>
 
-      {/* MODAL PREVIEW FOTO BESAR */}
-      {previewPhoto && (
-        <div
-          onClick={() => setPreviewPhoto(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 cursor-pointer"
-        >
-          <div className="relative max-w-2xl max-h-[85vh] bg-slate-900 p-2 rounded-2xl overflow-hidden">
-            <button
-              onClick={() => setPreviewPhoto(null)}
-              className="absolute top-4 right-4 z-10 p-2 bg-black/60 text-white rounded-full hover:bg-black"
+      {/* MODAL 1: DELEGASI TUGAS KE STAF */}
+      {selectedTriage &&
+        createPortal(
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSelectedTriage(null);
+            }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 touch-none overscroll-none animate-in fade-in duration-200"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl w-full max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200"
             >
-              <X className="w-5 h-5" />
-            </button>
-            <img src={previewPhoto} alt="Bukti Foto" className="max-w-full max-h-[80vh] object-contain rounded-xl" />
-          </div>
-        </div>
-      )}
+              <form onSubmit={handleSaveTriage} className="flex flex-col h-full max-h-full overflow-hidden min-h-0">
+                <div className="shrink-0 p-5 sm:p-6 pb-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900">
+                      {selectedTriage.status === 'MENUNGGU_TRIASE' ? 'Delegasikan Tugas ke Staf' : 'Perbarui Delegasi Tugas'}
+                    </h3>
+                    <p className="text-xs text-slate-500">Tiket #{selectedTriage.id}: {selectedTriage.judul}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTriage(null)}
+                    className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6 space-y-4 text-xs font-semibold touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  {/* Tahap 1: Informasi Tugas & Lokasi (Otomatis Terisi Sempurna) */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        Tahap 1: Informasi Tugas & Lokasi
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        Terisi Sempurna
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-xs sm:text-sm font-bold text-slate-900">{selectedTriage.judul}</p>
+                      {selectedTriage.lokasi && (
+                        <p className="text-[11px] text-slate-600 flex items-center gap-1 mt-0.5 font-medium">
+                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>{selectedTriage.lokasi}</span>
+                        </p>
+                      )}
+                      <p className="text-[11px] text-slate-600 line-clamp-2 mt-1 leading-relaxed">
+                        {selectedTriage.deskripsi}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-blue-50/70 border border-brand-mint/40 rounded-xl">
+                    <p className="text-[11px] text-brand-deep font-semibold leading-relaxed">
+                      Bagian Tahap 1 sudah otomatis terisi dari laporan. Koordinator hanya bertugas memilih tingkat prioritas, batas waktu, dan staf pelaksana di bawah ini.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 mb-1.5 font-bold">Divisi Penanggung Jawab:</label>
+                    <select
+                      value={triageForm.divisiId}
+                      onChange={(e) => setTriageForm({ ...triageForm, divisiId: e.target.value, pelaksanaId: '' })}
+                      className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0f5c43]"
+                    >
+                      <option value="">Pilih Divisi Target</option>
+                      {divisiList.map((d) => (
+                        <option key={d.id} value={d.id}>{d.nama}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 mb-1.5 font-bold">Petugas Pelaksana (Staf) *:</label>
+                    <select
+                      value={triageForm.pelaksanaId}
+                      onChange={(e) => setTriageForm({ ...triageForm, pelaksanaId: e.target.value })}
+                      required
+                      className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0f5c43]"
+                    >
+                      <option value="">Pilih Petugas yang Ditugaskan</option>
+                      {availableStaffForModal.map((s) => (
+                        <option key={s.id} value={s.id}>{s.nama} ({s.role})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-700 mb-1.5 font-bold">Tingkat Prioritas *:</label>
+                      <select
+                        value={triageForm.prioritas}
+                        onChange={(e) => setTriageForm({ ...triageForm, prioritas: e.target.value as any })}
+                        className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#0f5c43]"
+                      >
+                        <option value="LOW">Rendah (LOW)</option>
+                        <option value="MEDIUM">Sedang (MEDIUM)</option>
+                        <option value="HIGH">Tinggi (HIGH)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 mb-1.5 font-bold">Batas Waktu (Deadline) *:</label>
+                      <input
+                        type="datetime-local"
+                        value={triageForm.deadline}
+                        onChange={(e) => setTriageForm({ ...triageForm, deadline: e.target.value })}
+                        required
+                        className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0f5c43]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 mb-1.5 font-bold">Catatan Instruksi Khusus (Opsional):</label>
+                    <textarea
+                      rows={2}
+                      value={triageForm.catatanRevisi}
+                      onChange={(e) => setTriageForm({ ...triageForm, catatanRevisi: e.target.value })}
+                      placeholder="Tambahkan catatan atau instruksi pengerjaan..."
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-normal focus:outline-none focus:ring-2 focus:ring-[#0f5c43]"
+                    />
+                  </div>
+                </div>
+
+                <div className="shrink-0 p-4 sm:p-5 border-t border-slate-100 bg-slate-50/90 backdrop-blur-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ticketToDelegate = selectedTriage;
+                      setSelectedTriage(null);
+                      navigate('/tambah-tugas', {
+                        state: {
+                          ticketId: ticketToDelegate.id,
+                          judul: ticketToDelegate.judul,
+                          lokasi: ticketToDelegate.lokasi,
+                          deskripsi: ticketToDelegate.deskripsi,
+                          prioritas: ticketToDelegate.prioritas,
+                          divisiId: ticketToDelegate.divisiId,
+                          fotoInstruksi: ticketToDelegate.fotoInstruksi,
+                        },
+                      });
+                    }}
+                    className="text-[11px] font-bold text-brand-deep hover:underline text-left self-start sm:self-auto"
+                  >
+                    Delegasi Multi-Staf →
+                  </button>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTriage(null)}
+                      className="h-10 sm:h-11 px-4 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      className="h-10 sm:h-11 px-5 sm:px-6 bg-[#0f5c43] hover:bg-[#0c4935] text-white font-bold rounded-xl text-xs shadow-xs transition"
+                    >
+                      Simpan & Delegasikan
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* MODAL 2: LAPOR SELESAI + FOTO BUKTI (STAF) */}
+      {reportTarget &&
+        createPortal(
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setReportTarget(null);
+            }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 touch-none overscroll-none animate-in fade-in duration-200"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl w-full max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200"
+            >
+              <form onSubmit={handleSubmitReport} className="flex flex-col h-full max-h-full overflow-hidden min-h-0">
+                <div className="shrink-0 p-5 sm:p-6 pb-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900">Lapor Tugas Selesai</h3>
+                    <p className="text-xs text-slate-500">Tiket #{reportTarget.id}: {reportTarget.judul}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReportTarget(null)}
+                    className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6 space-y-4 text-xs font-semibold touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  <div>
+                    <label className="block text-slate-700 mb-1.5 font-bold">Catatan Hasil Pengerjaan:</label>
+                    <textarea
+                      rows={3}
+                      value={reportText}
+                      onChange={(e) => setReportText(e.target.value)}
+                      placeholder="Uraikan tindakan yang telah Anda selesaikan..."
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-normal focus:outline-none focus:ring-2 focus:ring-[#f47a45]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 mb-1.5 font-bold">Foto Bukti Hasil Pekerjaan:</label>
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            try {
+                              const base64 = await compressImageToBase64(file);
+                              setReportPhoto(base64);
+                            } catch {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setReportPhoto(reader.result as string);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }
+                        }}
+                        className="w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
+                      />
+
+                      {reportPhoto && (
+                        <div className="relative mt-2 rounded-xl overflow-hidden border border-slate-200 max-h-48 bg-slate-50">
+                          <img src={reportPhoto} alt="Preview Bukti" className="w-full h-44 object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setReportPhoto('')}
+                            className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full hover:bg-black"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="shrink-0 p-4 sm:p-5 border-t border-slate-100 bg-slate-50/90 backdrop-blur-xs flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setReportTarget(null)}
+                    className="h-10 sm:h-11 px-4 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingReport || !reportPhoto}
+                    className="h-10 sm:h-11 px-5 sm:px-6 bg-[#f47a45] hover:bg-[#e06934] disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-2 transition"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>{submittingReport ? 'Mengirim...' : 'Kirim Bukti & Tandai Selesai'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* MODAL 3: EVALUASI HASIL & FOTO (ATASAN) */}
+      {evalTarget &&
+        createPortal(
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setEvalTarget(null);
+            }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 touch-none overscroll-none animate-in fade-in duration-200"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl w-full max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200"
+            >
+              <div className="shrink-0 p-5 sm:p-6 pb-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Evaluasi Pekerjaan Staf</h3>
+                  <p className="text-xs text-slate-500">Tiket #{evalTarget.id}: {evalTarget.judul}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEvalTarget(null)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6 space-y-4 text-xs font-semibold touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+                {evalTarget.fotoBukti && (
+                  <div>
+                    <p className="text-xs font-bold text-slate-700 mb-1.5">Foto Bukti dari Staf:</p>
+                    <img
+                      src={evalTarget.fotoBukti}
+                      alt="Bukti Staf"
+                      onClick={() => setPreviewPhoto(evalTarget.fotoBukti!)}
+                      className="w-full h-44 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-95 transition"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1 italic">Klik gambar untuk memperbesar</p>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-xs font-bold text-slate-700 mb-1.5">Catatan Pengerjaan Staf:</p>
+                  <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200 leading-relaxed">
+                    {evalTarget.laporanPenyelesaian || 'Tugas telah diselesaikan.'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Catatan Evaluasi / Arahan Perbaikan (Wajib jika revisi):
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={evalNote}
+                    onChange={(e) => setEvalNote(e.target.value)}
+                    placeholder="Berikan catatan evaluasi atau alasan perbaikan jika belum sesuai..."
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-normal focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  />
+                </div>
+              </div>
+
+              <div className="shrink-0 p-4 sm:p-5 border-t border-slate-100 bg-slate-50/90 backdrop-blur-xs flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleRejectToRevision}
+                  className="h-10 sm:h-11 px-4 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Minta Revisi</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApprove}
+                  className="h-10 sm:h-11 px-5 sm:px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5 transition"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Setujui Selesai</span>
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* MODAL 4: LAPOR KENDALA (STAF) */}
+      {escalateTarget &&
+        createPortal(
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setEscalateTarget(null);
+            }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 touch-none overscroll-none animate-in fade-in duration-200"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl w-full max-w-md max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200"
+            >
+              <div className="shrink-0 p-5 sm:p-6 pb-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Laporkan Kendala</h3>
+                  <p className="text-xs text-slate-500">Tiket #{escalateTarget.id}: {escalateTarget.judul}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEscalateTarget(null)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6 space-y-3 touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Jelaskan kendala pengerjaan tugas (misal: alat cadangan tidak tersedia, butuh persetujuan biaya tambahan, atau menunggu vendor).
+                </p>
+                <textarea
+                  rows={4}
+                  value={escalateNote}
+                  onChange={(e) => setEscalateNote(e.target.value)}
+                  placeholder="Tuliskan rincian kendala yang dialami secara jelas..."
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-normal focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  required
+                />
+              </div>
+
+              <div className="shrink-0 p-4 sm:p-5 border-t border-slate-100 bg-slate-50/90 backdrop-blur-xs flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setEscalateTarget(null)}
+                  className="h-10 sm:h-11 px-4 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReportEscalation}
+                  disabled={!escalateNote.trim()}
+                  className="h-10 sm:h-11 px-5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-xs transition"
+                >
+                  Kirim Laporan Kendala
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* MODAL 5: PREVIEW FOTO BESAR */}
+      {previewPhoto &&
+        createPortal(
+          <div
+            onClick={() => setPreviewPhoto(null)}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 cursor-pointer touch-none overscroll-none animate-in fade-in duration-200"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-2xl max-h-[85vh] bg-slate-900 p-2 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200"
+            >
+              <button
+                onClick={() => setPreviewPhoto(null)}
+                className="absolute top-4 right-4 z-10 p-2 bg-black/60 text-white rounded-full hover:bg-black transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <img src={previewPhoto} alt="Bukti Foto" className="max-w-full max-h-[80vh] object-contain rounded-xl" />
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

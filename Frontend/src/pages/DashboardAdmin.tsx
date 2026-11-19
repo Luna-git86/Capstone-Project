@@ -53,9 +53,9 @@ const DashboardAdmin: React.FC = () => {
 
   const currentUserName = localStorage.getItem('userName') || '';
 
-  const fetchAdminData = async () => {
+  const fetchAdminData = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       const [userRes, divRes, logRes] = await Promise.all([
         api.get('/auth/users'),
         api.get('/auth/divisi'),
@@ -67,12 +67,16 @@ const DashboardAdmin: React.FC = () => {
     } catch (err) {
       console.error('Gagal memuat data Admin:', err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAdminData();
+    fetchAdminData(false);
+    const interval = setInterval(() => {
+      fetchAdminData(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleCreateUser = async (e: React.FormEvent) => {

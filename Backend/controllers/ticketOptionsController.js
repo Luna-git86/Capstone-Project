@@ -18,15 +18,16 @@ const getTicketOptions = async (req, res) => {
     const rawDivisiId = req.query.divisiId;
     let selectedDivisiId = null;
 
-    if (rawDivisiId !== undefined && rawDivisiId !== '') {
+    // Untuk Koordinator dan Kadiv, pilihan pelaksana mutlak terkunci pada divisinya sendiri
+    if (callerDivisiId && ['KADIV', 'KOORDINATOR'].includes(callerRole)) {
+      selectedDivisiId = callerDivisiId;
+    } else if (rawDivisiId !== undefined && rawDivisiId !== '') {
       selectedDivisiId = Number(rawDivisiId);
       if (!Number.isInteger(selectedDivisiId) || selectedDivisiId <= 0) {
         return res.status(400).json({
           message: 'ID divisi tidak valid.',
         });
       }
-    } else if (callerDivisiId && ['KADIV', 'KOORDINATOR'].includes(callerRole)) {
-      selectedDivisiId = callerDivisiId;
     }
 
     // 2. Tentukan target role pelaksana sesuai aturan hierarki:

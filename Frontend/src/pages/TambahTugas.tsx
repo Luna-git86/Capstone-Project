@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import api from '../services/api';
-import { getAuthRole, getAuthDivisiId, getAuthUserId } from '../utils/authStorage';
+import { getAuthRole, getAuthDivisiId, getAuthDivisiNama, getAuthUserId } from '../utils/authStorage';
 
 interface Divisi {
   id: number;
@@ -27,20 +27,6 @@ interface Pelaksana {
   role: string;
   divisiId: number | null;
   divisi?: { id: number; nama: string };
-}
-
-interface IncomingTicket {
-  id: number;
-  judul: string;
-  lokasi: string | null;
-  deskripsi: string;
-  prioritas: 'LOW' | 'MEDIUM' | 'HIGH';
-  status: string;
-  deadline?: string | null;
-  divisiId?: number | null;
-  divisi?: { id: number; nama: string } | null;
-  pembuat?: { id?: number; nama: string; role: string };
-  pelaksana?: { id?: number; nama: string; role: string } | null;
 }
 
 const compressImageToBase64 = (file: File): Promise<string> => {
@@ -82,10 +68,8 @@ export default function TambahTugas() {
 
   const userRole = getAuthRole() || 'KOORDINATOR';
   const userDivisiId = getAuthDivisiId() || '';
+  const userDivisiNama = getAuthDivisiNama();
   const currentUserId = getAuthUserId();
-
-  const [incomingTickets, setIncomingTickets] = useState<IncomingTicket[]>([]);
-  const [selectedTicketId, setSelectedTicketId] = useState<string>(String(sourceTicketId));
 
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
   const [allStaffList, setAllStaffList] = useState<Pelaksana[]>([]);
@@ -97,7 +81,7 @@ export default function TambahTugas() {
     lokasi: location.state?.lokasi || '',
     deskripsi: location.state?.deskripsi || '',
     prioritas: (location.state?.prioritas as 'LOW' | 'MEDIUM' | 'HIGH') || 'MEDIUM',
-    divisiId: location.state?.divisiId ? String(location.state.divisiId) : userDivisiId,
+    divisiId: userRole === 'DIREKTUR' ? (location.state?.divisiId ? String(location.state.divisiId) : '') : (userDivisiId || (location.state?.divisiId ? String(location.state.divisiId) : '')),
     pelaksanaIds: [] as string[],
     deadline: '',
     fotoInstruksi: location.state?.fotoInstruksi || '',
@@ -120,37 +104,37 @@ export default function TambahTugas() {
     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
   };
 
+  // Ambil detail tiket sumber jika berasal dari daftar tugas atau URL parentId
+  useEffect(() => {
+    if (!sourceTicketId) return;
+    const fetchSourceTicket = async () => {
+      try {
+        const res = await api.get(`/tickets/${sourceTicketId}`);
+        const t = res.data?.data || res.data;
+        if (t) {
+          setFormData((prev) => ({
+            ...prev,
+            judul: prev.judul || t.judul || '',
+            lokasi: prev.lokasi || t.lokasi || '',
+            deskripsi: prev.deskripsi || t.deskripsi || '',
+            prioritas: (prev.prioritas || t.prioritas || 'MEDIUM') as 'LOW' | 'MEDIUM' | 'HIGH',
+            divisiId: prev.divisiId || (t.divisiId ? String(t.divisiId) : ''),
+            deadline: prev.deadline || (t.deadline ? toDateTimeLocalInput(t.deadline) : ''),
+            fotoInstruksi: prev.fotoInstruksi || t.fotoInstruksi || '',
+          }));
+          if (t.fotoInstruksi) {
+            setPreviewName('Lampiran dari Tiket Sumber');
+          }
+        }
+      } catch (err) {
+        console.warn('Gagal memuat rincian tiket sumber:', err);
+      }
+    };
+    fetchSourceTicket();
+  }, [sourceTicketId]);
+
   useEffect(() => {
     const loadInitialData = async () => {
-      try {
-        const ticketRes = await api.get('/tickets');
-        const allTickets: IncomingTicket[] = Array.isArray(ticketRes.data)
-          ? ticketRes.data
-          : ticketRes.data?.data || [];
-
-        const delegatableTickets = allTickets.filter((t) => {
-          if (t.status === 'MENUNGGU_TRIASE') return true;
-          if (userRole === 'KADIV') {
-            const isAssignedToKadiv =
-              !t.pelaksana ||
-              t.pelaksana.role === 'KADIV' ||
-              (currentUserId && String(t.pelaksana.id) === String(currentUserId));
-            return t.pembuat?.role === 'DIREKTUR' && isAssignedToKadiv && t.status !== 'SELESAI';
-          }
-          if (userRole === 'KOORDINATOR') {
-            const isAssignedToKoor =
-              (currentUserId && String(t.pelaksana?.id) === String(currentUserId)) ||
-              t.pelaksana?.role === 'KOORDINATOR';
-            const isDirective = ['KADIV', 'DIREKTUR'].includes(t.pembuat?.role || '');
-            return isDirective && isAssignedToKoor && t.status !== 'SELESAI';
-          }
-          return false;
-        });
-        setIncomingTickets(delegatableTickets);
-      } catch (e) {
-        console.warn('Gagal memuat tiket masuk:', e);
-      }
-
       try {
         const divRes = await api.get('/auth/divisi');
         const listDivisi: Divisi[] = divRes.data?.data || divRes.data || [];
@@ -158,7 +142,7 @@ export default function TambahTugas() {
         if (!formData.divisiId && listDivisi.length > 0) {
           setFormData((prev) => ({
             ...prev,
-            divisiId: prev.divisiId || String(listDivisi[0].id),
+            divisiId: userRole === 'DIREKTUR' ? String(listDivisi[0].id) : (userDivisiId || String(listDivisi[0].id)),
           }));
         }
       } catch (e) {
@@ -199,36 +183,6 @@ export default function TambahTugas() {
     };
     fetchPelaksanaByDivisi();
   }, [formData.divisiId]);
-
-  const handleSelectIncomingTicket = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    setSelectedTicketId(val);
-    if (!val) {
-      setFormData((prev) => ({
-        ...prev,
-        judul: '',
-        lokasi: '',
-        deskripsi: '',
-        fotoInstruksi: '',
-      }));
-      setPreviewName('');
-      return;
-    }
-    const found = incomingTickets.find((t) => String(t.id) === val);
-    if (found) {
-      setFormData((prev) => ({
-        ...prev,
-        judul: found.judul,
-        lokasi: found.lokasi || '',
-        deskripsi: found.deskripsi,
-        prioritas: found.prioritas || 'MEDIUM',
-        divisiId: found.divisi?.id ? String(found.divisi.id) : prev.divisiId,
-        pelaksanaIds: [],
-        deadline: found.deadline ? toDateTimeLocalInput(found.deadline) : prev.deadline,
-      }));
-      setPreviewName('');
-    }
-  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -313,7 +267,7 @@ export default function TambahTugas() {
       const promises = formData.pelaksanaIds.map((pelaksanaId) => {
         const payload: any = {
           tipe: 'BUAT_TUGAS',
-          ticketId: selectedTicketId ? Number(selectedTicketId) : undefined,
+          ticketId: sourceTicketId ? Number(sourceTicketId) : undefined,
           judul: formData.judul,
           lokasi: formData.lokasi,
           deskripsi: formData.deskripsi,
@@ -324,8 +278,8 @@ export default function TambahTugas() {
           fotoInstruksi: formData.fotoInstruksi || null,
         };
 
-        if (paramParentId) {
-          payload.parentTicketId = Number(paramParentId);
+        if (paramParentId || sourceTicketId) {
+          payload.parentTicketId = Number(paramParentId || sourceTicketId);
         }
 
         return api.post('/tickets', payload);
@@ -333,10 +287,6 @@ export default function TambahTugas() {
 
       await Promise.all(promises);
       setSuccessCount(promises.length);
-
-      if (!sourceTicketId) {
-        setSelectedTicketId('');
-      }
 
       setFormData((prev) => ({
         ...prev,
@@ -357,16 +307,15 @@ export default function TambahTugas() {
   };
 
   const filteredStaff = useMemo(() => {
-    const list =
-      pelaksanaList.length > 0
-        ? pelaksanaList
-        : allStaffList.filter(
-            (s) => !formData.divisiId || String(s.divisiId) === String(formData.divisiId)
-          );
+    const targetDivId = userRole === 'DIREKTUR' ? formData.divisiId : (userDivisiId || formData.divisiId);
+    const baseList = pelaksanaList.length > 0 ? pelaksanaList : allStaffList;
+    const list = targetDivId
+      ? baseList.filter((s) => String(s.divisiId) === String(targetDivId))
+      : baseList;
 
     if (!staffSearch.trim()) return list;
     return list.filter((s) => s.nama.toLowerCase().includes(staffSearch.toLowerCase()));
-  }, [pelaksanaList, allStaffList, formData.divisiId, staffSearch]);
+  }, [pelaksanaList, allStaffList, formData.divisiId, userDivisiId, userRole, staffSearch]);
 
   const pageTitle =
     userRole === 'DIREKTUR'
@@ -453,84 +402,122 @@ export default function TambahTugas() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* STEP 1: Info Utama & Lokasi */}
-          <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
-                  1
-                </span>
-                <span>Informasi Tugas & Lokasi *</span>
-              </label>
-              <span className="text-[11px] font-semibold text-slate-400">Tahap 1</span>
-            </div>
-
-            {['KADIV', 'KOORDINATOR'].includes(userRole) && !sourceTicketId && (
-              <div className="space-y-1.5 p-3.5 bg-slate-50 border border-clinical-border rounded-2xl">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                  Tautkan dengan Keluhan / Arahan Masuk (Opsional)
+          {sourceTicketId ? (
+            <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold">
+                    ✓
+                  </span>
+                  <span>Informasi Tugas & Lokasi</span>
                 </label>
-                <select
-                  value={selectedTicketId}
-                  onChange={handleSelectIncomingTicket}
-                  className="w-full h-11 px-3 bg-white border border-clinical-border rounded-xl text-xs sm:text-sm font-semibold text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
-                >
-                  <option value="">-- Buat Penugasan Baru (Mandiri) --</option>
-                  {incomingTickets.map((t) => (
-                    <option key={t.id} value={String(t.id)}>
-                      [#T-{String(t.id).padStart(3, '0')}] {t.judul}
-                    </option>
-                  ))}
-                </select>
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  Tahap 1 Otomatis Terisi Sempurna
+                </span>
               </div>
-            )}
 
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-clinical-ink">
-                Judul Tugas / Arahan *
-              </label>
-              <input
-                type="text"
-                name="judul"
-                value={formData.judul}
-                onChange={handleChange}
-                required
-                placeholder="Contoh: Perbaikan & Cuci AC Ruang Nifas"
-                className="w-full h-12 px-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
-              />
+              <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3.5">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Judul Tugas / Arahan</span>
+                  <p className="text-sm sm:text-base font-extrabold text-clinical-ink mt-0.5">
+                    {formData.judul || 'Memuat rincian judul tugas...'}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-200/80">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lokasi / Area</span>
+                    <p className="text-xs font-semibold text-slate-800 mt-0.5 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{formData.lokasi || 'Seluruh Area / Sesuai Laporan'}</span>
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tiket Sumber</span>
+                    <p className="text-xs font-bold text-brand-deep mt-0.5">
+                      #T-{String(sourceTicketId).padStart(3, '0')}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-200/80">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Instruksi Detail Pekerjaan</span>
+                  <p className="text-xs text-slate-700 leading-relaxed mt-0.5 whitespace-pre-wrap">
+                    {formData.deskripsi || '-'}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-500 italic">
+                * Bagian Tahap 1 di atas telah otomatis terisi dari laporan. Koordinator hanya bertugas memilih Tingkat Prioritas (Tahap 2) dan Staf Pelaksana (Tahap 3).
+              </p>
+
+              {/* Input tersembunyi agar form validation & submission tetap bekerja sempurna */}
+              <input type="hidden" name="judul" value={formData.judul} />
+              <input type="hidden" name="lokasi" value={formData.lokasi} />
+              <input type="hidden" name="deskripsi" value={formData.deskripsi} />
             </div>
+          ) : (
+            <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
+                    1
+                  </span>
+                  <span>Informasi Tugas & Lokasi *</span>
+                </label>
+                <span className="text-[11px] font-semibold text-slate-400">Tahap 1</span>
+              </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-clinical-ink">
-                Lokasi / Area
-              </label>
-              <div className="relative">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-clinical-ink">
+                  Judul Tugas / Arahan *
+                </label>
                 <input
                   type="text"
-                  name="lokasi"
-                  value={formData.lokasi}
+                  name="judul"
+                  value={formData.judul}
                   onChange={handleChange}
-                  placeholder="Contoh: Gedung Utama Lt. 2"
-                  className="w-full h-12 pl-11 pr-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
+                  required
+                  placeholder="Contoh: Perbaikan & Cuci AC Ruang Nifas"
+                  className="w-full h-12 px-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
                 />
-                <MapPin className="w-4 h-4 text-slate-400 absolute left-4 top-4" />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-clinical-ink">
+                  Lokasi / Area
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="lokasi"
+                    value={formData.lokasi}
+                    onChange={handleChange}
+                    placeholder="Contoh: Gedung Utama Lt. 2"
+                    className="w-full h-12 pl-11 pr-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
+                  />
+                  <MapPin className="w-4 h-4 text-slate-400 absolute left-4 top-4" />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-clinical-ink">
+                  Instruksi Detail Pekerjaan *
+                </label>
+                <textarea
+                  name="deskripsi"
+                  rows={3}
+                  value={formData.deskripsi}
+                  onChange={handleChange}
+                  required
+                  placeholder="Tuliskan standar hasil kerja yang Anda harapkan..."
+                  className="w-full p-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition leading-relaxed"
+                />
               </div>
             </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-clinical-ink">
-                Instruksi Detail Pekerjaan *
-              </label>
-              <textarea
-                name="deskripsi"
-                rows={3}
-                value={formData.deskripsi}
-                onChange={handleChange}
-                required
-                placeholder="Tuliskan standar hasil kerja yang Anda harapkan..."
-                className="w-full p-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition leading-relaxed"
-              />
-            </div>
-          </div>
+          )}
 
           {/* STEP 2: Prioritas SLA & Batas Waktu */}
           <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
@@ -630,21 +617,34 @@ export default function TambahTugas() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1">
-                  Filter Divisi
+                  Divisi Pelaksana
                 </label>
-                <select
-                  name="divisiId"
-                  value={formData.divisiId}
-                  onChange={handleChange}
-                  className="w-full h-11 px-3 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-semibold text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
-                >
-                  <option value="">-- Tampilkan Semua Divisi --</option>
-                  {divisiList.map((d) => (
-                    <option key={d.id} value={String(d.id)}>
-                      {d.nama}
-                    </option>
-                  ))}
-                </select>
+                {userRole === 'DIREKTUR' ? (
+                  <select
+                    name="divisiId"
+                    value={formData.divisiId}
+                    onChange={handleChange}
+                    className="w-full h-11 px-3 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-semibold text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
+                  >
+                    <option value="">-- Pilih Divisi Tujuan --</option>
+                    {divisiList.map((d) => (
+                      <option key={d.id} value={String(d.id)}>
+                        {d.nama}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="w-full h-11 px-4 bg-slate-100 border border-clinical-border rounded-2xl text-xs font-bold text-clinical-ink flex items-center justify-between">
+                    <span className="truncate">
+                      {divisiList.find((d) => String(d.id) === String(formData.divisiId || userDivisiId))?.nama ||
+                        userDivisiNama ||
+                        'Divisi Anda'}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-semibold bg-white/90 px-2.5 py-0.5 rounded-full border border-slate-200 shrink-0">
+                      Terkunci
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div>

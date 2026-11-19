@@ -1,7 +1,7 @@
 // Backend/config/notificationConfig.js
 const systemConfigStore = require('./systemConfigStore');
 
-const DEFAULT_CRON_SCHEDULE = '*/15 * * * *';
+const DEFAULT_CRON_SCHEDULE = '* * * * *';
 const DEFAULT_REMINDER_HOURS = 24;
 const DEFAULT_TIME_ZONE = 'Asia/Makassar';
 

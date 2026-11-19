@@ -7,23 +7,15 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
-  .split(',')
-  .map((o) => o.trim());
-
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(new Error('Origin tidak diizinkan oleh kebijakan CORS RSIA.'));
-    },
+    origin: true,
     credentials: true,
   })
 );
 app.use('/api/uat-sm/check-excel', express.json({ limit: '6mb' }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const authRoutes = require('./routes/authRoute');
 app.use('/api/auth', authRoutes);

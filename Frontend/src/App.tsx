@@ -24,6 +24,7 @@ const AnalisiKunjungan = lazy(() => import('./pages/AnalisiKunjungan'));
 const LaporanSLA = lazy(() => import('./pages/LaporanSLA'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const DetailTugas = lazy(() => import('./pages/DetailTugas'));
+const TriageTugas = lazy(() => import('./pages/TriageTugas'));
 const DetailLaporan = lazy(() => import('./pages/DetailLaporan'));
 const RiwayatLaporan = lazy(() => import('./pages/RiwayatLaporan'));
 const DashboardStaff = lazy(() => import('./pages/Staf/DashboardStaff'));
@@ -191,6 +192,11 @@ function App() {
             {/* 7. Menu Laporkan Masalah / Ajukan Tiket ke Pihak Berwenang */}
             <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR', 'STAF']} />}>
               <Route path="/laporkan-masalah" element={<LaporkanMasalah />} />
+            </Route>
+
+            {/* 8. Pemberian Tugas / Delegasi (Khusus Koordinator, Kadiv, Direktur) */}
+            <Route element={<RoleProtectedRoute allowedRoles={['DIREKTUR', 'KADIV', 'KOORDINATOR']} />}>
+              <Route path="/triage-tugas/:id" element={<TriageTugas />} />
             </Route>
 
             {/* 8. Laporan Kinerja / SLA */}

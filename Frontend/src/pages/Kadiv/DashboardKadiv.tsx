@@ -35,28 +35,35 @@ const DashboardKadiv: React.FC = () => {
   const userDivisi = getAuthDivisiNama();
   const canViewMedisAnalytics = isKadivPelayananMedis(userDivisi);
 
+  const fetchTickets = async (isBackground = false) => {
+    try {
+      if (!isBackground) setLoading(true);
+      const response = await api.get('/tickets');
+      setTickets(response.data.data || response.data || []);
+    } catch (error) {
+      console.error('Gagal mengambil data tiket Kadiv:', error);
+    } finally {
+      if (!isBackground) setLoading(false);
+    }
+  };
+
+  const fetchSmSummary = async () => {
+    if (!canViewMedisAnalytics) return;
+    try {
+      const res = await api.get('/sm/summary');
+      setSmKadiv(res.data?.data || null);
+    } catch {
+      // Opsional; tidak menghalangi tiket Kadiv
+    }
+  };
+
   useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        const response = await api.get('/tickets');
-        setTickets(response.data.data || response.data || []);
-      } catch (error) {
-        console.error('Gagal mengambil data tiket Kadiv:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    const fetchSmSummary = async () => {
-      if (!canViewMedisAnalytics) return;
-      try {
-        const res = await api.get('/sm/summary');
-        setSmKadiv(res.data?.data || null);
-      } catch {
-        // Opsional; tidak menghalangi tiket Kadiv
-      }
-    };
-    fetchTickets();
+    fetchTickets(false);
     fetchSmSummary();
+    const interval = setInterval(() => {
+      fetchTickets(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, [canViewMedisAnalytics]);
 
   const kadivPoliEntries = Object.entries(smKadiv?.by_poliklinik || {});
