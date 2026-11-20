@@ -1,4 +1,4 @@
-// Frontend/src/pages/MenuLaporan.tsx
+// Frontend/src/pages/Koordinator/MenuLaporan.tsx
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -13,6 +13,11 @@ import {
   X,
 } from 'lucide-react';
 import api from '../../services/api';
+import {
+  getAuthRole,
+  getAuthUserDivisiId,
+  getAuthDivisiNama,
+} from '../../utils/authStorage';
 
 interface Divisi {
   id: number;
@@ -23,11 +28,26 @@ interface Ticket {
   id: number;
   judul: string;
   lokasi?: string | null;
-  status: 'MENUNGGU_TRIASE' | 'DIPROSES' | 'MENUNGGU_VALIDASI' | 'HOLD_ESKALASI' | 'SELESAI' | 'DITOLAK';
+  status:
+    | 'MENUNGGU_TRIASE'
+    | 'DIPROSES'
+    | 'MENUNGGU_VALIDASI'
+    | 'HOLD_ESKALASI'
+    | 'SELESAI'
+    | 'DITOLAK';
   createdAt?: string;
+  divisiId?: number;
   divisi?: { id?: number; nama: string };
-  pembuat?: { id?: number; nama: string };
-  pelapor?: { id?: number; nama: string };
+  pembuat?: {
+    id?: number;
+    nama: string;
+    divisi?: { id?: number; nama: string } | null;
+  };
+  pelapor?: {
+    id?: number;
+    nama: string;
+    divisi?: { id?: number; nama: string } | null;
+  };
 }
 
 export default function AntreanLaporan() {
@@ -37,9 +57,13 @@ export default function AntreanLaporan() {
 
   const [activeTab, setActiveTab] = useState<'MENUNGGU' | 'RIWAYAT'>('MENUNGGU');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterDivisi, setFilterDivisi] = useState('Semua');
+  const [filterDivisiAsal, setFilterDivisiAsal] = useState('Semua');
 
   const navigate = useNavigate();
+
+  const userRole = getAuthRole();
+  const userDivisiId = Number(getAuthUserDivisiId() || 0);
+  const userDivisiNama = getAuthDivisiNama('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,17 +84,47 @@ export default function AntreanLaporan() {
     fetchData();
   }, []);
 
-  // Gabungkan daftar divisi dari API + divisi unik dari data laporan jika API belum lengkap
-  const opsiDivisi = useMemo(() => {
+  // 1. Saring laporan agar HANYA menampilkan laporan yang tertuju ke divisi pengguna
+  const laporanUntukDivisiSaya = useMemo(() => {
+    if (userRole === 'DIREKTUR' || userRole === 'ADMIN') {
+      return daftarLaporan;
+    }
+
+    return daftarLaporan.filter((laporan) => {
+      const targetDivisiId = Number(laporan.divisi?.id || laporan.divisiId || 0);
+      if (userDivisiId > 0 && targetDivisiId > 0) {
+        return targetDivisiId === userDivisiId;
+      }
+      if (userDivisiNama && laporan.divisi?.nama) {
+        return (
+          laporan.divisi.nama.trim().toLowerCase() ===
+          userDivisiNama.trim().toLowerCase()
+        );
+      }
+      return false;
+    });
+  }, [daftarLaporan, userRole, userDivisiId, userDivisiNama]);
+
+  const getDivisiAsalNama = (laporan: Ticket): string => {
+    return (
+      laporan.pembuat?.divisi?.nama ||
+      laporan.pelapor?.divisi?.nama ||
+      'Unit Internal'
+    );
+  };
+
+  // 2. Opsi filter berdasarkan Divisi Asal Pelapor
+  const opsiDivisiAsal = useMemo(() => {
     const map = new Map<string, string>();
     divisiList.forEach((d) => {
       if (d.nama) map.set(d.nama, d.nama);
     });
-    daftarLaporan.forEach((l) => {
-      if (l.divisi?.nama) map.set(l.divisi.nama, l.divisi.nama);
+    laporanUntukDivisiSaya.forEach((l) => {
+      const asal = getDivisiAsalNama(l);
+      if (asal) map.set(asal, asal);
     });
     return Array.from(map.values());
-  }, [divisiList, daftarLaporan]);
+  }, [divisiList, laporanUntukDivisiSaya]);
 
   const getStatusMeta = (status: string) => {
     switch (status) {
@@ -128,55 +182,78 @@ export default function AntreanLaporan() {
   const activeStatuses = ['MENUNGGU_TRIASE', 'DIPROSES', 'MENUNGGU_VALIDASI', 'HOLD_ESKALASI'];
   const historyStatuses = ['SELESAI', 'DITOLAK'];
 
-  const dataTertampil = useMemo(() => {
-    return daftarLaporan.filter((laporan) => {
-      if (activeTab === 'MENUNGGU' && !activeStatuses.includes(laporan.status)) return false;
-      if (activeTab === 'RIWAYAT' && !historyStatuses.includes(laporan.status)) return false;
+  // 3. Filter Tab, Divisi Asal Pelapor, dan Pencarian Teks
+  const dataTertampil = laporanUntukDivisiSaya.filter((laporan) => {
+    if (activeTab === 'MENUNGGU' && !activeStatuses.includes(laporan.status)) return false;
+    if (activeTab === 'RIWAYAT' && !historyStatuses.includes(laporan.status)) return false;
 
-      if (filterDivisi !== 'Semua' && laporan.divisi?.nama !== filterDivisi) {
-        return false;
-      }
+    const divisiAsal = getDivisiAsalNama(laporan);
+    if (filterDivisiAsal !== 'Semua' && divisiAsal !== filterDivisiAsal) {
+      return false;
+    }
 
-      if (searchQuery.trim()) {
-        const q = searchQuery.trim().toLowerCase().replace(/^#/, '');
-        const namaPelapor = (laporan.pembuat?.nama || laporan.pelapor?.nama || '').toLowerCase();
-        const matchJudul = (laporan.judul || '').toLowerCase().includes(q);
-        const matchLokasi = (laporan.lokasi || '').toLowerCase().includes(q);
-        const formattedId = `t-${String(laporan.id).padStart(3, '0')}`;
-        const matchId = formattedId.includes(q) || String(laporan.id).includes(q);
-        if (!matchJudul && !matchLokasi && !matchId && !namaPelapor) return false;
-      }
+    const rawQuery = searchQuery.trim().toLowerCase();
+    if (rawQuery !== '') {
+      const q = rawQuery.replace(/^#/, '');
+      const judul = (laporan.judul || '').toLowerCase();
+      const lokasi = (laporan.lokasi || '').toLowerCase();
+      const pelapor = (laporan.pembuat?.nama || laporan.pelapor?.nama || '').toLowerCase();
+      const asal = divisiAsal.toLowerCase();
+      const formattedId = `t-${String(laporan.id).padStart(3, '0')}`;
+      const rawId = String(laporan.id);
 
-      return true;
+      const isMatch =
+        judul.includes(q) ||
+        lokasi.includes(q) ||
+        pelapor.includes(q) ||
+        asal.includes(q) ||
+        formattedId.includes(q) ||
+        rawId.includes(q);
+
+      if (!isMatch) return false;
+    }
+  
+
+    return true;
     });
-  }, [daftarLaporan, activeTab, filterDivisi, searchQuery]);
 
-  const jumlahLaporanAktif = daftarLaporan.filter((l) => activeStatuses.includes(l.status)).length;
-  const jumlahLaporanSelesai = daftarLaporan.filter((l) => historyStatuses.includes(l.status)).length;
+  const jumlahLaporanAktif = laporanUntukDivisiSaya.filter((l) =>
+    activeStatuses.includes(l.status)
+  ).length;
+  const jumlahLaporanSelesai = laporanUntukDivisiSaya.filter((l) =>
+    historyStatuses.includes(l.status)
+  ).length;
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto min-h-screen space-y-6 pb-28 md:pb-12">
       {/* Header Halaman */}
       <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span className="inline-block px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-emerald-50 text-brand-deep border border-emerald-200 uppercase tracking-wider mb-1.5">
-            Triase & Tindak Lanjut
-          </span>
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+            <span className="inline-block px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-emerald-50 text-brand-deep border border-emerald-200 uppercase tracking-wider">
+              Triase & Tindak Lanjut
+            </span>
+            {userDivisiNama && (
+              <span className="inline-block px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-slate-100 text-slate-600">
+                Tujuan: {userDivisiNama}
+              </span>
+            )}
+          </div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
             Manajemen Laporan Masuk
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Pantau keluhan fasilitas dari unit layanan dan distribusikan menjadi penugasan teknis.
+            Pantau keluhan fasilitas yang masuk ke divisi Anda dan distribusikan menjadi penugasan teknis.
           </p>
         </div>
       </div>
 
       {/* Kontainer Utama */}
       <div className="bg-white border border-slate-200/90 rounded-3xl shadow-xs flex flex-col overflow-hidden">
-        {/* Toolbar Tab, Pencarian & Filter Divisi */}
+        {/* Toolbar Tab, Pencarian & Filter Divisi Asal Pelapor */}
         <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/60 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3.5">
           {/* Sub-Tab */}
-          <div className="flex bg-white p-1 rounded-2xl border border-slate-200/90 shadow-2xs w-full lg:w-auto">
+          <div className="flex bg-white p-1 rounded-2xl border border-slate-200/90 shadow-2xs shrink-0">
             <button
               type="button"
               onClick={() => setActiveTab('MENUNGGU')}
@@ -201,37 +278,40 @@ export default function AntreanLaporan() {
             </button>
           </div>
 
-          {/* Search & Dropdown Filter Divisi */}
-          <div className="flex flex-col sm:flex-row gap-2.5 w-full lg:w-auto">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
+          {/* Search & Dropdown Filter Divisi Asal */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1 lg:max-w-xl justify-end">
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
+                aria-label="Cari laporan masuk"
                 placeholder="Cari ID, masalah, lokasi, pelapor..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-10 pl-10 pr-8 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-deep transition"
+                className="w-full h-10 pl-10 pr-8 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-deep focus:border-brand-deep transition"
               />
               {searchQuery && (
                 <button
                   type="button"
+                  aria-label="Hapus pencarian"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            <div className="relative sm:w-64">
+            <div className="relative sm:w-60 shrink-0">
               <Filter className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <select
-                value={filterDivisi}
-                onChange={(e) => setFilterDivisi(e.target.value)}
-                className="w-full h-10 pl-9 pr-8 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-deep transition truncate"
+                aria-label="Filter divisi asal pelapor"
+                value={filterDivisiAsal}
+                onChange={(e) => setFilterDivisiAsal(e.target.value)}
+                className="w-full h-10 pl-9 pr-8 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-deep focus:border-brand-deep transition truncate"
               >
-                <option value="Semua">Semua Divisi Tujuan</option>
-                {opsiDivisi.map((namaDiv) => (
+                <option value="Semua">Semua Divisi Pelapor</option>
+                {opsiDivisiAsal.map((namaDiv) => (
                   <option key={namaDiv} value={namaDiv}>
                     {namaDiv}
                   </option>
@@ -253,7 +333,7 @@ export default function AntreanLaporan() {
                   Masalah & Lokasi
                 </th>
                 <th className="py-3.5 px-6 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                  Pelapor & Divisi Tujuan
+                  Pelapor & Divisi Asal
                 </th>
                 <th className="py-3.5 px-6 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider text-center">
                   Status
@@ -275,7 +355,9 @@ export default function AntreanLaporan() {
                 dataTertampil.map((laporan) => {
                   const isBaru = isLaporanBaru(laporan.createdAt);
                   const statusMeta = getStatusMeta(laporan.status);
-                  const namaPelapor = laporan.pembuat?.nama || laporan.pelapor?.nama || 'Staf Unit';
+                  const namaPelapor =
+                    laporan.pembuat?.nama || laporan.pelapor?.nama || 'Staf Unit';
+                  const divisiAsal = getDivisiAsalNama(laporan);
 
                   return (
                     <tr
@@ -322,7 +404,7 @@ export default function AntreanLaporan() {
                         )}
                       </td>
 
-                      {/* Kolom 3: Pelapor & Divisi */}
+                      {/* Kolom 3: Pelapor & Divisi Asal */}
                       <td className="py-4 px-6 align-top">
                         <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
                           <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -330,7 +412,7 @@ export default function AntreanLaporan() {
                         </div>
                         <div className="inline-flex items-center gap-1.5 text-xs text-slate-500 mt-1 bg-slate-100/80 px-2 py-0.5 rounded-md">
                           <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>{laporan.divisi?.nama || 'Belum Ditentukan'}</span>
+                          <span>{divisiAsal}</span>
                         </div>
                       </td>
 
@@ -374,9 +456,9 @@ export default function AntreanLaporan() {
                       </div>
                       <p className="font-bold text-sm text-slate-600">Tidak ada laporan ditemukan</p>
                       <p className="text-xs text-slate-400">
-                        {searchQuery || filterDivisi !== 'Semua'
-                          ? 'Coba ubah kata kunci pencarian atau pilih divisi lain.'
-                          : 'Belum ada data laporan pada kategori ini.'}
+                        {searchQuery || filterDivisiAsal !== 'Semua'
+                          ? 'Coba ubah kata kunci pencarian atau pilih divisi pelapor lain.'
+                          : 'Belum ada laporan yang ditujukan ke divisi Anda pada kategori ini.'}
                       </p>
                     </div>
                   </td>

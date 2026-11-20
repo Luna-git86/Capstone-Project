@@ -375,7 +375,13 @@ const getTickets = async (req, res) => {
       where: filter,
       include: {
         pembuat: {
-          select: { id: true, nama: true, noHp: true, role: true },
+          select: {
+            id: true,
+            nama: true,
+            noHp: true,
+            role: true,
+            divisi: { select: { id: true, nama: true } },
+          },
         },
         penanggungJawab: {
           select: { id: true, nama: true, noHp: true, role: true },

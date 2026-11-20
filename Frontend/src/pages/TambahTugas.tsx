@@ -112,6 +112,21 @@ export default function TambahTugas() {
   const [error, setError] = useState<string>('');
   const [successCount, setSuccessCount] = useState<number>(0);
 
+  const getCurrentLocalDateTime = () => {
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000;
+    return new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
+  };
+
+  const [minDeadline, setMinDeadline] = useState<string>(() => getCurrentLocalDateTime());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setMinDeadline(getCurrentLocalDateTime());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
   const toDateTimeLocalInput = (dateStr: string | null | undefined) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
@@ -234,7 +249,17 @@ export default function TambahTugas() {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    if (name === 'deadline' && value) {
+      const currentMin = getCurrentLocalDateTime();
+      setMinDeadline(currentMin);
+      if (new Date(value).getTime() < new Date().getTime()) {
+        setError('Batas waktu target tidak boleh berada di masa lalu.');
+        setFormData((prev) => ({ ...prev, deadline: currentMin }));
+        return;
+      }
+      setError('');
+    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleFileProcess = async (file: File) => {
@@ -302,6 +327,10 @@ export default function TambahTugas() {
     }
     if (!formData.deadline) {
       setError('Wajib menentukan batas waktu (SLA deadline).');
+      return;
+    }
+    if (new Date(formData.deadline).getTime() < new Date().getTime()) {
+      setError('Batas waktu target tidak boleh kurang dari waktu sekarang.');
       return;
     }
 
@@ -603,8 +632,20 @@ export default function TambahTugas() {
                 <input
                   type="datetime-local"
                   name="deadline"
+                  min={minDeadline}
                   value={formData.deadline}
                   onChange={handleChange}
+                  onBlur={() => {
+                    if (
+                      formData.deadline &&
+                      new Date(formData.deadline).getTime() < new Date().getTime()
+                    ) {
+                      const currentMin = getCurrentLocalDateTime();
+                      setMinDeadline(currentMin);
+                      setFormData((prev) => ({ ...prev, deadline: currentMin }));
+                      setError('Batas waktu target tidak boleh berada di masa lalu.');
+                    }
+                  }}
                   required
                   className="w-full h-12 pl-11 pr-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-bold text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
                 />
