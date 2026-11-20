@@ -1,11 +1,11 @@
-// Frontend/src/pages/Penguji/Tab5ProyeksiDashboard.tsx
+// Frontend/src/pages/Penguji/Tab6ProyeksiDashboard.tsx
 import React from 'react';
 import {
   Bar,
+  BarChart,
   CartesianGrid,
-  ComposedChart,
+  LabelList,
   Legend,
-  Line,
   Tooltip,
   XAxis,
   YAxis,
@@ -16,41 +16,48 @@ import {
   RSIA_UAT_COLORS,
   UAT_CHART_FONT,
   formatNumId,
-  type Tab5Data,
+  type Tab6Data,
 } from './uatSmTypes';
 
-interface Tab5Props {
-  data: Tab5Data | null;
-  unlockedStep: number;
+interface Tab6Props {
+  data: Tab6Data | null;
+  viewStep: number;
   liveNotes: Record<string, string>;
 }
 
-export const Tab5ProyeksiDashboard: React.FC<Tab5Props> = ({ data, unlockedStep, liveNotes }) => {
-  if (!data || unlockedStep < 1) {
+export const Tab6ProyeksiDashboard: React.FC<Tab6Props> = ({ data, viewStep, liveNotes }) => {
+  if (!data || !data.projection2026 || viewStep < 1) {
     return (
       <div className="tvlk-card rounded-2xl p-6 text-center space-y-2">
-        <p className="text-sm font-extrabold text-[#18201c]">Tahap 5 Belum Dimulai</p>
+        <p className="text-sm font-extrabold text-[#18201c]">Tab 6 Belum Dimulai</p>
         <p className="text-xs text-[#6b7770]">
-          Klik tombol hijau <strong className="text-[#0f5c43]">Mulai Hitung (0/3)</strong> untuk melihat proyeksi Juli–Desember 2026 dan kesiapan data tampil pada Website Dashboard RSIA.
+          Klik tombol hijau <strong className="text-[#0f5c43]">Lihat Proyeksi Jul–Des 2026 (1/3)</strong> di kanan atas untuk mengecek proyeksi dan kesiapan Dashboard Analisis Kunjungan.
         </p>
       </div>
     );
   }
 
+  const monthlyH2Series = Array.isArray(data.monthlyH2Series) ? data.monthlyH2Series : [];
+  const unitH2List = Array.isArray(data.unitH2List) ? data.unitH2List : [];
+  const dashboardFiles = Array.isArray(data.dashboardFiles) ? data.dashboardFiles : [];
+  const dashboardViews = Array.isArray(data.dashboardViews) ? data.dashboardViews : [];
+
   return (
     <div className="space-y-4">
-      {/* Langkah 5.1 */}
-      <StepSectionCard
-        stepCode="Langkah 5.1"
-        title="Proyeksi Kunjungan Paruh Kedua 2026 (Juli–Desember 2026)"
-        subtitle="Perkiraan beban kunjungan untuk 184 hari ke depan secara keseluruhan maupun pada 4 poliklinik utama RSIA."
-        done={unlockedStep >= 1}
-      >
+      {/* Langkah 6.1 */}
+      {viewStep === 1 && (
+        <StepSectionCard
+          stepCode="Langkah 6.1"
+          title="Proyeksi Kunjungan Paruh Kedua 2026 (Jul–Des 2026)"
+          subtitle="Membandingkan perkiraan bulanan kedua model dan beban 4 poliklinik utama."
+          done={viewStep >= 1}
+        >
         <PanduanPengujiBox
-          whatHappens="Sistem menghitung perkiraan jumlah pasien untuk 184 hari pada paruh kedua tahun 2026 (Juli–Desember 2026) baik untuk Total RS maupun pada 4 poliklinik utama."
+          whatHappens="Menampilkan perkiraan kunjungan 184 hari ke depan (Jul–Des 2026) untuk Total RS dan 4 poliklinik utama."
           stepsToCheck={[
-            'Periksa 3 kartu ringkasan: Proyeksi Jul–Des 2026 (3.798 pasien), Realisasi Jan–Jun 2026 (4.044 pasien), dan Estimasi Setahun Penuh 2026 (7.842 pasien).',
-            'Cek grafik perkiraan bulanan Jul–Des 2026 serta dua tabel rincian (per poliklinik utama & per bulan) di bawahnya.',
+            'Cek 3 kartu ringkasan: Proyeksi Jul–Des 2026 (3.798 pasien), Realisasi Jan–Jun 2026 (4.044), dan Estimasi Setahun (7.842).',
+            'Bandingkan kedua batang berdampingan pada grafik bulanan (oranye = HistGB vs ungu = NB GLM), lalu cek angkanya pada tabel di bawah.',
+            'Klik "Cek Kesiapan Data Dashboard →" di kanan atas.',
           ]}
         />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -79,25 +86,39 @@ export const Tab5ProyeksiDashboard: React.FC<Tab5Props> = ({ data, unlockedStep,
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          <div className="lg:col-span-7 rounded-2xl border border-[#dce7e0] bg-white p-3.5">
-            <p className="text-xs font-extrabold text-[#18201c] mb-2">
-              Grafik Perkiraan Bulanan Jul–Des 2026 (HistGB vs NB GLM)
-            </p>
-            <UatChartBox heightPx={240}>
+        {/* Grafik Bulanan Full Width dengan Grouped Bars (sama-sama batang berdampingan + label angka) */}
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-[#dce7e0] bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <p className="text-xs sm:text-sm font-extrabold text-[#18201c]">
+                Grafik Perbandingan Perkiraan Bulanan Jul–Des 2026 (HistGB vs NB GLM)
+              </p>
+              <span className="text-[11px] font-semibold text-[#6b7770]">
+                Batang oranye &amp; batang ungu sejajar per bulan agar mudah dibandingkan langsung
+              </span>
+            </div>
+            <UatChartBox heightPx={310}>
               {({ width, height }) => (
-                <ComposedChart width={width} height={height} data={data.monthlyH2Series} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+                <BarChart
+                  width={width}
+                  height={height}
+                  data={monthlyH2Series}
+                  margin={{ top: 24, right: 16, left: 0, bottom: 6 }}
+                  barGap={6}
+                  barCategoryGap="22%"
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke={RSIA_UAT_COLORS.grid} vertical={false} />
                   <XAxis
                     dataKey="label"
-                    tick={{ ...UAT_CHART_FONT, fontSize: 11, fill: RSIA_UAT_COLORS.axis }}
+                    tick={{ ...UAT_CHART_FONT, fontSize: 11, fill: RSIA_UAT_COLORS.axis, fontWeight: 600 }}
                   />
                   <YAxis
-                    width={42}
+                    width={44}
+                    domain={[0, (dataMax: number) => Math.ceil((dataMax + 90) / 50) * 50]}
                     tick={{ ...UAT_CHART_FONT, fontSize: 11, fill: RSIA_UAT_COLORS.axis }}
                   />
                   <Tooltip
-                    contentStyle={{ ...UAT_CHART_FONT, fontSize: '12px', borderRadius: '12px' }}
+                    contentStyle={{ ...UAT_CHART_FONT, fontSize: '12px', borderRadius: '12px', borderColor: '#ace2c5' }}
                   />
                   <Legend
                     iconSize={12}
@@ -112,22 +133,33 @@ export const Tab5ProyeksiDashboard: React.FC<Tab5Props> = ({ data, unlockedStep,
                     name="Proyeksi Utama (HistGB)"
                     fill={RSIA_UAT_COLORS.forecast}
                     radius={[6, 6, 0, 0]}
-                    barSize={28}
-                  />
-                  <Line
-                    type="monotone"
+                    maxBarSize={42}
+                  >
+                    <LabelList
+                      dataKey="histgb"
+                      position="top"
+                      style={{ ...UAT_CHART_FONT, fontSize: 11, fontWeight: 700, fill: '#b94818' }}
+                    />
+                  </Bar>
+                  <Bar
                     dataKey="nbGlm"
-                    name="Pembanding (NB GLM)"
-                    stroke={RSIA_UAT_COLORS.nbGlm}
-                    strokeWidth={2.5}
-                    dot={{ r: 3 }}
-                  />
-                </ComposedChart>
+                    name="Pembanding Statistik (NB GLM)"
+                    fill={RSIA_UAT_COLORS.nbGlm}
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={42}
+                  >
+                    <LabelList
+                      dataKey="nbGlm"
+                      position="top"
+                      style={{ ...UAT_CHART_FONT, fontSize: 11, fontWeight: 700, fill: '#4347b8' }}
+                    />
+                  </Bar>
+                </BarChart>
               )}
             </UatChartBox>
           </div>
 
-          <div className="lg:col-span-5 overflow-x-auto rounded-2xl border border-[#dce7e0]">
+          <div className="overflow-x-auto rounded-2xl border border-[#dce7e0]">
             <div className="bg-[#f6f8f7] px-3.5 py-2 border-b border-[#dce7e0] text-xs font-extrabold text-[#18201c]">
               Tabel Proyeksi 4 Poliklinik Utama (Jul–Des 2026)
             </div>
@@ -140,7 +172,7 @@ export const Tab5ProyeksiDashboard: React.FC<Tab5Props> = ({ data, unlockedStep,
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#eef1ef]">
-                {data.unitH2List.map((u) => (
+                {unitH2List.map((u) => (
                   <tr key={u.poliklinik} className="hover:bg-[#edf8f2]/40">
                     <td className="py-2.5 px-3 font-extrabold text-[#18201c]">{u.poliklinik}</td>
                     <td className="py-2.5 px-3 text-right font-extrabold text-[#d95d28] tabular-nums">
@@ -156,7 +188,6 @@ export const Tab5ProyeksiDashboard: React.FC<Tab5Props> = ({ data, unlockedStep,
           </div>
         </div>
 
-        {/* Tabel Proyeksi Bulanan Jul-Des 2026 */}
         <div className="overflow-x-auto rounded-2xl border border-[#dce7e0]">
           <div className="bg-[#f6f8f7] px-3.5 py-2 border-b border-[#dce7e0] text-xs font-extrabold text-[#18201c]">
             Tabel Rincian Perkiraan Kunjungan Bulanan (Juli–Desember 2026 • {data.projection2026.h2Days} Hari)
@@ -172,7 +203,7 @@ export const Tab5ProyeksiDashboard: React.FC<Tab5Props> = ({ data, unlockedStep,
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef1ef]">
-              {data.monthlyH2Series.map((m) => (
+              {monthlyH2Series.map((m) => (
                 <tr key={m.label} className="hover:bg-[#edf8f2]/40">
                   <td className="py-2 px-3 font-extrabold text-[#18201c]">{m.label}</td>
                   <td className="py-2 px-3 text-right tabular-nums text-[#6b7770]">{m.days} hari</td>
@@ -194,35 +225,37 @@ export const Tab5ProyeksiDashboard: React.FC<Tab5Props> = ({ data, unlockedStep,
                   {formatNumId(data.projection2026.h2Projected)} pasien
                 </td>
                 <td className="py-2.5 px-3 text-right tabular-nums">
-                  {formatNumId(data.monthlyH2Series.reduce((acc, m) => acc + m.nbGlm, 0))} pasien
+                  {formatNumId(monthlyH2Series.reduce((acc, m) => acc + m.nbGlm, 0))} pasien
                 </td>
                 <td className="py-2.5 px-3 text-right">—</td>
               </tr>
             </tbody>
           </table>
         </div>
-      </StepSectionCard>
+        </StepSectionCard>
+      )}
 
-      {/* Langkah 5.2 */}
-      {unlockedStep >= 2 && (
+      {/* Langkah 6.2 */}
+      {viewStep === 2 && (
         <StepSectionCard
-          stepCode="Langkah 5.2"
-          title="Pengiriman 9 Paket Data Rekap Aman ke Website Dashboard RSIA"
-          subtitle="Memastikan seluruh angka proyeksi, beban poliklinik, dan jam sibuk telah siap ditampilkan di Dashboard RSIA tanpa satu pun data pribadi."
-          done={unlockedStep >= 2}
+          stepCode="Langkah 6.2"
+          title="Kesiapan 9 Paket Data Aman Dashboard RSIA"
+          subtitle="Memastikan seluruh berkas grafik & angka siap tampil bebas identitas pasien."
+          done={viewStep >= 2}
           ranLiveInfo={liveNotes.stage7_export}
         >
           <PanduanPengujiBox
-            whatHappens="Sistem menyaring kembali seluruh keluaran dan mengekspor 9 paket data ringkas yang bebas identitas pasien ke folder Dashboard RSIA."
+            whatHappens="Menyiapkan 9 paket data ringkas untuk halaman Beranda dan Analisis Kunjungan."
             stepsToCheck={[
-              'Pastikan status bertuliskan "9 / 9 Paket Lengkap & Bebas Identitas" dan seluruh 9 baris pada tabel berstatus hijau "Siap".',
+              'Pastikan status hijau tertulis "9 / 9 Paket Lengkap & Bebas Identitas" dan seluruh baris berstatus Siap.',
+              'Klik "Lihat Panduan Uji Role →" di kanan atas.',
             ]}
           />
           <div className="flex items-center justify-between gap-2 rounded-xl bg-[#edf8f2] border border-[#93d1ae] px-3.5 py-2.5">
             <span className="text-xs font-extrabold text-[#0f5c43] flex items-center gap-2">
               <ShieldCheck className="w-4 h-4" />
               Status Kesiapan Data Website Dashboard:{' '}
-              {data.allDashboardReady ? `${data.dashboardFiles.length} / ${data.dashboardFiles.length} Paket Lengkap & Bebas Identitas` : 'Sebagian Belum Terbentuk'}
+              {data.allDashboardReady ? `${dashboardFiles.length} / ${dashboardFiles.length} Paket Lengkap & Bebas Identitas` : 'Sebagian Belum Terbentuk'}
             </span>
           </div>
 
@@ -238,7 +271,7 @@ export const Tab5ProyeksiDashboard: React.FC<Tab5Props> = ({ data, unlockedStep,
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#eef1ef]">
-                {data.dashboardFiles.map((f, idx) => (
+                {dashboardFiles.map((f, idx) => (
                   <tr key={f.file} className="hover:bg-[#edf8f2]/40">
                     <td className="py-2 px-3 text-center font-bold text-[#0f5c43]">{idx + 1}</td>
                     <td className="py-2 px-3 font-bold text-[#18201c]">{f.label}</td>
@@ -262,20 +295,20 @@ export const Tab5ProyeksiDashboard: React.FC<Tab5Props> = ({ data, unlockedStep,
         </StepSectionCard>
       )}
 
-      {/* Langkah 5.3 */}
-      {unlockedStep >= 3 && (
+      {/* Langkah 6.3 */}
+      {viewStep === 3 && (
         <StepSectionCard
-          stepCode="Langkah 5.3"
-          title="Tampilan Akhir Data pada Dashboard Analisis Kunjungan RSIA"
-          subtitle="Hasil akhir Scientific Method ditampilkan berupa angka ringkas, grafik tren, dan proyeksi kunjungan di Dashboard agar Direktur dapat mengambil keputusan secara langsung."
-          done={unlockedStep >= 3}
+          stepCode="Langkah 6.3"
+          title="Panduan Uji Dashboard Analisis Kunjungan (Direktur & Kadiv Medis)"
+          subtitle="Ringkasan tampilan dan fungsi tombol saat penguji lanjut menguji role Direktur & Kadiv."
+          done={viewStep >= 3}
         >
           <PanduanPengujiBox
-            whatHappens="Menampilkan pemetaan akhir bagian mana saja dari hasil Scientific Method yang muncul di menu Beranda dan Analisis Kunjungan RSIA, serta fungsi tiap tombol kontrolnya."
+            whatHappens="Pengujian berlanjut dari akun Penguji ini ke akun Direktur dan Kadiv Pelayanan Medis di halaman Analisis Kunjungan."
             stepsToCheck={[
-              'Cocokkan ke-5 baris pada Tabel Tampilan Akhir Data dengan tampilan asli ketika Anda login sebagai Direktur (081100000002) atau Kadiv Pelayanan Medis (081100000007).',
-              'Gunakan Tabel Panduan Fungsi Tombol Analisis Kunjungan di bawah sebagai acuan saat mencoba dropdown Unit, rentang tanggal, resolusi waktu, Garis, dan Jam Sibuk 24J.',
-              'Pastikan Kadiv di luar Pelayanan Medis (seperti Kadiv Umum & IT 081100000003 atau Kadiv Penunjang Medis 081100000008) TIDAK dapat membuka menu Analisis Kunjungan.',
+              'Keluar lalu login sebagai Direktur (081100000002): buka Analisis Kunjungan dan uji tombol Unit, Rentang Tanggal, Resolusi Waktu, Garis, ? Panduan, serta Jam Sibuk 24J sesuai tabel di bawah.',
+              'Login sebagai Kadiv Pelayanan Medis (081100000007): pastikan hanya 6 unit medis yang tampil (tanpa Total RS & tanpa Laboratorium).',
+              'Uji pembanding Kadiv Umum & IT (081100000003): pastikan menu Analisis Kunjungan tidak muncul dan akses ditolak.',
             ]}
           />
           <div className="overflow-x-auto rounded-2xl border border-[#dce7e0]">
@@ -289,7 +322,7 @@ export const Tab5ProyeksiDashboard: React.FC<Tab5Props> = ({ data, unlockedStep,
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#eef1ef]">
-                {data.dashboardViews.map((vw) => (
+                {dashboardViews.map((vw) => (
                   <tr key={vw.viewName} className="hover:bg-[#edf8f2]/40">
                     <td className="py-2.5 px-3 font-extrabold text-[#0f5c43]">
                       <span className="inline-flex items-center gap-1.5">

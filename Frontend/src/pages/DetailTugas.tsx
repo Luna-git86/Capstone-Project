@@ -2,19 +2,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
+  AlertTriangle,
   ArrowLeft,
+  ArrowUpRight,
   Check,
   CheckCircle2,
   MapPin,
   Maximize2,
   MessageCircle,
+  Play,
   Plus,
   Upload,
   User,
+  Wrench,
   X,
 } from 'lucide-react';
 import api from '../services/api';
-import { getAuthRole } from '../utils/authStorage';
+import { getAuthRole, getAuthUserId } from '../utils/authStorage';
 
 interface TicketLog {
   id: number;
@@ -61,20 +65,6 @@ interface TicketDetail {
   }>;
 }
 
-interface Divisi {
-  id: number;
-  nama: string;
-}
-
-interface StaffUser {
-  id: number;
-  nama: string;
-  noHp: string;
-  role: string;
-  divisiId: number | null;
-  divisi?: { id: number; nama: string };
-}
-
 const compressImageToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -106,38 +96,20 @@ export default function DetailTugas() {
   const [loading, setLoading] = useState(true);
 
   const userRole = getAuthRole() || 'STAF';
+  const currentUserId = getAuthUserId();
   const isKadivDir = ['KADIV', 'DIREKTUR'].includes(userRole);
   const isKadiv = userRole === 'KADIV';
   const isKoor = userRole === 'KOORDINATOR';
   const isAtasan = isKoor || isKadivDir;
-  const isStaf = userRole === 'STAF';
-
-  const [divisiList, setDivisiList] = useState<Divisi[]>([]);
-  const [staffList, setStaffList] = useState<StaffUser[]>([]);
 
   const [laporanText, setLaporanText] = useState('');
   const [fotoBase64, setFotoBase64] = useState('');
   const [kendalaText, setKendalaText] = useState('');
   const [evaluasiNote, setEvaluasiNote] = useState('');
+  const [tindakLanjutKendalaNote, setTindakLanjutKendalaNote] = useState('');
+  const [isKerjakanSendiri, setIsKerjakanSendiri] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-
-  const [showDelegasiForm, setShowDelegasiForm] = useState(false);
-  const [triageForm, setTriageForm] = useState({
-    divisiId: '',
-    prioritas: 'MEDIUM',
-    pelaksanaId: '',
-    deadline: '',
-    catatanRevisi: '',
-  });
-
-  const toDateTimeLocalInput = (isoStr: string | null) => {
-    if (!isoStr) return '';
-    const d = new Date(isoStr);
-    if (Number.isNaN(d.getTime())) return '';
-    const tzOffset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
-  };
 
   const fetchDetail = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
@@ -151,23 +123,6 @@ export default function DetailTugas() {
       }
 
       setTicket(ticketData);
-
-      if (isAtasan && !isBackground) {
-        const [divRes, staffRes] = await Promise.all([
-          api.get('/auth/divisi'),
-          api.get('/tickets/staff'),
-        ]);
-        setDivisiList(divRes.data.data || divRes.data || []);
-        setStaffList(staffRes.data.data || staffRes.data || []);
-
-        setTriageForm({
-          divisiId: ticketData.divisi?.id ? String(ticketData.divisi.id) : '',
-          prioritas: ticketData.prioritas || 'MEDIUM',
-          pelaksanaId: ticketData.pelaksana?.id ? String(ticketData.pelaksana.id) : '',
-          deadline: toDateTimeLocalInput(ticketData.deadline),
-          catatanRevisi: ticketData.catatanRevisi || '',
-        });
-      }
     } catch (error: any) {
       if (!isBackground) {
         console.error('Gagal mengambil detail tugas', error);
@@ -217,6 +172,12 @@ export default function DetailTugas() {
           label: 'Selesai Tuntas',
           bg: 'bg-blue-100 text-brand-deep border-brand-mint/50',
           dot: 'bg-brand-mint',
+        };
+      case 'DITOLAK':
+        return {
+          label: 'Ditolak / Dibatalkan',
+          bg: 'bg-slate-200 text-slate-800 border-slate-300',
+          dot: 'bg-slate-600',
         };
       default:
         return {
@@ -297,23 +258,54 @@ export default function DetailTugas() {
     }
   };
 
-  const handleDelegasiSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleTindakLanjutKendala = async (aksi: 'LANJUTKAN' | 'ESKALASI') => {
+    if (aksi === 'ESKALASI' && !tindakLanjutKendalaNote.trim()) {
+      return alert(
+        `Mohon tulis alasan eskalasi masalah ke ${isKadiv ? 'Direktur' : 'Kadiv'}.`
+      );
+    }
     setIsSubmitting(true);
     try {
-      await api.put(`/tickets/${id}/triage`, {
-        divisiId: Number(triageForm.divisiId),
-        prioritas: triageForm.prioritas,
-        pelaksanaId: Number(triageForm.pelaksanaId),
-        deadline: new Date(triageForm.deadline).toISOString(),
-        status: 'DIPROSES',
-        catatanRevisi: triageForm.catatanRevisi,
+      const targetEskalasi = isKadiv ? 'DIREKTUR' : 'KADIV';
+      const statusTujuan = aksi === 'LANJUTKAN' ? 'DIPROSES' : 'HOLD_ESKALASI';
+      const catatanFinal =
+        aksi === 'LANJUTKAN'
+          ? tindakLanjutKendalaNote.trim()
+            ? `[Arahan ${userRole}]: ${tindakLanjutKendalaNote.trim()}`
+            : `[Arahan ${userRole}]: Kendala telah ditindaklanjuti, silakan lanjutkan pengerjaan tugas.`
+          : `[Eskalasi ${userRole} ke ${targetEskalasi}]: ${tindakLanjutKendalaNote.trim()}`;
+
+      await api.patch(`/tickets/${id}/status`, {
+        status: statusTujuan,
+        catatanRevisi: catatanFinal,
       });
-      alert('Tugas berhasil didelegasikan!');
-      setShowDelegasiForm(false);
-      fetchDetail(true);
+
+      alert(
+        aksi === 'LANJUTKAN'
+          ? 'Kendala berhasil ditindaklanjuti! Tugas kini kembali berstatus Sedang Dikerjakan.'
+          : `Masalah berhasil dieskalasikan ke ${isKadiv ? 'Direktur' : 'Kadiv'}.`
+      );
+      setTindakLanjutKendalaNote('');
+      await fetchDetail(true);
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Gagal menyimpan pendelegasian.');
+      alert(error.response?.data?.message || 'Gagal memproses tindak lanjut kendala.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleMulaiKerjakanSendiri = async () => {
+    if (!ticket) return;
+    setIsSubmitting(true);
+    try {
+      await api.patch(`/tickets/${id}/status`, {
+        status: 'DIPROSES',
+        catatanRevisi: `[Dikerjakan oleh ${userRole}]`,
+      });
+      await fetchDetail(true);
+      setIsKerjakanSendiri(true);
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Gagal memperbarui status pengerjaan tugas.');
     } finally {
       setIsSubmitting(false);
     }
@@ -347,12 +339,31 @@ export default function DetailTugas() {
 
   const badge = getStatusBadge(ticket.status);
   const isOverdue =
-    ticket.deadline && new Date(ticket.deadline) < new Date() && ticket.status !== 'SELESAI';
+    ticket.deadline &&
+    new Date(ticket.deadline) < new Date() &&
+    ticket.status !== 'SELESAI' &&
+    ticket.status !== 'DITOLAK';
 
   const totalChild = ticket.childTickets?.length || 0;
   const completedChild =
     ticket.childTickets?.filter((c) => c.status === 'SELESAI').length || 0;
   const progressPercent = totalChild === 0 ? 0 : Math.round((completedChild / totalChild) * 100);
+
+  const isAssignedToCurrentUser =
+    Boolean(
+      currentUserId &&
+        ticket.pelaksana?.id &&
+        String(ticket.pelaksana.id) === String(currentUserId)
+    ) ||
+    (!ticket.pelaksana && isKadiv && ticket.pembuat?.role === 'DIREKTUR');
+
+  const canMulaiKerjakan =
+    isAssignedToCurrentUser &&
+    ['MENUNGGU_TRIASE', 'HOLD_ESKALASI'].includes(ticket.status);
+
+  const showFormLaporSelesai =
+    isAssignedToCurrentUser &&
+    (ticket.status === 'DIPROSES' || (ticket.status === 'HOLD_ESKALASI' && isKerjakanSendiri));
 
   return (
     <div className="min-h-screen bg-clinical-bg pb-28 md:pb-12">
@@ -492,6 +503,43 @@ export default function DetailTugas() {
               )}
             </div>
 
+            {/* Banner Laporan Kendala / Catatan Arahan & Revisi */}
+            {(ticket.status === 'HOLD_ESKALASI' || ticket.catatanRevisi) && (
+              <div
+                className={`p-5 sm:p-6 rounded-3xl border shadow-xs space-y-2.5 ${
+                  ticket.status === 'HOLD_ESKALASI'
+                    ? 'bg-rose-50/70 border-rose-200'
+                    : 'bg-amber-50/70 border-amber-200'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <AlertTriangle
+                    className={`w-4 h-4 shrink-0 ${
+                      ticket.status === 'HOLD_ESKALASI' ? 'text-rose-600' : 'text-amber-600'
+                    }`}
+                  />
+                  <h3
+                    className={`text-xs font-extrabold uppercase tracking-widest ${
+                      ticket.status === 'HOLD_ESKALASI' ? 'text-rose-700' : 'text-amber-800'
+                    }`}
+                  >
+                    {ticket.status === 'HOLD_ESKALASI'
+                      ? 'Laporan Kendala Lapangan (Eskalasi)'
+                      : 'Catatan Arahan / Revisi Terbaru'}
+                  </h3>
+                </div>
+                <p
+                  className={`text-sm font-medium bg-white/90 p-4 rounded-2xl border leading-relaxed whitespace-pre-wrap ${
+                    ticket.status === 'HOLD_ESKALASI'
+                      ? 'text-rose-950 border-rose-200/80'
+                      : 'text-amber-950 border-amber-200/80'
+                  }`}
+                >
+                  {ticket.catatanRevisi || 'Pelaksana melaporkan kendala tanpa rincian tambahan.'}
+                </p>
+              </div>
+            )}
+
             {/* Sub-Tugas / Delegasi */}
             {ticket.childTickets && ticket.childTickets.length > 0 && (
               <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
@@ -529,7 +577,10 @@ export default function DetailTugas() {
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          Pelaksana: <strong className="text-slate-700">{child.pelaksana?.nama || 'Belum ditunjuk'}</strong>
+                          Pelaksana:{' '}
+                          <strong className="text-slate-700">
+                            {child.pelaksana?.nama || 'Belum ditunjuk'}
+                          </strong>
                         </p>
                       </div>
                       <span
@@ -590,7 +641,7 @@ export default function DetailTugas() {
                   {ticket.laporanPenyelesaian && (
                     <div>
                       <p className="text-[11px] font-bold text-slate-400 uppercase mb-2">
-                        Catatan Staf Pelaksana
+                        Catatan Pelaksana
                       </p>
                       <div className="p-4 bg-blue-50/50 rounded-2xl border border-brand-mint/30 text-xs sm:text-sm font-medium text-brand-deep leading-relaxed italic">
                         "{ticket.laporanPenyelesaian}"
@@ -706,14 +757,49 @@ export default function DetailTugas() {
               )}
             </div>
 
-            {/* A. STAF: LAPOR SELESAI */}
-            {isStaf && (ticket.status === 'DIPROSES' || ticket.status === 'HOLD_ESKALASI') && (
-              <div className="bg-clinical-surface p-5 rounded-3xl border-2 border-brand-mint shadow-md space-y-4">
+            {/* A0. PELAKSANA YANG DITUNJUK: MULAI KERJAKAN TUGAS */}
+            {canMulaiKerjakan && !isKerjakanSendiri && (
+              <div className="bg-clinical-surface p-5 rounded-3xl border-2 border-brand-orange/40 shadow-md space-y-3">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-brand-deep animate-ping" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-brand-orange animate-ping" />
                   <h3 className="text-sm font-extrabold text-clinical-ink">
-                    Lapor Tugas Selesai
+                    Konfirmasi Pengerjaan
                   </h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Tugas ini ditujukan kepada Anda. Tekan tombol di bawah untuk mulai mengerjakan dan mengubah status menjadi Sedang Dikerjakan.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleMulaiKerjakanSendiri}
+                  disabled={isSubmitting}
+                  className="w-full h-12 bg-brand-orange hover:bg-brand-orange/90 active:scale-98 text-white font-extrabold text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Wrench className="w-4 h-4" />
+                  <span>{isSubmitting ? 'Memproses...' : 'Kerjakan Tugas Ini'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* A. PELAKSANA YANG DITUNJUK: LAPOR SELESAI */}
+            {showFormLaporSelesai && (
+              <div className="bg-clinical-surface p-5 rounded-3xl border-2 border-brand-mint shadow-md space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-brand-deep animate-ping" />
+                    <h3 className="text-sm font-extrabold text-clinical-ink">
+                      Lapor Tugas Selesai
+                    </h3>
+                  </div>
+                  {isKerjakanSendiri && (
+                    <button
+                      type="button"
+                      onClick={() => setIsKerjakanSendiri(false)}
+                      className="text-[11px] font-bold text-slate-400 hover:text-slate-700"
+                    >
+                      Tutup
+                    </button>
+                  )}
                 </div>
 
                 <form onSubmit={handleLaporSelesai} className="space-y-3.5">
@@ -778,31 +864,33 @@ export default function DetailTugas() {
                 </form>
 
                 {/* Kendala Eskalasi */}
-                <div className="pt-3 border-t border-clinical-border/60">
-                  <details className="group">
-                    <summary className="text-xs font-bold text-brand-orange cursor-pointer list-none flex items-center justify-between hover:underline">
-                      <span>Lapor Kendala Biaya / Alat</span>
-                      <span className="text-xs group-open:rotate-180 transition">▼</span>
-                    </summary>
-                    <form onSubmit={handleLaporKendala} className="mt-3 space-y-2.5">
-                      <textarea
-                        rows={2}
-                        value={kendalaText}
-                        onChange={(e) => setKendalaText(e.target.value)}
-                        required
-                        placeholder="Sebutkan kendala biaya, sparepart, atau koordinasi..."
-                        className="w-full p-2.5 bg-brand-orange-soft/50 border border-brand-orange/40 rounded-xl text-xs font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-orange"
-                      />
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="w-full h-11 bg-brand-orange hover:bg-brand-orange/90 active:scale-98 text-white font-bold text-xs rounded-2xl shadow-xs transition"
-                      >
-                        Ajukan Eskalasi Penundaan
-                      </button>
-                    </form>
-                  </details>
-                </div>
+                {ticket.status === 'DIPROSES' && (
+                  <div className="pt-3 border-t border-clinical-border/60">
+                    <details className="group">
+                      <summary className="text-xs font-bold text-brand-orange cursor-pointer list-none flex items-center justify-between hover:underline">
+                        <span>Lapor Kendala Biaya / Alat</span>
+                        <span className="text-xs group-open:rotate-180 transition">▼</span>
+                      </summary>
+                      <form onSubmit={handleLaporKendala} className="mt-3 space-y-2.5">
+                        <textarea
+                          rows={2}
+                          value={kendalaText}
+                          onChange={(e) => setKendalaText(e.target.value)}
+                          required
+                          placeholder="Sebutkan kendala biaya, sparepart, atau koordinasi..."
+                          className="w-full p-2.5 bg-brand-orange-soft/50 border border-brand-orange/40 rounded-xl text-xs font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-orange"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="w-full h-11 bg-brand-orange hover:bg-brand-orange/90 active:scale-98 text-white font-bold text-xs rounded-2xl shadow-xs transition"
+                        >
+                          Ajukan Eskalasi Penundaan
+                        </button>
+                      </form>
+                    </details>
+                  </div>
+                )}
               </div>
             )}
 
@@ -850,115 +938,88 @@ export default function DetailTugas() {
               </div>
             )}
 
-            {/* C. ATASAN: DELEGASI TUGAS */}
-            {(isKoor || isKadiv) &&
-              (ticket.status === 'MENUNGGU_TRIASE' || ticket.status === 'DIPROSES') && (
-                <div className="bg-clinical-surface p-5 rounded-3xl border border-clinical-border shadow-xs space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-extrabold text-clinical-ink">
-                      Pendelegasian Tugas
-                    </h3>
+            {/* B2. ATASAN: TINDAK LANJUT KENDALA / ESKALASI */}
+            {isAtasan && ticket.status === 'HOLD_ESKALASI' && (
+              <div className="bg-clinical-surface p-5 rounded-3xl border-2 border-rose-200 shadow-md space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping" />
+                  <h3 className="text-sm font-extrabold text-rose-950">
+                    Tindak Lanjut Kendala
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Berikan arahan solusi (misal persetujuan biaya/alat) untuk melanjutkan pengerjaan tugas
+                  {userRole !== 'DIREKTUR'
+                    ? `, atau eskalasikan masalah ke ${isKadiv ? 'Direktur' : 'Kadiv'} jika memerlukan keputusan lebih lanjut.`
+                    : '.'}
+                </p>
+
+                <textarea
+                  rows={3}
+                  value={tindakLanjutKendalaNote}
+                  onChange={(e) => setTindakLanjutKendalaNote(e.target.value)}
+                  placeholder={
+                    userRole !== 'DIREKTUR'
+                      ? `Tulis arahan tindak lanjut, persetujuan biaya/sparepart, atau alasan eskalasi ke ${isKadiv ? 'Direktur' : 'Kadiv'}...`
+                      : 'Tulis arahan tindak lanjut atau persetujuan biaya/sparepart...'
+                  }
+                  className="w-full p-3 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleTindakLanjutKendala('LANJUTKAN')}
+                    disabled={isSubmitting}
+                    className="w-full h-12 bg-brand-deep hover:bg-brand-deeper active:scale-98 text-white font-extrabold text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Play className="w-4 h-4" />
+                    <span>{isSubmitting ? 'Memproses...' : 'Setujui & Lanjutkan Tugas'}</span>
+                  </button>
+
+                  {userRole !== 'DIREKTUR' && (
                     <button
                       type="button"
-                      onClick={() => setShowDelegasiForm((prev) => !prev)}
-                      className="text-xs font-bold text-brand-deep hover:underline"
+                      onClick={() => handleTindakLanjutKendala('ESKALASI')}
+                      disabled={isSubmitting}
+                      className="w-full h-11 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs rounded-2xl transition disabled:opacity-50 flex items-center justify-center gap-1.5"
                     >
-                      {showDelegasiForm ? 'Tutup Form' : 'Ubah Pelaksana'}
-                    </button>
-                  </div>
-
-                  {showDelegasiForm ? (
-                    <form onSubmit={handleDelegasiSubmit} className="space-y-3 pt-2 border-t border-clinical-border/60">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                          Divisi Pelaksana *
-                        </label>
-                        <select
-                          value={triageForm.divisiId}
-                          onChange={(e) =>
-                            setTriageForm({ ...triageForm, divisiId: e.target.value, pelaksanaId: '' })
-                          }
-                          required
-                          className="w-full h-10 px-3 border border-clinical-border bg-slate-50 rounded-xl text-xs font-medium"
-                        >
-                          <option value="">-- Pilih Divisi --</option>
-                          {divisiList.map((d) => (
-                            <option key={d.id} value={String(d.id)}>
-                              {d.nama}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                          Pilih Staf Pelaksana *
-                        </label>
-                        <select
-                          value={triageForm.pelaksanaId}
-                          onChange={(e) => setTriageForm({ ...triageForm, pelaksanaId: e.target.value })}
-                          required
-                          className="w-full h-10 px-3 border border-clinical-border bg-slate-50 rounded-xl text-xs font-medium"
-                        >
-                          <option value="">-- Pilih Staf --</option>
-                          {staffList
-                            .filter(
-                              (s) => !triageForm.divisiId || String(s.divisiId) === String(triageForm.divisiId)
-                            )
-                            .map((s) => (
-                              <option key={s.id} value={String(s.id)}>
-                                {s.nama} ({s.role})
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                          Batas Waktu (Deadline) *
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={triageForm.deadline}
-                          onChange={(e) => setTriageForm({ ...triageForm, deadline: e.target.value })}
-                          required
-                          className="w-full h-10 px-3 border border-clinical-border bg-slate-50 rounded-xl text-xs font-medium"
-                        />
-                      </div>
-
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setShowDelegasiForm(false)}
-                          className="flex-1 h-10 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
-                        >
-                          Batal
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={isSubmitting}
-                          className="flex-1 h-10 text-xs font-bold text-white bg-brand-deep hover:bg-brand-deeper rounded-xl shadow-xs"
-                        >
-                          {isSubmitting ? 'Menyimpan...' : 'Simpan'}
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate(
-                          `/tambah-tugas?parentId=${ticket.id}&parentTitle=${encodeURIComponent(
-                            ticket.judul
-                          )}`
-                        )
-                      }
-                      className="w-full h-12 bg-brand-deep hover:bg-brand-deeper active:scale-98 text-white font-extrabold text-xs rounded-2xl shadow-xs transition flex items-center justify-center gap-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Buat Tiket Turunan Baru</span>
+                      <ArrowUpRight className="w-4 h-4" />
+                      <span>
+                        {isKadiv
+                          ? 'Eskalasikan Masalah ke Direktur'
+                          : 'Eskalasikan Masalah ke Kadiv'}
+                      </span>
                     </button>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* C. ATASAN: DELEGASI TUGAS */}
+            {(isKoor || isKadiv) &&
+              (ticket.status === 'MENUNGGU_TRIASE' ||
+                ticket.status === 'DIPROSES' ||
+                ticket.status === 'HOLD_ESKALASI') && (
+                <div className="bg-clinical-surface p-5 rounded-3xl border border-clinical-border shadow-xs space-y-3">
+                  <h3 className="text-sm font-extrabold text-clinical-ink">
+                    Pendelegasian Tugas
+                  </h3>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/tambah-tugas?parentId=${ticket.id}&parentTitle=${encodeURIComponent(
+                          ticket.judul
+                        )}`
+                      )
+                    }
+                    className="w-full h-12 bg-brand-deep hover:bg-brand-deeper active:scale-98 text-white font-extrabold text-xs rounded-2xl shadow-xs transition flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Buat Tiket Turunan Baru</span>
+                  </button>
                 </div>
               )}
           </div>

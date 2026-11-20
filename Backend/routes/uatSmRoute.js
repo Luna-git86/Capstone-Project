@@ -12,6 +12,5 @@ router.get('/status', uatSmController.getStatus);
 router.get('/stage-data/:tabKey', uatSmController.getTabData);
 router.post('/run/:stageId', uatSmController.runStage);
 router.get('/figure/:filename', uatSmController.getFigure);
-router.post('/check-excel', uatSmController.checkUploadedExcel);
 
 module.exports = router;

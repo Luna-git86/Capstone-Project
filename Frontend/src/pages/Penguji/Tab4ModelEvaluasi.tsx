@@ -1,4 +1,4 @@
-// Frontend/src/pages/Penguji/Tab3ModelEvaluasi.tsx
+// Frontend/src/pages/Penguji/Tab4ModelEvaluasi.tsx
 import React, { useMemo, useState } from 'react';
 import {
   CartesianGrid,
@@ -15,12 +15,12 @@ import {
   RSIA_UAT_COLORS,
   UAT_CHART_FONT,
   formatNumId,
-  type Tab3Data,
+  type Tab4Data,
 } from './uatSmTypes';
 
-interface Tab3Props {
-  data: Tab3Data | null;
-  unlockedStep: number;
+interface Tab4Props {
+  data: Tab4Data | null;
+  viewStep: number;
   liveNotes: Record<string, string>;
 }
 
@@ -34,13 +34,13 @@ const MONTH_OPTIONS = [
   { val: '2026-06', label: 'Juni 2026' },
 ];
 
-export const Tab3ModelEvaluasi: React.FC<Tab3Props> = ({ data, unlockedStep, liveNotes }) => {
+export const Tab4ModelEvaluasi: React.FC<Tab4Props> = ({ data, viewStep, liveNotes }) => {
   const [selectedUnit, setSelectedUnit] = useState<string>('TOTAL');
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-03');
 
   const chartPoints = useMemo(() => {
-    if (!data) return [];
-    const base = data.testSeriesByUnit[selectedUnit] || data.testSeriesByUnit.TOTAL || [];
+    const seriesByUnit = data?.testSeriesByUnit ?? {};
+    const base = seriesByUnit[selectedUnit] || seriesByUnit.TOTAL || [];
     const filtered =
       selectedMonth === 'ALL' ? base : base.filter((pt) => pt.date.startsWith(selectedMonth));
     return filtered.map((pt) => ({
@@ -49,31 +49,37 @@ export const Tab3ModelEvaluasi: React.FC<Tab3Props> = ({ data, unlockedStep, liv
     }));
   }, [data, selectedUnit, selectedMonth]);
 
-  if (!data || unlockedStep < 1) {
+  if (!data || !data.testPeriod || viewStep < 1) {
     return (
       <div className="tvlk-card rounded-2xl p-6 text-center space-y-2">
-        <p className="text-sm font-extrabold text-[#18201c]">Tahap 3 Belum Dimulai</p>
+        <p className="text-sm font-extrabold text-[#18201c]">Tab 4 Belum Dimulai</p>
         <p className="text-xs text-[#6b7770]">
-          Klik tombol hijau <strong className="text-[#0f5c43]">Mulai Hitung (0/3)</strong> untuk melatih model dan melihat perbandingan ketepatannya di tahun 2026.
+          Klik tombol hijau <strong className="text-[#0f5c43]">Latih Model Prediksi (1/3)</strong> di kanan atas untuk melatih model perkiraan dan menguji ketepatannya pada data 2026.
         </p>
       </div>
     );
   }
 
+  const leaderboard = Array.isArray(data.leaderboard) ? data.leaderboard : [];
+  const poliLeaderboard = Array.isArray(data.poliLeaderboard) ? data.poliLeaderboard : [];
+  const testSeriesUnits = Array.isArray(data.testSeriesUnits) ? data.testSeriesUnits : [];
+
   return (
     <div className="space-y-4">
-      {/* Langkah 3.1 */}
-      <StepSectionCard
-        stepCode="Langkah 3.1"
-        title="Mengenal 3 Cara Menebak Kunjungan yang Diadu Secara Adil"
-        subtitle="Program melatih model statistik (NB GLM) dan pembelajaran mesin (HistGradientBoosting), lalu mengadunya dengan cara manual meniru minggu lalu."
-        done={unlockedStep >= 1}
-        ranLiveInfo={liveNotes.stage4_modeling}
-      >
+      {/* Langkah 4.1 */}
+      {viewStep === 1 && (
+        <StepSectionCard
+          stepCode="Langkah 4.1"
+          title="3 Metode Prediksi yang Diadu"
+          subtitle="Mengenali dua model perkiraan sistem dibanding cara tebak manual minggu lalu."
+          done={viewStep >= 1}
+          ranLiveInfo={liveNotes.stage4_modeling}
+        >
         <PanduanPengujiBox
-          whatHappens="Saat Mulai Hitung (0/3) diklik, sistem melatih 2 model prediksi (HistGradientBoosting dan Negative Binomial GLM) memakai data latih 2023–2025, lalu membandingkannya dengan cara manual Seasonal Naive."
+          whatHappens="Melatih dua model sistem (HistGB dan NB GLM) dari data latih 2023–2025."
           stepsToCheck={[
-            'Pastikan proses pelatihan selesai tanpa error dan menampilkan 3 kartu penjelasan metode (HistGradientBoosting, Negative Binomial GLM, dan Seasonal Naive).',
+            'Pastikan tampil 3 kartu penjelasan metode (HistGradientBoosting, Negative Binomial GLM, dan Seasonal Naive) tanpa error.',
+            'Klik "Uji Ketepatan Data 2026 →" di kanan atas untuk melihat skor akurasinya.',
           ]}
         />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -106,24 +112,25 @@ export const Tab3ModelEvaluasi: React.FC<Tab3Props> = ({ data, unlockedStep, liv
               Menebak jumlah pasien hari ini persis sama dengan hari yang sama minggu lalu, tanpa menghitung tanggal merah atau tren turun-naik.
             </p>
           </div>
-        </div>
-      </StepSectionCard>
+          </div>
+        </StepSectionCard>
+      )}
 
-      {/* Langkah 3.2 */}
-      {unlockedStep >= 2 && (
+      {/* Langkah 4.2 */}
+      {viewStep === 2 && (
         <StepSectionCard
-          stepCode="Langkah 3.2"
-          title={`Hasil Adu Ketepatan di Data Uji (${data.testPeriod.start} s.d. ${data.testPeriod.end} • ${data.testPeriod.total_days} Hari)`}
-          subtitle="Evaluasi adil pada 6 bulan pertama tahun 2026 yang belum pernah dipakai saat pelatihan."
-          done={unlockedStep >= 2}
+          stepCode="Langkah 4.2"
+          title={`Skor Adu Ketepatan pada 181 Hari Uji (${data.testPeriod.start} s.d. ${data.testPeriod.end})`}
+          subtitle="Mengukur rata-rata meleset harian model di paruh pertama tahun 2026."
+          done={viewStep >= 2}
           ranLiveInfo={liveNotes.stage5_evaluation}
         >
           <PanduanPengujiBox
-            whatHappens="Sistem menguji ketiga metode secara objektif menggunakan 181 hari data Januari–Juni 2026 yang belum pernah dilihat saat pelatihan."
+            whatHappens="Menguji ketepatan ketiga metode pada 181 hari data Jan–Jun 2026 yang belum pernah dilihat saat pelatihan."
             stepsToCheck={[
-              'Periksa spanduk pencapaian menunjukkan kesalahan prediksi turun 29,06% dibanding cara manual dengan model terbaik HistGradientBoosting.',
-              'Bandingkan baris angka pada tabel: HistGradientBoosting (4,958 pasien/hari) dan NB GLM (4,985 pasien/hari) jauh lebih tepat dibanding Seasonal Naive (6,989 pasien/hari).',
-              'Cek Tabel Perbandingan Ketepatan pada 4 Poliklinik Utama (IGD, OBGYN, Umum, Anak) di bagian bawah.',
+              'Cek spanduk hijau: kesalahan prediksi harus turun ~29,06% dibanding cara manual dengan model terbaik HistGradientBoosting.',
+              'Cek dua tabel skor: rata-rata meleset HistGB (4,958) & NB GLM (4,985) lebih kecil daripada Seasonal Naive (6,989).',
+              'Klik "Lihat Grafik Uji Harian →" di kanan atas.',
             ]}
           />
           <div className="rounded-2xl bg-[#edf8f2] border border-[#93d1ae] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -155,7 +162,7 @@ export const Tab3ModelEvaluasi: React.FC<Tab3Props> = ({ data, unlockedStep, liv
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#eef1ef]">
-                {data.leaderboard.map((row, idx) => (
+                {leaderboard.map((row, idx) => (
                   <tr key={row.key} className={idx === 0 ? 'bg-[#edf8f2]/60' : 'bg-white'}>
                     <td className="py-2.5 px-3">
                       <p className="font-extrabold text-[#18201c]">{row.model}</p>
@@ -192,7 +199,7 @@ export const Tab3ModelEvaluasi: React.FC<Tab3Props> = ({ data, unlockedStep, liv
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#eef1ef]">
-                  {data.poliLeaderboard.map((p) => (
+                  {poliLeaderboard.map((p) => (
                     <tr key={p.poliklinik} className="hover:bg-[#edf8f2]/40">
                       <td className="py-2.5 px-3 font-extrabold text-[#18201c]">{p.poliklinik}</td>
                       <td className="py-2.5 px-3 text-right font-extrabold text-[#0f5c43] tabular-nums">
@@ -221,30 +228,31 @@ export const Tab3ModelEvaluasi: React.FC<Tab3Props> = ({ data, unlockedStep, liv
         </StepSectionCard>
       )}
 
-      {/* Langkah 3.3 */}
-      {unlockedStep >= 3 && (
+      {/* Langkah 4.3 */}
+      {viewStep === 3 && (
         <StepSectionCard
-          stepCode="Langkah 3.3"
-          title="Grafik & Tabel Harian Pasien Nyata vs Perkiraan Model (Uji 2026)"
-          subtitle="Arahkan kursor ke garis grafik dan cocokkan angka hari demi hari pada tabel di bawahnya untuk memastikan akurasi model."
-          done={unlockedStep >= 3}
+          stepCode="Langkah 4.3"
+          title="Grafik & Tabel Harian Pasien Nyata vs Perkiraan (Uji 2026)"
+          subtitle="Mencocokkan angka prediksi harian terhadap jumlah pasien asli di SIMRS."
+          done={viewStep >= 3}
         >
           <PanduanPengujiBox
-            whatHappens="Sistem menyusun grafik harian perbandingan jumlah pasien nyata di SIMRS versus hasil tebakan HistGB dan NB GLM selama masa uji Jan–Jun 2026."
+            whatHappens="Membandingkan garis jumlah pasien nyata (hijau) dengan perkiraan HistGB (oranye) dan NB GLM (ungu) per tanggal."
             stepsToCheck={[
-              'Ganti pilihan unit pada dropdown "Semua Unit RSIA (Total)" dan pilihan bulan pada dropdown "Maret 2026 (Ramadan & Idulfitri)".',
-              'Arahkan kursor ke garis grafik, lalu cocokkan angkanya dengan Tabel Rincian Harian: Pasien Nyata vs Perkiraan di bawah grafik.',
+              'Ubah dropdown Unit dan Bulan (mis. ke "Maret 2026 (Ramadan & Idulfitri)") untuk memastikan grafik dan tabel harian di bawahnya ikut berubah.',
+              'Arahkan kursor ke garis grafik, lalu cocokkan angkanya dengan tabel tanggal di bawah grafik.',
+              'Klik "Lanjut ke Tab 5 →" di kanan atas.',
             ]}
           />
           <div className="flex flex-wrap items-center gap-2.5">
             <select
-              aria-label="Filter Unit Grafik Tab 3"
+              aria-label="Filter Unit Grafik Tab 4"
               value={selectedUnit}
               onChange={(e) => setSelectedUnit(e.target.value)}
               className="text-xs font-bold bg-[#f6f8f7] border border-[#dce7e0] rounded-xl px-3 py-1.5 text-[#18201c]"
             >
               <option value="TOTAL">Semua Unit RSIA (Total)</option>
-              {data.testSeriesUnits
+              {testSeriesUnits
                 .filter((u) => u !== 'TOTAL')
                 .map((u) => (
                   <option key={u} value={u}>
@@ -253,7 +261,7 @@ export const Tab3ModelEvaluasi: React.FC<Tab3Props> = ({ data, unlockedStep, liv
                 ))}
             </select>
             <select
-              aria-label="Filter Bulan Uji Tab 3"
+              aria-label="Filter Bulan Uji Tab 4"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="text-xs font-bold bg-[#f6f8f7] border border-[#dce7e0] rounded-xl px-3 py-1.5 text-[#18201c]"

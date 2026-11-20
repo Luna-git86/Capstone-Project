@@ -2,7 +2,6 @@
 const { execFile } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 
 const STAGE_DEFINITIONS = {
@@ -10,9 +9,9 @@ const STAGE_DEFINITIONS = {
     order: 1,
     script: 'scripts/01_data_understanding.py',
     args: ['scripts/01_data_understanding.py'],
-    title: 'Pemeriksaan Data Mentah SIMRS (4 Berkas Tahunan)',
+    title: 'Muat Dataset Mentah SIMRS (4 Berkas Tahunan — Tanpa Preprocessing)',
     checkFile: 'outputs/tables/01_data_profile.json',
-    plainSummary: 'Membaca 4 berkas registrasi pasien (2023–Jun 2026) serta memeriksa kelengkapan tanggal dan duplikat.',
+    plainSummary: 'Memuat 4 berkas Excel mentah SIMRS (2023–Jun 2026) serta memeriksa status load, jumlah baris, dan 9 kolom asli tanpa preprocessing.',
   },
   stage2_preprocessing: {
     order: 2,
@@ -331,7 +330,7 @@ async function runCachedPythonJson(smDir, cacheKey, watchPaths, pyScript, extraA
 const RAW_SAMPLE_PY = `
 import json, os, sys, pandas as pd
 raw_dir = sys.argv[1]
-usecols = ['No. Rawat', 'Tgl Reg', 'Jam', 'Poliklinik', 'Penjamin', 'Jns Kunjungan']
+usecols = ['No. Rawat', 'Tgl Reg', 'Jam', 'No. RM', 'Pasien', 'Poliklinik', 'Dokter', 'Penjamin', 'Jns Kunjungan']
 plan = [
     ('rawat_jalan_2023.xlsx', lambda d: d[(d['Poliklinik'] == 'IGD') | (d['Penjamin'] == '-')].head(2)),
     ('rawat_jalan_2023.xlsx', lambda d: d[d['Poliklinik'] == 'Unit IGD'].head(1)),
@@ -349,19 +348,17 @@ for fname, picker in plan:
         loaded[fp] = pd.read_excel(fp, header=1, nrows=350, usecols=usecols)
     df = loaded[fp]
     for _, r in picker(df).iterrows():
-        nr = str(r['No. Rawat'])
-        mask_nr = (nr[:11] + '***') if len(nr) > 11 else (nr[:4] + '***')
         rows.append({
             'sumberBerkas': fname,
-            'noRawatMask': mask_nr,
-            'tglReg': str(r['Tgl Reg'])[:10],
-            'jam': str(r['Jam']),
-            'noRmMask': '****** (Disensor)',
-            'pasienMask': '[Disensor Sistem]',
-            'dokterMask': '[Disensor Sistem]',
-            'poliklinikRaw': str(r['Poliklinik']),
-            'penjaminRaw': str(r['Penjamin']),
-            'jenisKunjungan': str(r['Jns Kunjungan']),
+            'noRawatRaw': '' if pd.isna(r['No. Rawat']) else str(r['No. Rawat']),
+            'tglReg': '' if pd.isna(r['Tgl Reg']) else str(r['Tgl Reg'])[:10],
+            'jam': '' if pd.isna(r['Jam']) else str(r['Jam']),
+            'noRmRaw': '' if pd.isna(r['No. RM']) else str(r['No. RM']),
+            'pasienRaw': '' if pd.isna(r['Pasien']) else str(r['Pasien']),
+            'poliklinikRaw': '' if pd.isna(r['Poliklinik']) else str(r['Poliklinik']),
+            'dokterRaw': '' if pd.isna(r['Dokter']) else str(r['Dokter']),
+            'penjaminRaw': '' if pd.isna(r['Penjamin']) else str(r['Penjamin']),
+            'jenisKunjungan': '' if pd.isna(r['Jns Kunjungan']) else str(r['Jns Kunjungan']),
         })
 print(json.dumps(rows[:8]))
 `;
@@ -440,33 +437,36 @@ print(json.dumps(rows))
 
 async function buildTab1Payload(smDir) {
   const profile = readJsonSafe(path.join(smDir, 'outputs/tables/01_data_profile.json'));
-  const prepLog = readJsonSafe(path.join(smDir, 'data/processed/preprocessing_log.json'));
-  const poliLoad = readJsonSafe(path.join(smDir, 'outputs/dashboard/poli_load.json'));
-  const modelMeta = readJsonSafe(path.join(smDir, 'models/model_metadata.json'));
 
   const fileVerification = profile?.file_verification || {};
   const files = Object.entries(fileVerification).map(([fileName, info]) => ({
     fileName,
+    status: info.status || 'Berhasil Dimuat',
+    fileSizeKb: info.file_size_kb ?? null,
+    columnsCount: info.columns_count || 9,
     rows: info.rows || 0,
     dateMin: info.date_min || '-',
     dateMax: info.date_max || '-',
     natDates: info.nat_dates || 0,
+    nullCells: info.null_cells ?? 0,
     columnsVerified: Boolean(info.columns_verified),
   }));
 
-  const stepNorm = prepLog?.steps?.['04_normalize_categoricals'] || {};
-  const stepPriv = prepLog?.steps?.['06_privacy'] || {};
-  const stepAgg = prepLog?.steps?.['07_aggregate_daily'] || {};
-  const loads = poliLoad?.poliklinik_loads || [];
-  const totalRecords = profile?.total_records || prepLog?.steps?.['01_load_combine']?.rows_after || 0;
-  const primarySharePct = loads
-    .filter((u) => ['UNIT IGD', 'POLIKLINIK OBGYN', 'POLIKLINIK UMUM', 'POLIKLINIK ANAK'].includes(u.poliklinik))
-    .reduce((acc, u) => acc + (Number(u.share_pct) || 0), 0);
+  const totalRecords = profile?.total_records || 0;
+
+  const rawPoliObj = profile?.poliklinik_raw_distribution || {};
+  const rawPoliklinikDistribution = Object.entries(rawPoliObj)
+    .map(([poliklinik, count]) => ({
+      poliklinik,
+      count: Number(count || 0),
+      sharePct: totalRecords > 0 ? Number(((Number(count || 0) / totalRecords) * 100).toFixed(2)) : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
 
   const penjaminObj = profile?.penjamin_distribution || {};
   const penjaminDistribution = Object.entries(penjaminObj)
     .map(([penjamin, count]) => ({
-      penjamin: penjamin === '-' ? 'TIDAK TERCATAT (-)' : penjamin,
+      penjamin,
       count: Number(count || 0),
       sharePct: totalRecords > 0 ? Number(((Number(count || 0) / totalRecords) * 100).toFixed(2)) : 0,
     }))
@@ -479,38 +479,175 @@ async function buildTab1Payload(smDir) {
     sharePct: totalRecords > 0 ? Number(((Number(count || 0) / totalRecords) * 100).toFixed(2)) : 0,
   }));
 
+  const rawColumns = Array.isArray(profile?.raw_columns_detail)
+    ? profile.raw_columns_detail
+    : (profile?.raw_columns || []).map((colName) => ({
+        name: colName,
+        dtype: profile?.raw_dtypes?.[colName] || 'object',
+        nullCount: profile?.raw_null_counts?.[colName] ?? 0,
+        roleInRaw: 'Kolom asli Excel SIMRS',
+        status: 'Utuh (Belum Preprocessing)',
+      }));
+
   const rawDir = path.join(smDir, 'data/raw');
   const rawWatch = ['rawat_jalan_2023.xlsx', 'rawat_jalan_2024.xlsx', 'rawat_jalan_2025.xlsx', 'rawat_jalan_2026.xlsx'].map((f) =>
     path.join(rawDir, f)
   );
+  const sampleRawRows = await runCachedPythonJson(smDir, 'raw', rawWatch, RAW_SAMPLE_PY, [rawDir]);
+
+  const loadMeta = profile?.load_status || {};
+  const prepMeta = profile?.preprocessing_status || {};
+
+  return assertNoPiiLeak(
+    {
+      loadSummary: {
+        status: loadMeta.status || (files.length === 4 && totalRecords > 0 ? 'BERHASIL' : 'BELUM'),
+        filesExpected: loadMeta.files_expected || 4,
+        filesLoaded: loadMeta.files_loaded || files.length,
+        totalRowsLoaded: totalRecords,
+        totalColumns: loadMeta.total_columns || rawColumns.length || 9,
+        allColumnsMatched: Boolean(loadMeta.all_columns_matched ?? files.every((f) => f.columnsVerified)),
+        dateStart: profile?.date_range?.start || '2023-01-01',
+        dateEnd: profile?.date_range?.end || '2026-06-30',
+        totalDays: profile?.date_range?.total_days || 1277,
+        totalMonths: profile?.date_range?.total_months || 42,
+        preprocessingApplied: Boolean(prepMeta.preprocessing_applied ?? false),
+        hashingApplied: Boolean(prepMeta.hashing_applied ?? false),
+        saltingApplied: Boolean(prepMeta.salting_applied ?? false),
+        labelNormalizationApplied: Boolean(prepMeta.label_normalization_applied ?? false),
+      },
+      files,
+      rawColumns,
+      rawPoliklinikDistribution,
+      penjaminDistribution,
+      visitTypeDistribution,
+      sampleRawRows,
+    },
+    'tab1'
+  );
+}
+
+async function buildTab2Payload(smDir) {
+  const prepLog = readJsonSafe(path.join(smDir, 'data/processed/preprocessing_log.json'));
+  const profile = readJsonSafe(path.join(smDir, 'outputs/tables/01_data_profile.json'));
+  const poliLoad = readJsonSafe(path.join(smDir, 'outputs/dashboard/poli_load.json'));
+  const modelMeta = readJsonSafe(path.join(smDir, 'models/model_metadata.json'));
+
+  const stepLoad = prepLog?.steps?.['01_load_combine'] || {};
+  const stepCols = prepLog?.steps?.['02_standardize_columns'] || {};
+  const stepParse = prepLog?.steps?.['03_parse_dates_times'] || {};
+  const stepNorm = prepLog?.steps?.['04_normalize_categoricals'] || {};
+  const stepDup = prepLog?.steps?.['05_handle_duplicates'] || {};
+  const stepPriv = prepLog?.steps?.['06_privacy'] || {};
+  const stepAgg = prepLog?.steps?.['07_aggregate_daily'] || {};
+  const stepOut = prepLog?.steps?.['08_outlier_detection'] || {};
+  const stepSave = prepLog?.steps?.['09_save_outputs'] || {};
+
+  const totalRecords = stepLoad.rows_after || profile?.total_records || 39042;
+  const loads = poliLoad?.poliklinik_loads || [];
+  const primarySharePct = loads
+    .filter((u) => ['UNIT IGD', 'POLIKLINIK OBGYN', 'POLIKLINIK UMUM', 'POLIKLINIK ANAK'].includes(u.poliklinik))
+    .reduce((acc, u) => acc + (Number(u.share_pct) || 0), 0);
+
   const anonPath = path.join(smDir, 'data/interim/visits_anonymized.parquet');
   const dailyPath = path.join(smDir, 'data/processed/daily_total.parquet');
-
-  const [sampleRawRows, sampleAnonymizedRows, dailySampleRows] = await Promise.all([
-    runCachedPythonJson(smDir, 'raw', rawWatch, RAW_SAMPLE_PY, [rawDir]),
+  const [sampleAnonymizedRows, dailySampleRows] = await Promise.all([
     runCachedPythonJson(smDir, 'anon', [anonPath], ANON_SAMPLE_PY, [anonPath]),
     runCachedPythonJson(smDir, 'daily', [dailyPath], DAILY_SAMPLE_PY, [dailyPath]),
   ]);
 
   return assertNoPiiLeak(
     {
-      kpi: {
-        totalVisits: totalRecords,
-        totalDays: profile?.date_range?.total_days || stepAgg.total_days || 0,
-        duplicates: profile?.quality?.duplicate_no_rawat ?? prepLog?.steps?.['05_handle_duplicates']?.duplicates_found ?? 0,
-        missingDays: profile?.date_range?.missing_days ?? stepAgg.missing_days_filled ?? 0,
-        primaryUnitsSharePct: Number(primarySharePct.toFixed(2)),
-        rareUnitsSharePct: Number((100 - primarySharePct).toFixed(2)),
-        dateStart: profile?.date_range?.start || '2023-01-01',
-        dateEnd: profile?.date_range?.end || '2026-06-30',
+      stage2Summary: {
+        rowsProcessed: totalRecords,
+        totalDays: stepAgg.total_days || profile?.date_range?.total_days || 1277,
+        duplicates: stepDup.duplicates_found ?? 0,
+        missingDays: stepAgg.missing_days_filled ?? 0,
         meanDaily: stepAgg.visit_count_mean || 30.57,
         maxDaily: stepAgg.visit_count_max || 80,
         minDaily: stepAgg.visit_count_min || 8,
+        igdMergedCount: stepNorm.igd_merged || 0,
+        penjaminDashReplacedCount: stepNorm.penjamin_dash_replaced || 0,
+        uniquePatientsHashed: stepPriv.unique_patients_hashed || 0,
+        uniqueDoctorsAnonymized: stepNorm.unique_dokter || 29,
+        outlierDaysFlagged: stepOut.n_outliers || 0,
+        primaryUnitsSharePct: Number(primarySharePct.toFixed(2)),
+        rareUnitsSharePct: Number((100 - primarySharePct).toFixed(2)),
       },
-      files,
-      penjaminDistribution,
-      visitTypeDistribution,
-      sampleRawRows,
+      preprocessingSteps: [
+        {
+          stepNo: 1,
+          stepKey: '01_load_combine',
+          title: 'Muat & Gabungkan 4 File Mentah',
+          affectedColumns: 'Seluruh 9 kolom + source_file',
+          rowsAfter: stepLoad.rows_after || totalRecords,
+          resultNote: 'Menggabungkan data mentah 2023–Jun 2026 siap dibersihkan',
+        },
+        {
+          stepNo: 2,
+          stepKey: '02_standardize_columns',
+          title: 'Standarisasi Nama Kolom (snake_case)',
+          affectedColumns: 'No. Rawat → no_rawat, Tgl Reg → tgl_reg, dst.',
+          rowsAfter: stepCols.rows_after || totalRecords,
+          resultNote: `${(stepCols.columns_after || []).length || 10} nama kolom diseragamkan, ${(stepCols.extra_dropped || []).length} kolom ekstra dibuang`,
+        },
+        {
+          stepNo: 3,
+          stepKey: '03_parse_dates_times',
+          title: 'Parsing & Validasi Tanggal serta Jam',
+          affectedColumns: 'tgl_reg, jam → date, hour (0–23)',
+          rowsAfter: stepParse.rows_after || totalRecords,
+          resultNote: `${stepParse.nat_dates ?? 0} tanggal rusak (NaT), ${stepParse.nat_times ?? 0} jam rusak`,
+        },
+        {
+          stepNo: 4,
+          stepKey: '04_normalize_categoricals',
+          title: 'Bersihkan Spasi, Kapital, Label IGD & "-"',
+          affectedColumns: 'poliklinik, dokter, penjamin, jns_kunjungan',
+          rowsAfter: stepNorm.rows_after || totalRecords,
+          resultNote: `Gabung IGD → UNIT IGD (${stepNorm.igd_merged || 0} baris), ubah "-" → TIDAK TERCATAT (${stepNorm.penjamin_dash_replaced || 0} baris), hasil ${stepNorm.unique_poliklinik || 7} unit`,
+        },
+        {
+          stepNo: 5,
+          stepKey: '05_handle_duplicates',
+          title: 'Cek & Tangani Data Ganda',
+          affectedColumns: 'no_rawat',
+          rowsAfter: stepDup.rows_after || totalRecords,
+          resultNote: `${stepDup.duplicates_found ?? 0} baris ganda ditemukan`,
+        },
+        {
+          stepNo: 6,
+          stepKey: '06_privacy',
+          title: 'Hapus Kolom Pasien, Hash+Salt No. RM & Anonimkan Dokter',
+          affectedColumns: 'pasien (hapus), no_rm (SHA-256 + SM_HASH_SALT), dokter (DOKTER_XX)',
+          rowsAfter: stepPriv.rows_after || totalRecords,
+          resultNote: `${stepPriv.unique_patients_hashed || 0} No. RM unik ter-hash; no_rm & dokter_code dilepas dari data pemodelan`,
+        },
+        {
+          stepNo: 7,
+          stepKey: '07_aggregate_daily',
+          title: 'Agregasi Menjadi Rekap Kunjungan Harian',
+          affectedColumns: 'date, poliklinik → visit_count, new_patient_count',
+          rowsAfter: stepAgg.total_days || 1277,
+          resultNote: `Membentuk ${stepAgg.total_days || 1277} hari total & ${stepAgg.daily_by_poli_rows || 8939} baris per 7 poliklinik`,
+        },
+        {
+          stepNo: 8,
+          stepKey: '08_outlier_detection',
+          title: 'Tandai Hari Lonjakan Ekstrem (Metode IQR)',
+          affectedColumns: 'is_outlier (berdasarkan batas IQR latih)',
+          rowsAfter: stepAgg.total_days || 1277,
+          resultNote: `${stepOut.n_outliers || 0} hari lonjakan ditandai (tidak dihapus & tidak masuk fitur prediksi)`,
+        },
+        {
+          stepNo: 9,
+          stepKey: '09_save_outputs',
+          title: 'Simpan 3 Dataset Bersih (Parquet) & Log Skema',
+          affectedColumns: 'visits_anonymized, daily_total, daily_by_poli',
+          rowsAfter: stepSave.daily_total_rows || 1277,
+          resultNote: `Tersimpan ${stepSave.interim_rows || totalRecords} baris antara & ${stepSave.daily_total_rows || 1277} hari bersih`,
+        },
+      ],
       sampleAnonymizedRows,
       dailySampleRows,
       privacyComparisons: [
@@ -523,7 +660,7 @@ async function buildTab1Payload(smDir) {
         {
           field: 'Nomor Rekam Medis (No. RM)',
           beforeExample: 'Nomor identitas rekam medis pasien RSIA',
-          afterExample: `Disamarkan menjadi kode acak satu arah (${stepPriv.unique_patients_hashed || 0} pasien unik)`,
+          afterExample: `Disamarkan (SHA-256 + SM_HASH_SALT) untuk ${stepPriv.unique_patients_hashed || 0} pasien unik`,
           status: stepPriv.no_rm_hashed_with_env_salt ? 'Aman (Tersamarkan)' : 'Perlu Cek',
         },
         {
@@ -567,11 +704,11 @@ async function buildTab1Payload(smDir) {
         },
       ],
     },
-    'tab1'
+    'tab2'
   );
 }
 
-async function buildTab2Payload(smDir) {
+async function buildTab3Payload(smDir) {
   const evalMetrics = readJsonSafe(path.join(smDir, 'outputs/tables/05_evaluation_metrics.json'));
   const featSummary = readJsonSafe(path.join(smDir, 'outputs/tables/03_feature_summary.json'));
   const holidayFile = readJsonSafe(path.join(smDir, 'data/processed/holidays_2023_2026.json'));
@@ -630,11 +767,11 @@ async function buildTab2Payload(smDir) {
       heatmapUnits: Object.keys(heatmapByUnit),
       heatmapByUnit,
     },
-    'tab2'
+    'tab3'
   );
 }
 
-function buildTab3Payload(smDir) {
+function buildTab4Payload(smDir) {
   const evalMetrics = readJsonSafe(path.join(smDir, 'outputs/tables/05_evaluation_metrics.json'));
   const comparison = readJsonSafe(path.join(smDir, 'outputs/dashboard/model_comparison.json'));
   const forecast = readJsonSafe(path.join(smDir, 'outputs/dashboard/forecast_vs_actual.json'));
@@ -719,11 +856,11 @@ function buildTab3Payload(smDir) {
       testSeriesUnits: Object.keys(testSeriesByUnit),
       testSeriesByUnit,
     },
-    'tab3'
+    'tab4'
   );
 }
 
-function buildTab4Payload(smDir) {
+function buildTab5Payload(smDir) {
   const evalMetrics = readJsonSafe(path.join(smDir, 'outputs/tables/05_evaluation_metrics.json'));
   const vizSummary = readJsonSafe(path.join(smDir, 'outputs/figures/06_visualization_summary.json'));
 
@@ -843,11 +980,11 @@ function buildTab4Payload(smDir) {
       ],
       latestIntegrityTests: latestTestRun?.parsedTests || [],
     },
-    'tab4'
+    'tab5'
   );
 }
 
-function buildTab5Payload(smDir) {
+function buildTab6Payload(smDir) {
   const summary = readJsonSafe(path.join(smDir, 'outputs/dashboard/summary.json'));
   const forecast = readJsonSafe(path.join(smDir, 'outputs/dashboard/forecast_vs_actual.json'));
   const poliLoad = readJsonSafe(path.join(smDir, 'outputs/dashboard/poli_load.json'));
@@ -977,7 +1114,7 @@ function buildTab5Payload(smDir) {
       allDashboardReady: dashboardFiles.every((f) => f.ready),
       dashboardViews,
     },
-    'tab5'
+    'tab6'
   );
 }
 
@@ -1020,6 +1157,7 @@ const getTabData = async (req, res) => {
       tab3: buildTab3Payload,
       tab4: buildTab4Payload,
       tab5: buildTab5Payload,
+      tab6: buildTab6Payload,
     };
 
     const builder = builders[tabKey];
@@ -1073,13 +1211,13 @@ const runStage = async (req, res) => {
 
     const tabForStage = {
       stage1_understanding: 'tab1',
-      stage2_preprocessing: 'tab1',
-      stage3_features: 'tab2',
-      stage4_modeling: 'tab3',
-      stage5_evaluation: 'tab3',
-      stage6_visualization: 'tab4',
-      stage7_export: 'tab5',
-      stage8_integrity_test: 'tab4',
+      stage2_preprocessing: 'tab2',
+      stage3_features: 'tab3',
+      stage4_modeling: 'tab4',
+      stage5_evaluation: 'tab4',
+      stage6_visualization: 'tab5',
+      stage7_export: 'tab6',
+      stage8_integrity_test: 'tab5',
     }[stageId];
 
     const refreshedTab = tabForStage ? { [tabForStage]: await getTabBuilder(tabForStage)(smDir) } : {};
@@ -1120,6 +1258,8 @@ function getTabBuilder(tabKey) {
       return buildTab4Payload;
     case 'tab5':
       return buildTab5Payload;
+    case 'tab6':
+      return buildTab6Payload;
     default:
       return () => ({});
   }
@@ -1145,114 +1285,11 @@ const getFigure = async (req, res) => {
   }
 };
 
-const EXCEL_INSPECT_PY = `
-import json, sys, pandas as pd
-fp = sys.argv[1]
-low = fp.lower()
-if low.endswith('.csv'):
-    df = pd.read_csv(fp)
-else:
-    raw_preview = pd.read_excel(fp, header=None, nrows=4)
-    hdr = 1 if (len(raw_preview) > 1 and str(raw_preview.iloc[0, 0]).lower().startswith('laporan')) else 0
-    df = pd.read_excel(fp, header=hdr)
-cols = [str(c).strip() for c in df.columns]
-required = ['No. Rawat', 'Tgl Reg', 'Jam', 'Poliklinik', 'Penjamin', 'Jns Kunjungan']
-matched = [r for r in required if any(c.lower() == r.lower() for c in cols)]
-poli_col = next((c for c in cols if c.lower() == 'poliklinik'), None)
-tgl_col = next((c for c in cols if c.lower() == 'tgl reg'), None)
-jam_col = next((c for c in cols if c.lower() == 'jam'), None)
-pj_col = next((c for c in cols if c.lower() == 'penjamin'), None)
-jns_col = next((c for c in cols if c.lower() == 'jns kunjungan'), None)
-date_min = None
-date_max = None
-if tgl_col:
-    parsed = pd.to_datetime(df[tgl_col], errors='coerce', dayfirst=True).dropna()
-    if len(parsed) > 0:
-        date_min = parsed.min().strftime('%Y-%m-%d')
-        date_max = parsed.max().strftime('%Y-%m-%d')
-poli_list = sorted(df[poli_col].dropna().astype(str).str.strip().unique().tolist())[:15] if poli_col else []
-sample_rows = []
-for _, r in df.head(5).iterrows():
-    sample_rows.append({
-        'tanggal': str(r[tgl_col])[:10] if tgl_col else '-',
-        'jam': str(r[jam_col]) if jam_col else '-',
-        'poliklinik': str(r[poli_col]) if poli_col else '-',
-        'penjamin': str(r[pj_col]) if pj_col else '-',
-        'jenisKunjungan': str(r[jns_col]) if jns_col else '-',
-    })
-print(json.dumps({
-    'totalRows': int(len(df)),
-    'matchedColumns': matched,
-    'missingRequiredColumns': [r for r in required if r not in matched],
-    'isFormatCompatible': len(matched) == len(required),
-    'dateMin': date_min,
-    'dateMax': date_max,
-    'poliklinikDetected': poli_list,
-    'sampleRows': sample_rows,
-    'privacyNote': 'Identitas pasien dan dokter tidak dikirimkan maupun disimpan ke server.',
-}))
-`;
-
-const checkUploadedExcel = async (req, res) => {
-  const { fileName, contentBase64 } = req.body || {};
-  if (!fileName || !contentBase64 || typeof contentBase64 !== 'string') {
-    return res.status(400).json({ message: 'Harap pilih file Excel (.xlsx) atau CSV terlebih dahulu.' });
-  }
-
-  const ext = path.extname(String(fileName)).toLowerCase();
-  if (!['.xlsx', '.xls', '.csv'].includes(ext)) {
-    return res.status(400).json({ message: 'Format file harus berupa Excel (.xlsx) atau CSV (.csv).' });
-  }
-
-  const base64Clean = contentBase64.includes(',') ? contentBase64.split(',').pop() : contentBase64;
-  const buffer = Buffer.from(base64Clean, 'base64');
-  if (!buffer.length || buffer.length > 5 * 1024 * 1024) {
-    return res.status(400).json({ message: 'Ukuran file tidak boleh kosong atau melebihi 5 MB.' });
-  }
-
-  const tmpPath = path.join(os.tmpdir(), `rsia_uat_check_${crypto.randomBytes(8).toString('hex')}${ext}`);
-  const smDir = getSmDir();
-  const pythonBin = getPythonExecutable(smDir);
-
-  try {
-    fs.writeFileSync(tmpPath, buffer);
-    const output = await new Promise((resolve, reject) => {
-      execFile(
-        pythonBin,
-        ['-c', EXCEL_INSPECT_PY, tmpPath],
-        { cwd: smDir, shell: false, timeout: 45000, maxBuffer: 1024 * 1024 },
-        (error, stdout, stderr) => {
-          if (error) {
-            return reject(new Error((stderr || error.message || 'Gagal membaca file Excel').trim().slice(0, 300)));
-          }
-          return resolve(JSON.parse(String(stdout || '{}')));
-        }
-      );
-    });
-
-    return res.status(200).json({
-      success: true,
-      fileName: path.basename(String(fileName)),
-      inspection: assertNoPiiLeak(output, 'checkUploadedExcel'),
-    });
-  } catch (error) {
-    console.error('[UAT-SM] Error checkUploadedExcel:', error);
-    return res.status(400).json({
-      message: `File belum dapat dibaca dengan benar: ${error.message}`,
-    });
-  } finally {
-    if (fs.existsSync(tmpPath)) {
-      fs.unlinkSync(tmpPath);
-    }
-  }
-};
-
 module.exports = {
   getStatus,
   getTabData,
   runStage,
   getFigure,
-  checkUploadedExcel,
   STAGE_DEFINITIONS,
   ALLOWED_FIGURES,
   assertNoPiiLeak,

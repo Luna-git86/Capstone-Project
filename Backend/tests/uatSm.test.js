@@ -89,40 +89,60 @@ describe('UAT Scientific Method API (/api/uat-sm) RBAC & Security', () => {
     assert.equal(res.body.stages.length, 8);
   });
 
-  it('4. Seluruh endpoint stage-data (tab1 s.d. tab5) mengembalikan angka riil & nol PII', async () => {
+  it('4. Seluruh endpoint stage-data (tab1 s.d. tab6) mengembalikan angka riil & nol PII', async () => {
     const t1 = await requestApp({ pathUrl: '/api/uat-sm/stage-data/tab1', token: pengujiToken });
     assert.equal(t1.status, 200);
-    assert.equal(t1.body.data.kpi.totalVisits, 39042);
-    assert.equal(t1.body.data.kpi.totalDays, 1277);
-    assert.ok(t1.body.data.penjaminDistribution.length >= 4);
+    assert.equal(t1.body.data.loadSummary.status, 'BERHASIL');
+    assert.equal(t1.body.data.loadSummary.totalRowsLoaded, 39042);
+    assert.equal(t1.body.data.loadSummary.totalColumns, 9);
+    assert.equal(t1.body.data.loadSummary.preprocessingApplied, false);
+    assert.equal(t1.body.data.loadSummary.hashingApplied, false);
+    assert.equal(t1.body.data.loadSummary.saltingApplied, false);
+    assert.equal(t1.body.data.loadSummary.labelNormalizationApplied, false);
+    assert.equal(t1.body.data.rawColumns.length, 9);
+    assert.ok(t1.body.data.rawPoliklinikDistribution.some((u) => u.poliklinik === 'IGD'));
+    assert.ok(t1.body.data.rawPoliklinikDistribution.some((u) => u.poliklinik === 'Unit IGD'));
+    assert.ok(t1.body.data.penjaminDistribution.some((p) => p.penjamin === '-'));
     assert.ok(t1.body.data.sampleRawRows.length >= 5);
-    assert.ok(t1.body.data.sampleRawRows[0].pasienMask.includes('Disensor'));
-    assert.ok(t1.body.data.sampleAnonymizedRows.length >= 5);
-    assert.ok(t1.body.data.sampleAnonymizedRows[0].rmHashPreview);
-    assert.equal(t1.body.data.dailySampleRows.length, 10);
-    assert.ok('visitCount' in t1.body.data.dailySampleRows[0]);
+    assert.ok(t1.body.data.sampleRawRows[0].pasienRaw.length > 0);
+    assert.ok(!t1.body.data.sampleRawRows[0].pasienRaw.includes('Tutup Layar'));
+    assert.ok(t1.body.data.sampleRawRows[0].noRmRaw.length > 0);
+    assert.ok(!t1.body.data.sampleRawRows[0].noRmRaw.includes('Hash'));
+    assert.ok(t1.body.data.sampleRawRows[0].dokterRaw.length > 0);
+    assert.ok(t1.body.data.sampleRawRows[0].noRawatRaw.length > 0);
+    assert.ok(!t1.body.data.sampleRawRows[0].noRawatRaw.includes('***'));
 
     const t2 = await requestApp({ pathUrl: '/api/uat-sm/stage-data/tab2', token: pengujiToken });
     assert.equal(t2.status, 200);
-    assert.equal(t2.body.data.featureCount, 14);
-    assert.equal(t2.body.data.sampleEngineeredRows.length, 10);
+    assert.equal(t2.body.data.stage2Summary.totalDays, 1277);
+    assert.equal(t2.body.data.stage2Summary.duplicates, 0);
+    assert.equal(t2.body.data.preprocessingSteps.length, 9);
+    assert.ok(t2.body.data.sampleAnonymizedRows.length >= 5);
+    assert.ok(t2.body.data.sampleAnonymizedRows[0].rmHashPreview);
+    assert.equal(t2.body.data.dailySampleRows.length, 10);
+    assert.ok('visitCount' in t2.body.data.dailySampleRows[0]);
 
     const t3 = await requestApp({ pathUrl: '/api/uat-sm/stage-data/tab3', token: pengujiToken });
     assert.equal(t3.status, 200);
-    assert.equal(t3.body.data.bestModel, 'HistGradientBoosting');
-    assert.equal(t3.body.data.leaderboard.length, 3);
+    assert.equal(t3.body.data.featureCount, 14);
+    assert.equal(t3.body.data.sampleEngineeredRows.length, 10);
 
     const t4 = await requestApp({ pathUrl: '/api/uat-sm/stage-data/tab4', token: pengujiToken });
     assert.equal(t4.status, 200);
-    assert.equal(t4.body.data.hypotheses.length, 3);
-    assert.ok(t4.body.data.figures.length >= 3);
+    assert.equal(t4.body.data.bestModel, 'HistGradientBoosting');
+    assert.equal(t4.body.data.leaderboard.length, 3);
 
     const t5 = await requestApp({ pathUrl: '/api/uat-sm/stage-data/tab5', token: pengujiToken });
     assert.equal(t5.status, 200);
-    assert.equal(t5.body.data.projection2026.h2Projected, 3798);
-    assert.equal(t5.body.data.dashboardFiles.length, 9);
-    assert.equal(t5.body.data.recommendations, undefined);
-    assert.ok(t5.body.data.dashboardViews.length >= 4);
+    assert.equal(t5.body.data.hypotheses.length, 3);
+    assert.ok(t5.body.data.figures.length >= 3);
+
+    const t6 = await requestApp({ pathUrl: '/api/uat-sm/stage-data/tab6', token: pengujiToken });
+    assert.equal(t6.status, 200);
+    assert.equal(t6.body.data.projection2026.h2Projected, 3798);
+    assert.equal(t6.body.data.dashboardFiles.length, 9);
+    assert.equal(t6.body.data.recommendations, undefined);
+    assert.ok(t6.body.data.dashboardViews.length >= 4);
   });
 
   it('5. Menolak stageId tidak valid, tabKey tidak valid, dan path traversal gambar', async () => {
@@ -168,24 +188,24 @@ describe('UAT Scientific Method API (/api/uat-sm) RBAC & Security', () => {
     assert.ok(res.body.parsedTests.every((t) => t.status === 'LOLOS'));
   });
 
-  it('9. POST /check-excel memvalidasi file CSV uji tanpa menimpa data resmi RSIA', async () => {
-    const sampleCsv = [
-      'No. Rawat,Tgl Reg,Jam,Poliklinik,Penjamin,Jns Kunjungan',
-      '2026/07/01/001,2026-07-01,08:15,POLIKLINIK OBGYN,BPJS,LAMA',
-      '2026/07/01/002,2026-07-01,09:05,UNIT IGD,UMUM,BARU',
-    ].join('\n');
-    const res = await requestApp({
+  it('9. Endpoint /check-excel sudah dihapus (404) & stage1_understanding memuat 4 berkas mentah tanpa preprocessing', async () => {
+    const removedRes = await requestApp({
       method: 'POST',
       pathUrl: '/api/uat-sm/check-excel',
       token: pengujiToken,
-      body: {
-        fileName: 'uji_simulasi.csv',
-        contentBase64: Buffer.from(sampleCsv, 'utf-8').toString('base64'),
-      },
+      body: { fileName: 'test.csv', contentBase64: 'YQ==' },
     });
-    assert.equal(res.status, 200);
-    assert.equal(res.body.inspection.totalRows, 2);
-    assert.equal(res.body.inspection.isFormatCompatible, true);
-    assert.equal(res.body.inspection.sampleRows.length, 2);
+    assert.equal(removedRes.status, 404);
+
+    const runRes = await requestApp({
+      method: 'POST',
+      pathUrl: '/api/uat-sm/run/stage1_understanding',
+      token: pengujiToken,
+    });
+    assert.equal(runRes.status, 200);
+    assert.equal(runRes.body.success, true);
+    assert.equal(runRes.body.refreshedTab.tab1.loadSummary.status, 'BERHASIL');
+    assert.equal(runRes.body.refreshedTab.tab1.loadSummary.totalRowsLoaded, 39042);
+    assert.equal(runRes.body.refreshedTab.tab1.loadSummary.preprocessingApplied, false);
   });
 });

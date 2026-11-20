@@ -14,6 +14,7 @@ env/
 ENV/
 __pycache__/
 *.py[cod]
+*.pyo
 *$py.class
 *.egg-info/
 .pytest_cache/
@@ -35,9 +36,33 @@ yarn-debug.log*
 yarn-error.log*
 
 # ==============================================================================
-# 4. DATA PRIVASI SIMRS, KONFIGURASI UNIT & PARQUET INTERMEDIATE/PROCESSED (SENSITIF)
+# 4. PENGAMANAN DATASET, DATABASE LOKAL, DOKUMEN & DATA PRIVASI SIMRS (SENSITIF)
 # ==============================================================================
-# Amankan seluruh isi folder config/ dan data/ (folder tetap ada via .gitkeep)
+# Pengamanan Dataset & File Database Lokal (Temuan D)
+data/
+data/raw/
+data/interim/
+data/processed/
+*.csv
+*.xlsx
+*.xls
+*.parquet
+*.sql
+!Backend/prisma/migrations/**/*.sql
+*.dump
+*.sqlite
+
+# Dokumen kantor, presentasi, PDF, dan file sitasi lokal (tidak perlu masuk repo)
+*.docx
+*.doc
+*.pptx
+*.ppt
+*.ppsx
+*.pdf
+*.ris
+*.bib
+
+# Amankan seluruh isi folder config/ dan data/ scientific-method (folder tetap ada via .gitkeep)
 scientific-method/config/*
 !scientific-method/config/.gitkeep
 
@@ -52,18 +77,8 @@ scientific-method/data/processed/*
 !scientific-method/data/interim/.gitkeep
 !scientific-method/data/processed/.gitkeep
 
-*.parquet
-*.xlsx
-*.xls
-scientific-method/**/*.csv
-scientific-method/**/*.docx
-scientific-method/**/*.pptx
-scientific-method/**/*.ppsx
-scientific-method/**/*.pdf
-scientific-method/**/*.png
-
 # ==============================================================================
-# 5. MODEL BINARIES, OUTPUTS, FIXTURES & ARTEFAK SEMENTARA (DIAMANKAN TOTAL)
+# 5. MODEL BINARIES, OUTPUTS, FIXTURES & ARTEFAK SCIENTIFIC METHOD (DIAMANKAN TOTAL)
 # ==============================================================================
 *.pkl
 *.joblib
@@ -73,7 +88,6 @@ scientific-method/**/*.png
 *.tmp
 *.log
 *.tsbuildinfo
-*.dump
 
 # Amankan seluruh isi models/, outputs/, dan fixtures/ (folder tetap ada via .gitkeep)
 scientific-method/models/*
@@ -95,6 +109,22 @@ scientific-method/fixtures/*
 scientific-method/fixtures/dashboard_sample/*
 !scientific-method/fixtures/dashboard_sample/.gitkeep
 
+# Amankan seluruh gambar, JSON, catatan, dan skrip generator dokumen/presentasi pribadi di scientific-method
+scientific-method/Hasil_Capstone_Project_POLNES/
+scientific-method/penjelasan/
+scientific-method/Penjelasan_SM_Detail/
+scientific-method/Penjelasan_SM_Detail.txt
+scientific-method/scripts/generate_*.py
+scientific-method/scripts/build_*.py
+scientific-method/**/*.json
+scientific-method/**/*.png
+scientific-method/**/*.jpg
+scientific-method/**/*.jpeg
+scientific-method/**/*.svg
+scientific-method/**/*.md
+scientific-method/**/*.txt
+!scientific-method/requirements.txt
+
 # ==============================================================================
 # 6. OS & EDITOR FILES
 # ==============================================================================
@@ -104,18 +134,5 @@ desktop.ini
 *.swp
 *.swo
 *~
-.vscode/*
-!.vscode/settings.json
-!.vscode/extensions.json
+.vscode/
 .idea/
-
-# ==============================================================================
-# 7. HASIL CAPSTONE POLNES, PENJELASAN SM DETAIL & FILE .txt / .md SCIENTIFIC METHOD
-# ==============================================================================
-scientific-method/Hasil_Capstone_Project_POLNES/
-scientific-method/penjelasan/
-scientific-method/Penjelasan_SM_Detail/
-scientific-method/Penjelasan_SM_Detail.txt
-scientific-method/**/*.md
-scientific-method/**/*.txt
-!scientific-method/requirements.txt
