@@ -12,6 +12,7 @@ import {
   Building2,
   UserCheck,
   AlertTriangle,
+  AlertCircle,
   ChevronUp,
   ChevronDown,
   SlidersHorizontal
@@ -126,10 +127,7 @@ export default function SemuaTugas() {
 
   const activeTickets = useMemo(() => {
     return tickets.filter(
-      (t) =>
-        t.status !== 'SELESAI' &&
-        t.status !== 'DITOLAK' &&
-        t.status !== 'MENUNGGU_VALIDASI'
+      (t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK'
     );
   }, [tickets]);
 
@@ -138,15 +136,12 @@ export default function SemuaTugas() {
       active: activeTickets.length,
       total: tickets.length,
       completed: tickets.filter(
-        (t) =>
-          t.status === 'SELESAI' ||
-          t.status === 'MENUNGGU_VALIDASI' ||
-          (t.status === 'DIPROSES' && Boolean(t.catatanRevisi))
+        (t) => t.status === 'SELESAI' || t.status === 'DITOLAK'
       ).length,
     };
   }, [tickets, activeTickets]);
 
-  // Hitungan dinamis untuk opsi filter sidebar
+  // Hitungan dinamis untuk opsi filter sidebar & kartu rangkuman
   const sidebarCounts = useMemo(() => {
     const now = new Date();
     const divisiMap: Record<number, number> = {};
@@ -163,7 +158,9 @@ export default function SemuaTugas() {
       assignedToMe: activeTickets.filter((t) => Number(t.pelaksana?.id) === currentUserId).length,
       createdByMe: activeTickets.filter((t) => Number(t.pembuat?.id) === currentUserId).length,
       belumDikerjakan: activeTickets.filter((t) => t.status === 'MENUNGGU_TRIASE').length,
-      sedangDikerjakan: activeTickets.filter((t) => t.status === 'DIPROSES').length,
+      sedangDikerjakan: activeTickets.filter((t) => t.status === 'DIPROSES' && !t.catatanRevisi).length,
+      menungguEvaluasi: activeTickets.filter((t) => t.status === 'MENUNGGU_VALIDASI').length,
+      perluRevisi: activeTickets.filter((t) => t.status === 'DIPROSES' && Boolean(t.catatanRevisi)).length,
       adaKendala: activeTickets.filter((t) => t.status === 'HOLD_ESKALASI').length,
       overdue: activeTickets.filter((t) => Boolean(t.deadline && new Date(t.deadline) < now)).length,
       divisiMap,
@@ -219,13 +216,19 @@ export default function SemuaTugas() {
         }
       }
 
-      // 3. Filter Sidebar: Status Tugas (Termasuk Lewat Tenggat)
+      // 3. Filter Sidebar: Status Tugas (Termasuk Revisi & Lewat Tenggat)
       if (selectedStatuses.length > 0) {
         const isOverdue = Boolean(t.deadline && new Date(t.deadline) < now);
-        const matchOverdue = selectedStatuses.includes('OVERDUE') && isOverdue;
-        const matchStatus = selectedStatuses.includes(t.status);
+        const isRevisi = t.status === 'DIPROSES' && Boolean(t.catatanRevisi);
+        const isDiprosesNormal = t.status === 'DIPROSES' && !t.catatanRevisi;
 
-        if (!matchOverdue && !matchStatus) {
+        const matchOverdue = selectedStatuses.includes('OVERDUE') && isOverdue;
+        const matchRevisi = selectedStatuses.includes('PERLU_REVISI') && isRevisi;
+        const matchDiproses = selectedStatuses.includes('DIPROSES') && isDiprosesNormal;
+        const matchOtherStatus =
+          t.status !== 'DIPROSES' && selectedStatuses.includes(t.status);
+
+        if (!matchOverdue && !matchRevisi && !matchDiproses && !matchOtherStatus) {
           return false;
         }
       }
@@ -274,8 +277,16 @@ export default function SemuaTugas() {
     }).format(new Date(dateStr));
   };
 
-  const getStatusBadge = (status: Ticket['status']) => {
-    switch (status) {
+  const getStatusBadge = (t: Ticket) => {
+    if (t.status === 'DIPROSES' && t.catatanRevisi) {
+      return {
+        label: 'Perlu Revisi',
+        bg: 'bg-rose-100 text-rose-900 border-rose-300',
+        dot: 'bg-rose-500',
+      };
+    }
+
+    switch (t.status) {
       case 'MENUNGGU_TRIASE':
         return {
           label: 'Perlu Petugas',
@@ -290,7 +301,7 @@ export default function SemuaTugas() {
         };
       case 'MENUNGGU_VALIDASI':
         return {
-          label: 'Menunggu Validasi',
+          label: 'Menunggu Evaluasi',
           bg: 'bg-indigo-100 text-indigo-900 border-indigo-300',
           dot: 'bg-indigo-500',
         };
@@ -302,7 +313,7 @@ export default function SemuaTugas() {
         };
       default:
         return {
-          label: status,
+          label: t.status,
           bg: 'bg-slate-100 text-slate-800 border-slate-300',
           dot: 'bg-slate-400',
         };
@@ -479,8 +490,10 @@ export default function SemuaTugas() {
                   {[
                     { key: 'MENUNGGU_TRIASE', label: 'Belum Dikerjakan', count: sidebarCounts.belumDikerjakan },
                     { key: 'DIPROSES', label: 'Sedang Dikerjakan', count: sidebarCounts.sedangDikerjakan },
+                    { key: 'MENUNGGU_VALIDASI', label: 'Menunggu Evaluasi', count: sidebarCounts.menungguEvaluasi },
+                    { key: 'PERLU_REVISI', label: 'Perlu Revisi', count: sidebarCounts.perluRevisi },
                     { key: 'HOLD_ESKALASI', label: 'Ada Kendala', count: sidebarCounts.adaKendala },
-                    { key: 'OVERDUE', label: 'Lewat Tenggat', count: sidebarCounts.overdue },
+                    { key: 'OVERDUE', label: 'Tugas Terlambat', count: sidebarCounts.overdue },
                   ].map((item) => (
                     <label
                       key={item.key}
@@ -548,8 +561,73 @@ export default function SemuaTugas() {
           </div>
         </div>
 
-        {/* KONTEN KANAN: Pencarian + Kartu Tugas */}
+        {/* KONTEN KANAN: Kartu Rangkuman + Pencarian + Kartu Tugas */}
         <div className="flex-1 w-full space-y-4">
+          {/* 3 KARTU RANGKUMAN */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Kartu 1: Menunggu Evaluasi */}
+            <button
+              type="button"
+              onClick={() =>
+                toggleStringFilter('MENUNGGU_VALIDASI', selectedStatuses, setSelectedStatuses)
+              }
+              className={`bg-white p-5 rounded-3xl border text-left shadow-xs hover:shadow-md transition flex flex-col justify-between ${
+                selectedStatuses.includes('MENUNGGU_VALIDASI')
+                  ? 'border-amber-400 ring-2 ring-amber-200'
+                  : 'border-slate-200/90'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-bold text-slate-500">Menunggu Evaluasi</span>
+                <Clock className="w-4 h-4 text-amber-500" />
+              </div>
+              <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-3">
+                {sidebarCounts.menungguEvaluasi}
+              </p>
+            </button>
+
+            {/* Kartu 2: Perlu Revisi */}
+            <button
+              type="button"
+              onClick={() =>
+                toggleStringFilter('PERLU_REVISI', selectedStatuses, setSelectedStatuses)
+              }
+              className={`bg-white p-5 rounded-3xl border text-left shadow-xs hover:shadow-md transition flex flex-col justify-between ${
+                selectedStatuses.includes('PERLU_REVISI')
+                  ? 'border-rose-400 ring-2 ring-rose-200'
+                  : 'border-slate-200/90'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-bold text-slate-500">Perlu Revisi</span>
+                <AlertCircle className="w-4 h-4 text-rose-500" />
+              </div>
+              <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-3">
+                {sidebarCounts.perluRevisi}
+              </p>
+            </button>
+
+            {/* Kartu 3: Tugas Terlambat */}
+            <button
+              type="button"
+              onClick={() =>
+                toggleStringFilter('OVERDUE', selectedStatuses, setSelectedStatuses)
+              }
+              className={`bg-white p-5 rounded-3xl border text-left shadow-xs hover:shadow-md transition flex flex-col justify-between ${
+                selectedStatuses.includes('OVERDUE')
+                  ? 'border-rose-500 ring-2 ring-rose-200'
+                  : 'border-slate-200/90'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-bold text-slate-500">Tugas Terlambat</span>
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
+              </div>
+              <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-3">
+                {sidebarCounts.overdue}
+              </p>
+            </button>
+          </div>
           
           {/* BAR PENCARIAN */}
           <div className="bg-white p-3.5 sm:p-4 rounded-3xl border border-slate-200/90 shadow-xs">
@@ -595,7 +673,7 @@ export default function SemuaTugas() {
           ) : (
             <div className="space-y-3.5">
               {filteredActiveTickets.map((t) => {
-                const badge = getStatusBadge(t.status);
+                const badge = getStatusBadge(t);
                 const dlDate = t.deadline ? new Date(t.deadline) : null;
                 const isOverdue = dlDate ? new Date() > dlDate : false;
                 const isArahanDivisi =

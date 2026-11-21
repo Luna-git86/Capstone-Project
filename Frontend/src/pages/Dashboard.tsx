@@ -7,17 +7,18 @@ import {
   AlertTriangle,
   Flame,
   Search,
-  MapPin,
   ArrowRight,
   Plus,
   Sparkles,
   TrendingUp,
   Building2,
   ExternalLink,
-  UserCheck
+  AlertCircle,
+  ShieldAlert,
+  Layers,
 } from 'lucide-react';
 import api from '../services/api';
-import { getAuthUserName, getAuthRole, getAuthDivisiNama } from '../utils/authStorage';
+import { getAuthUserName, getAuthRole, getAuthUserId } from '../utils/authStorage';
 
 interface SmSummarySnippet {
   kpi_total_rs?: {
@@ -39,23 +40,36 @@ interface SmSummarySnippet {
 interface Ticket {
   id: number;
   judul: string;
+  jenisTiket?: 'TUGAS' | 'LAPORAN';
   lokasi?: string | null;
   deskripsi: string;
   prioritas: 'LOW' | 'MEDIUM' | 'HIGH';
-  status: 'MENUNGGU_TRIASE' | 'DIPROSES' | 'SELESAI' | 'DITOLAK' | 'MENUNGGU_VALIDASI' | 'HOLD_ESKALASI';
+  status:
+    | 'MENUNGGU_TRIASE'
+    | 'DIPROSES'
+    | 'SELESAI'
+    | 'DITOLAK'
+    | 'MENUNGGU_VALIDASI'
+    | 'HOLD_ESKALASI';
   deadline: string | null;
   createdAt: string;
   completedAt?: string | null;
   pembuat?: { id: number; nama: string; role: string };
-  pelaksana?: { id: number; nama: string; role: string };
-  divisi?: { id: number; nama: string };
+  pelaksana?: { id: number; nama: string; role: string } | null;
+  divisi?: { id: number; nama: string } | null;
+  childTickets?: Array<{
+    id: number;
+    status: string;
+  }>;
 }
+
+type ExecutiveTab = 'PRIORITY_ATTENTION' | 'ESKALASI' | 'ARAHAN_SAYA' | 'OVERDUE';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const userName = getAuthUserName('Direktur RSIA');
   const userRole = getAuthRole() || 'DIREKTUR';
-  const userDivisi = getAuthDivisiNama();
+  const currentUserId = getAuthUserId();
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -63,7 +77,7 @@ export default function Dashboard() {
 
   // Filter State
   const [selectedDivisi, setSelectedDivisi] = useState<string>('SEMUA');
-  const [filterPrioritas, setFilterPrioritas] = useState<'ALL' | 'HIGH' | 'TRIASE' | 'DIPROSES'>('ALL');
+  const [activeTab, setActiveTab] = useState<ExecutiveTab>('PRIORITY_ATTENTION');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const getGreeting = () => {
@@ -99,6 +113,19 @@ export default function Dashboard() {
     fetchSmSummary();
   }, []);
 
+  // Sinkronkan status efektif tiket induk jika seluruh tugas turunannya sudah SELESAI
+  const getEffectiveStatus = (t: Ticket): Ticket['status'] => {
+    if (
+      t.status === 'DIPROSES' &&
+      t.childTickets &&
+      t.childTickets.length > 0 &&
+      t.childTickets.every((c) => c.status === 'SELESAI')
+    ) {
+      return 'SELESAI';
+    }
+    return t.status;
+  };
+
   // Ambil daftar divisi unik secara dinamis dari data tiket
   const daftarDivisi = useMemo(() => {
     return Array.from(new Set(tickets.map((t) => t.divisi?.nama).filter(Boolean))) as string[];
@@ -111,102 +138,207 @@ export default function Dashboard() {
       : tickets.filter((t) => t.divisi?.nama === selectedDivisi);
   }, [tickets, selectedDivisi]);
 
-  // Kalkulasi Metrik Utama Real-Time
-  const now = new Date();
+  // Kalkulasi Metrik Utama Real-Time (Mengecualikan tiket DITOLAK dari rasio penyelesaian)
+  const metrics = useMemo(() => {
+    const now = new Date();
 
-  const tugasAktif = useMemo(
-    () => ticketsByDivisi.filter((t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK'),
-    [ticketsByDivisi]
-  );
+    const aktif = ticketsByDivisi.filter((t) => {
+      const st = getEffectiveStatus(t);
+      return st !== 'SELESAI' && st !== 'DITOLAK';
+    });
 
-  const tugasSelesai = useMemo(
-    () => ticketsByDivisi.filter((t) => t.status === 'SELESAI'),
-    [ticketsByDivisi]
-  );
+    const selesai = ticketsByDivisi.filter((t) => getEffectiveStatus(t) === 'SELESAI');
 
-  const tugasDarurat = useMemo(
-    () => ticketsByDivisi.filter((t) => t.prioritas === 'HIGH' && t.status !== 'SELESAI'),
-    [ticketsByDivisi]
-  );
+    const ditolak = ticketsByDivisi.filter((t) => getEffectiveStatus(t) === 'DITOLAK');
 
-  const tugasTerlambat = useMemo(
-    () =>
-      ticketsByDivisi.filter(
-        (t) =>
-          t.status !== 'SELESAI' &&
-          t.status !== 'DITOLAK' &&
-          t.deadline &&
-          new Date(t.deadline) < now
-      ),
-    [ticketsByDivisi, now]
-  );
+    const darurat = aktif.filter((t) => t.prioritas === 'HIGH');
 
-  // Filter List Tugas untuk Card List
-  const filteredList = useMemo(() => {
-    return tugasAktif.filter((ticket) => {
-      // 1. Filter Tab
-      if (filterPrioritas === 'HIGH' && ticket.prioritas !== 'HIGH') return false;
-      if (filterPrioritas === 'TRIASE' && ticket.status !== 'MENUNGGU_TRIASE') return false;
-      if (filterPrioritas === 'DIPROSES' && ticket.status !== 'DIPROSES') return false;
+    const terlambat = aktif.filter((t) => Boolean(t.deadline && new Date(t.deadline) < now));
 
-      // 2. Filter Pencarian Teks
+    const eskalasi = aktif.filter((t) => getEffectiveStatus(t) === 'HOLD_ESKALASI');
+
+    const arahanSaya = aktif.filter(
+      (t) => currentUserId && String(t.pembuat?.id) === String(currentUserId)
+    );
+
+    const totalValid = aktif.length + selesai.length;
+    const completionRate = totalValid > 0 ? Math.round((selesai.length / totalValid) * 100) : 0;
+
+    return {
+      aktif,
+      selesai,
+      ditolak,
+      darurat,
+      terlambat,
+      eskalasi,
+      arahanSaya,
+      totalValid,
+      completionRate,
+    };
+  }, [ticketsByDivisi, currentUserId]);
+
+  // Ringkasan Kinerja & Beban Kerja Lintas Divisi
+  const divisiPerformance = useMemo(() => {
+    const now = new Date();
+    const map = new Map<
+      string,
+      {
+        nama: string;
+        aktif: number;
+        selesai: number;
+        terlambat: number;
+        eskalasi: number;
+        rate: number;
+      }
+    >();
+
+    tickets.forEach((t) => {
+      const divName = t.divisi?.nama || 'Belum Terpetakan';
+      const st = getEffectiveStatus(t);
+      if (st === 'DITOLAK') return;
+
+      if (!map.has(divName)) {
+        map.set(divName, {
+          nama: divName,
+          aktif: 0,
+          selesai: 0,
+          terlambat: 0,
+          eskalasi: 0,
+          rate: 0,
+        });
+      }
+
+      const row = map.get(divName)!;
+      if (st === 'SELESAI') {
+        row.selesai += 1;
+      } else {
+        row.aktif += 1;
+        if (st === 'HOLD_ESKALASI') row.eskalasi += 1;
+        if (t.deadline && new Date(t.deadline) < now) row.terlambat += 1;
+      }
+    });
+
+    return Array.from(map.values())
+      .map((item) => {
+        const total = item.aktif + item.selesai;
+        return {
+          ...item,
+          rate: total > 0 ? Math.round((item.selesai / total) * 100) : 0,
+        };
+      })
+      .sort((a, b) => b.terlambat - a.terlambat || b.aktif - a.aktif);
+  }, [tickets]);
+
+  // Daftar Tiket Krusial untuk Perhatian Eksekutif (Maksimal 8 baris teratas)
+  const executiveWatchlist = useMemo(() => {
+    const now = new Date();
+
+    const filtered = metrics.aktif.filter((ticket) => {
+      const st = getEffectiveStatus(ticket);
+      const isOverdue = Boolean(ticket.deadline && new Date(ticket.deadline) < now);
+      const isMyDirective =
+        Boolean(currentUserId) && String(ticket.pembuat?.id) === String(currentUserId);
+      const isEscalated = st === 'HOLD_ESKALASI';
+      const isHigh = ticket.prioritas === 'HIGH';
+
+      if (activeTab === 'PRIORITY_ATTENTION') {
+        if (!isEscalated && !isMyDirective && !isHigh && !isOverdue) return false;
+      } else if (activeTab === 'ESKALASI') {
+        if (!isEscalated) return false;
+      } else if (activeTab === 'ARAHAN_SAYA') {
+        if (!isMyDirective) return false;
+      } else if (activeTab === 'OVERDUE') {
+        if (!isOverdue) return false;
+      }
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
+        const paddedId = String(ticket.id).padStart(3, '0');
         const matchTitle = ticket.judul.toLowerCase().includes(q);
-        const matchLoc = (ticket.lokasi || '').toLowerCase().includes(q);
         const matchDivisi = (ticket.divisi?.nama || '').toLowerCase().includes(q);
         const matchPelaksana = (ticket.pelaksana?.nama || '').toLowerCase().includes(q);
-        const matchId = `t-${String(ticket.id).padStart(3, '0')}`.includes(q);
+        const matchId = `t-${paddedId}`.includes(q) || `l-${paddedId}`.includes(q);
 
-        if (!matchTitle && !matchLoc && !matchDivisi && !matchPelaksana && !matchId) {
+        if (!matchTitle && !matchDivisi && !matchPelaksana && !matchId) {
           return false;
         }
       }
 
       return true;
     });
-  }, [tugasAktif, filterPrioritas, searchQuery]);
 
-  const getPriorityStyle = (prioritas: Ticket['prioritas']) => {
+    // Urutkan berdasarkan urgensi: Eskalasi -> Overdue -> Prioritas HIGH -> Terbaru
+    return [...filtered].sort((a, b) => {
+      const stA = getEffectiveStatus(a);
+      const stB = getEffectiveStatus(b);
+      if (stA === 'HOLD_ESKALASI' && stB !== 'HOLD_ESKALASI') return -1;
+      if (stB === 'HOLD_ESKALASI' && stA !== 'HOLD_ESKALASI') return 1;
+
+      const overA = a.deadline && new Date(a.deadline) < now ? 1 : 0;
+      const overB = b.deadline && new Date(b.deadline) < now ? 1 : 0;
+      if (overA !== overB) return overB - overA;
+
+      const prioScore = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+      if (prioScore[a.prioritas] !== prioScore[b.prioritas]) {
+        return prioScore[b.prioritas] - prioScore[a.prioritas];
+      }
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [metrics.aktif, activeTab, searchQuery, currentUserId]);
+
+  const getPriorityBadge = (prioritas: Ticket['prioritas']) => {
     switch (prioritas) {
       case 'HIGH':
         return {
-          bar: 'bg-rose-500',
           badge: 'bg-rose-50 text-rose-700 border-rose-200',
-          label: 'Prioritas Tinggi',
+          label: 'Tinggi',
         };
       case 'MEDIUM':
         return {
-          bar: 'bg-[#f47a45]',
           badge: 'bg-amber-50 text-amber-800 border-amber-200',
-          label: 'Prioritas Sedang',
+          label: 'Sedang',
         };
       default:
         return {
-          bar: 'bg-blue-500',
           badge: 'bg-blue-50 text-blue-700 border-blue-200',
-          label: 'Prioritas Rendah',
+          label: 'Rendah',
         };
     }
   };
 
-  const getStatusStyle = (status: Ticket['status']) => {
+  const getStatusBadge = (status: Ticket['status']) => {
     switch (status) {
       case 'MENUNGGU_TRIASE':
-        return 'bg-amber-50 text-amber-800 border-amber-200';
+        return {
+          label: 'Menunggu Triase',
+          style: 'bg-amber-50 text-amber-800 border-amber-200',
+        };
       case 'DIPROSES':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
+        return {
+          label: 'Diproses',
+          style: 'bg-blue-50 text-blue-800 border-blue-200',
+        };
       case 'MENUNGGU_VALIDASI':
-        return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+        return {
+          label: 'Menunggu Validasi',
+          style: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+        };
       case 'HOLD_ESKALASI':
-        return 'bg-rose-50 text-rose-700 border-rose-200';
+        return {
+          label: 'Eskalasi / Kendala',
+          style: 'bg-rose-50 text-rose-700 border-rose-200',
+        };
       default:
-        return 'bg-slate-50 text-slate-700 border-slate-200';
+        return {
+          label: status.replace('_', ' '),
+          style: 'bg-slate-50 text-slate-700 border-slate-200',
+        };
     }
   };
 
   const formatDeadline = (iso: string | null): { formatted: string; isPast: boolean } => {
-    if (!iso) return { formatted: 'Tanpa batas waktu', isPast: false };
+    if (!iso) return { formatted: 'Tanpa SLA', isPast: false };
     const d = new Date(iso);
     const isPast = d < new Date();
     const formatted = new Intl.DateTimeFormat('id-ID', {
@@ -218,26 +350,47 @@ export default function Dashboard() {
     return { formatted, isPast };
   };
 
+  const handleOpenTicket = (ticket: Ticket) => {
+    if (ticket.jenisTiket === 'LAPORAN') {
+      navigate(`/detail-laporan/${ticket.id}`);
+    } else {
+      navigate(`/detail-tugas/${ticket.id}`);
+    }
+  };
+
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6">
-      {/* 1. HERO GREETING KHUSUS DIREKTUR DENGAN DESAIN BRAND DEEP & ORGANIC SHAPES */}
+    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 pb-24 md:pb-12">
+      {/* 1. HERO GREETING KHUSUS DIREKTUR */}
       <section className="relative bg-[#0f5c43] text-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-[#0f5c43]/15 overflow-hidden">
-        {/* Bentuk dekoratif organik tema RSIA */}
-        <div aria-hidden="true" className="pointer-events-none absolute -top-16 -right-16 w-60 h-60 rounded-full bg-teal-400/20 blur-2xl" />
-        <div aria-hidden="true" className="pointer-events-none absolute -bottom-20 -left-16 w-52 h-52 rounded-full bg-white/5 blur-xl" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-16 -right-16 w-60 h-60 rounded-full bg-teal-400/20 blur-2xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-20 -left-16 w-52 h-52 rounded-full bg-white/5 blur-xl"
+        />
 
         <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-5">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm text-xs font-semibold text-white/90">
               <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
-              <span>{userDivisi || 'Direksi'} • {userRole} RSIA</span>
+              <span>Direksi (Seluruh Divisi) • {userRole} RSIA</span>
               <Sparkles className="w-3.5 h-3.5 text-[#f47a45]" />
             </div>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white leading-tight">
               {getGreeting()}, {userName}!
             </h1>
             <p className="text-xs sm:text-sm text-white/80 max-w-xl leading-relaxed">
-              Terdapat <span className="font-bold text-white underline decoration-[#f47a45] underline-offset-4">{tugasAktif.length} tugas aktif</span> rumah sakit yang berada dalam pengawasan operasional kepemimpinan Anda hari ini.
+              Terdapat{' '}
+              <span className="font-bold text-white underline decoration-[#f47a45] underline-offset-4">
+                {metrics.aktif.length} tiket aktif
+              </span>{' '}
+              dan{' '}
+              <span className="font-bold text-amber-200">
+                {metrics.eskalasi.length} eskalasi pimpinan
+              </span>{' '}
+              dalam pengawasan operasional rumah sakit hari ini.
             </p>
           </div>
 
@@ -248,7 +401,7 @@ export default function Dashboard() {
               className="flex-1 sm:flex-none h-12 min-h-[48px] px-5 bg-[#f47a45] hover:bg-[#e06934] active:scale-95 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-md shadow-[#f47a45]/20 transition flex items-center justify-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              <span>Terbitkan Tugas Baru</span>
+              <span>Terbitkan Arahan</span>
             </button>
             <button
               type="button"
@@ -262,9 +415,9 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* 2. STATISTIK CEPAT DENGAN 4 KARTU MODERN KHUSUS DIREKTUR */}
+      {/* 2. EMPAT KARTU KPI EKSEKUTIF */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3.5 sm:gap-4">
-        {/* Total Tugas Aktif */}
+        {/* Tugas Aktif */}
         <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-md transition flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -276,7 +429,7 @@ export default function Dashboard() {
           </div>
           <div className="mt-3">
             <p className="text-3xl sm:text-4xl font-extrabold text-blue-600 tracking-tight">
-              {tugasAktif.length}
+              {metrics.aktif.length}
             </p>
             <p className="text-[11px] font-medium text-slate-500 mt-1 truncate">
               Sedang berjalan di RS
@@ -284,7 +437,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Tugas Selesai */}
+        {/* Tugas Selesai (Dihitung dari total tiket valid tanpa DITOLAK) */}
         <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-md transition flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -296,19 +449,23 @@ export default function Dashboard() {
           </div>
           <div className="mt-3">
             <p className="text-3xl sm:text-4xl font-extrabold text-[#0f5c43] tracking-tight">
-              {tugasSelesai.length}
+              {metrics.selesai.length}
             </p>
             <p className="text-[11px] font-medium text-slate-500 mt-1 truncate">
-              {ticketsByDivisi.length > 0
-                ? `Tuntas ${Math.round((tugasSelesai.length / ticketsByDivisi.length) * 100)}% dari total`
+              {metrics.totalValid > 0
+                ? `Tuntas ${metrics.completionRate}% dari ${metrics.totalValid} tiket valid`
                 : 'Belum ada data'}
             </p>
           </div>
         </div>
 
         {/* Prioritas Tinggi */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-md transition flex flex-col justify-between">
-          <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setActiveTab('PRIORITY_ATTENTION')}
+          className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-md transition flex flex-col justify-between text-left"
+        >
+          <div className="flex items-center justify-between w-full">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
               Prioritas Tinggi
             </span>
@@ -319,9 +476,9 @@ export default function Dashboard() {
           <div className="mt-3">
             <div className="flex items-baseline gap-2">
               <p className="text-3xl sm:text-4xl font-extrabold text-[#f47a45] tracking-tight">
-                {tugasDarurat.length}
+                {metrics.darurat.length}
               </p>
-              {tugasDarurat.length > 0 && (
+              {metrics.darurat.length > 0 && (
                 <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full uppercase">
                   Penting
                 </span>
@@ -331,11 +488,15 @@ export default function Dashboard() {
               Butuh perhatian segera
             </p>
           </div>
-        </div>
+        </button>
 
         {/* Terlambat SLA */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-md transition flex flex-col justify-between">
-          <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setActiveTab('OVERDUE')}
+          className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-md transition flex flex-col justify-between text-left"
+        >
+          <div className="flex items-center justify-between w-full">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
               Terlambat (SLA)
             </span>
@@ -346,9 +507,9 @@ export default function Dashboard() {
           <div className="mt-3">
             <div className="flex items-baseline gap-2">
               <p className="text-3xl sm:text-4xl font-extrabold text-rose-600 tracking-tight">
-                {tugasTerlambat.length}
+                {metrics.terlambat.length}
               </p>
-              {tugasTerlambat.length > 0 && (
+              {metrics.terlambat.length > 0 && (
                 <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full uppercase">
                   SLA Breach
                 </span>
@@ -358,10 +519,10 @@ export default function Dashboard() {
               Melebihi batas waktu
             </p>
           </div>
-        </div>
+        </button>
       </section>
 
-      {/* 3. BANNER AKSES CEPAT ANALITIK KUNJUNGAN PASIEN RAWAT JALAN (KHUSUS DIREKTUR) */}
+      {/* 3. BANNER AKSES CEPAT ANALITIK KUNJUNGAN PASIEN RAWAT JALAN */}
       {smSummary?.kpi_total_rs && (
         <section className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5">
@@ -394,7 +555,9 @@ export default function Dashboard() {
                   <span>
                     Target Proyeksi 2026:{' '}
                     <strong className="font-mono text-[#f47a45] text-sm">
-                      {smSummary.kpi_total_rs.annual_trends['2026_full_est'].total.toLocaleString('id-ID')}
+                      {smSummary.kpi_total_rs.annual_trends[
+                        '2026_full_est'
+                      ].total.toLocaleString('id-ID')}
                     </strong>{' '}
                     pasien
                   </span>
@@ -413,219 +576,331 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* 4. DAFTAR TUGAS PRIORITAS DIREKTUR (CARD LIST MOBILE-FIRST SEPERTI STAF) */}
-      <section className="bg-white rounded-3xl border border-slate-200/90 shadow-xs p-5 sm:p-7 space-y-5">
-        {/* Header, Filter Divisi & Search Bar */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+      {/* 4. RINGKASAN KINERJA & BEBAN KERJA LINTAS DIVISI */}
+      <section className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <span>Pengawasan Tugas Prioritas Rumah Sakit</span>
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                {filteredList.length}
+            <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-[#0f5c43]" />
+              <span>Kinerja & Beban Kerja Lintas Divisi</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Klik salah satu divisi untuk memfilter daftar perhatian eksekutif di bawah.
+            </p>
+          </div>
+          {selectedDivisi !== 'SEMUA' && (
+            <button
+              type="button"
+              onClick={() => setSelectedDivisi('SEMUA')}
+              className="text-xs font-bold text-[#0f5c43] bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl transition self-start sm:self-auto"
+            >
+              Reset Filter: {selectedDivisi} ×
+            </button>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider bg-slate-50/50">
+                <th className="py-3 px-6">Unit / Divisi</th>
+                <th className="py-3 px-4 text-center">Aktif</th>
+                <th className="py-3 px-4 text-center">Selesai</th>
+                <th className="py-3 px-4 text-center">Eskalasi</th>
+                <th className="py-3 px-4 text-center">Terlambat SLA</th>
+                <th className="py-3 px-6 w-48">Tingkat Tuntas</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {divisiPerformance.map((div) => {
+                const isSelected = selectedDivisi === div.nama;
+                return (
+                  <tr
+                    key={div.nama}
+                    onClick={() =>
+                      setSelectedDivisi((prev) => (prev === div.nama ? 'SEMUA' : div.nama))
+                    }
+                    className={`cursor-pointer transition ${
+                      isSelected ? 'bg-emerald-50/70' : 'hover:bg-slate-50/80'
+                    }`}
+                  >
+                    <td className="py-3.5 px-6 font-bold text-slate-800">{div.nama}</td>
+                    <td className="py-3.5 px-4 text-center font-extrabold text-blue-600">
+                      {div.aktif}
+                    </td>
+                    <td className="py-3.5 px-4 text-center font-extrabold text-[#0f5c43]">
+                      {div.selesai}
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      {div.eskalasi > 0 ? (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-extrabold">
+                          {div.eskalasi}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      {div.terlambat > 0 ? (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-extrabold">
+                          {div.terlambat}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-6">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-[#0f5c43] rounded-full transition-all"
+                            style={{ width: `${div.rate}%` }}
+                          />
+                        </div>
+                        <span className="font-mono font-bold text-slate-700 w-9 text-right">
+                          {div.rate}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* 5. TABEL PADAT: PERLU PERHATIAN EKSEKUTIF */}
+      <section className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-[#f47a45]" />
+              <span>Perlu Perhatian Eksekutif</span>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                {executiveWatchlist.length}
               </span>
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Daftar tiket tugas lintas divisi yang memerlukan pengawasan kepemimpinan
+            <p className="text-xs text-slate-500 mt-0.5">
+              Fokus pada tiket eskalasi pimpinan, arahan langsung Direktur, prioritas tinggi, dan keterlambatan SLA.
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
             {/* Filter Lingkup Divisi */}
-            <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
+            <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
               <Building2 className="w-4 h-4 text-[#0f5c43] shrink-0" />
               <select
                 value={selectedDivisi}
                 onChange={(e) => setSelectedDivisi(e.target.value)}
                 className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer pr-2"
               >
-                <option value="SEMUA">Semua Divisi ({tickets.length})</option>
-                {daftarDivisi.map((div) => {
-                  const divCount = tickets.filter((t) => t.divisi?.nama === div).length;
-                  return (
-                    <option key={div} value={div}>
-                      {div} ({divCount})
-                    </option>
-                  );
-                })}
+                <option value="SEMUA">Semua Divisi</option>
+                {daftarDivisi.map((div) => (
+                  <option key={div} value={div}>
+                    {div}
+                  </option>
+                ))}
               </select>
             </div>
 
             {/* Input Pencarian */}
-            <div className="relative w-full sm:w-64">
+            <div className="relative w-full sm:w-60">
               <input
                 type="text"
-                placeholder="Cari tugas, staf, ruangan..."
+                placeholder="Cari tiket, divisi, pelaksana..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-11 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0f5c43] focus:bg-white transition"
+                className="w-full h-10 pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0f5c43] focus:bg-white transition"
               />
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
             </div>
           </div>
         </div>
 
-        {/* Tab Filter Kategori Cepat */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+        {/* Tab Filter Eksekutif */}
+        <div className="px-5 py-3 bg-slate-50/70 border-b border-slate-100 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setFilterPrioritas('ALL')}
-            className={`h-9 px-4 rounded-xl text-xs font-bold transition whitespace-nowrap active:scale-95 ${
-              filterPrioritas === 'ALL'
+            onClick={() => setActiveTab('PRIORITY_ATTENTION')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+              activeTab === 'PRIORITY_ATTENTION'
                 ? 'bg-[#0f5c43] text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
             }`}
           >
-            Semua Aktif ({tugasAktif.length})
+            Semua Perhatian Utama
           </button>
           <button
             type="button"
-            onClick={() => setFilterPrioritas('HIGH')}
-            className={`h-9 px-4 rounded-xl text-xs font-bold transition whitespace-nowrap active:scale-95 flex items-center gap-1.5 ${
-              filterPrioritas === 'HIGH'
+            onClick={() => setActiveTab('ESKALASI')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+              activeTab === 'ESKALASI'
                 ? 'bg-rose-600 text-white shadow-xs'
-                : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                : 'bg-white text-rose-700 border border-rose-200 hover:bg-rose-50'
             }`}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            <span>Mendesak ({tugasDarurat.length})</span>
+            <AlertCircle className="w-3.5 h-3.5" />
+            <span>Eskalasi Pimpinan ({metrics.eskalasi.length})</span>
           </button>
           <button
             type="button"
-            onClick={() => setFilterPrioritas('TRIASE')}
-            className={`h-9 px-4 rounded-xl text-xs font-bold transition whitespace-nowrap active:scale-95 ${
-              filterPrioritas === 'TRIASE'
+            onClick={() => setActiveTab('ARAHAN_SAYA')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+              activeTab === 'ARAHAN_SAYA'
+                ? 'bg-[#0f5c43] text-white shadow-xs'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            Arahan Saya ({metrics.arahanSaya.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('OVERDUE')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+              activeTab === 'OVERDUE'
                 ? 'bg-amber-600 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
             }`}
           >
-            Perlu Petugas
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterPrioritas('DIPROSES')}
-            className={`h-9 px-4 rounded-xl text-xs font-bold transition whitespace-nowrap active:scale-95 ${
-              filterPrioritas === 'DIPROSES'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Sedang Dikerjakan
+            Terlambat SLA ({metrics.terlambat.length})
           </button>
         </div>
 
-        {/* List Card Tugas (Grid 2 Kolom di Desktop, 1 Kolom di Mobile - Format Persis Staf) */}
         {loading ? (
-          <div className="py-16 text-center space-y-3">
-            <div className="w-9 h-9 border-3 border-[#0f5c43] border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-xs font-bold text-slate-400">Memuat data pengawasan tugas...</p>
+          <div className="py-12 text-center space-y-2">
+            <div className="w-8 h-8 border-3 border-[#0f5c43] border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-xs font-bold text-slate-400">Memuat daftar pengawasan...</p>
           </div>
-        ) : filteredList.length === 0 ? (
-          <div className="py-12 px-4 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 space-y-3">
-            <div className="w-12 h-12 bg-emerald-50 text-[#0f5c43] rounded-2xl flex items-center justify-center mx-auto">
+        ) : executiveWatchlist.length === 0 ? (
+          <div className="py-12 px-4 text-center space-y-2">
+            <div className="w-11 h-11 bg-emerald-50 text-[#0f5c43] rounded-2xl flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-6 h-6" />
             </div>
-            <div>
-              <p className="text-sm font-bold text-slate-800">Semua Terkendali Sempurna!</p>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
-                {searchQuery
-                  ? 'Tidak ada tugas yang sesuai dengan kriteria pencarian.'
-                  : 'Seluruh tugas pada status ini telah ditangani dengan baik.'}
-              </p>
-            </div>
+            <p className="text-sm font-bold text-slate-800">Tidak Ada Tiket Mendesak</p>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              Tidak ditemukan eskalasi, keterlambatan SLA, maupun tiket prioritas tinggi pada filter ini.
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredList.map((ticket) => {
-              const pStyle = getPriorityStyle(ticket.prioritas);
-              const dl = formatDeadline(ticket.deadline);
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider bg-slate-50/40">
+                  <th className="py-3.5 px-6">Tiket & Judul</th>
+                  <th className="py-3.5 px-4">Divisi Tujuan</th>
+                  <th className="py-3.5 px-4">Pelaksana</th>
+                  <th className="py-3.5 px-4">Batas Waktu</th>
+                  <th className="py-3.5 px-4">Prioritas</th>
+                  <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-6 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {executiveWatchlist.slice(0, 8).map((ticket) => {
+                  const st = getEffectiveStatus(ticket);
+                  const statusBadge = getStatusBadge(st);
+                  const prioBadge = getPriorityBadge(ticket.prioritas);
+                  const dl = formatDeadline(ticket.deadline);
+                  const prefix = ticket.jenisTiket === 'LAPORAN' ? 'L' : 'T';
 
-              return (
-                <div
-                  key={ticket.id}
-                  onClick={() => navigate(`/detail-tugas/${ticket.id}`)}
-                  className="group relative bg-white hover:bg-slate-50/70 border border-slate-200/90 hover:border-[#0f5c43] rounded-3xl p-5 shadow-xs hover:shadow-md transition cursor-pointer flex flex-col justify-between gap-4 overflow-hidden"
-                >
-                  {/* Indikator Baris Samping Prioritas */}
-                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${pStyle.bar}`} />
-
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-2.5">
-                      <span className="font-mono text-xs font-extrabold text-[#0f5c43] bg-emerald-50 px-2.5 py-1 rounded-xl">
-                        #T-{String(ticket.id).padStart(3, '0')}
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase ${pStyle.badge}`}>
-                          {pStyle.label}
-                        </span>
-                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase ${getStatusStyle(ticket.status)}`}>
-                          {ticket.status.replace('_', ' ')}
-                        </span>
-                      </div>
-                    </div>
-
-                    <h3 className="text-base font-extrabold text-slate-900 group-hover:text-[#0f5c43] transition leading-snug line-clamp-2">
-                      {ticket.judul}
-                    </h3>
-
-                    <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
-                      {ticket.deskripsi || 'Tidak ada deskripsi tambahan.'}
-                    </p>
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
-                    {/* Lokasi, Divisi & Pelaksana */}
-                    <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-slate-500">
-                      {ticket.lokasi && (
-                        <div className="flex items-center gap-1 text-slate-700 font-semibold">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span className="truncate max-w-[140px]">{ticket.lokasi}</span>
+                  return (
+                    <tr
+                      key={ticket.id}
+                      onClick={() => handleOpenTicket(ticket)}
+                      className="hover:bg-slate-50/90 cursor-pointer transition group"
+                    >
+                      <td className="py-3.5 px-6">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-extrabold text-[#0f5c43]">
+                            #{prefix}-{String(ticket.id).padStart(3, '0')}
+                          </span>
+                          <span className="font-bold text-slate-900 group-hover:text-[#0f5c43] transition line-clamp-1">
+                            {ticket.judul}
+                          </span>
                         </div>
-                      )}
-                      {ticket.divisi?.nama && (
-                        <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                          <Building2 className="w-3 h-3 text-slate-400" />
-                          <span>{ticket.divisi.nama}</span>
-                        </span>
-                      )}
-                      <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                        <UserCheck className="w-3 h-3 text-slate-400" />
-                        <span>Pelaksana:</span>
-                        <strong className="text-slate-800">{ticket.pelaksana?.nama || 'Belum Ditunjuk'}</strong>
-                      </span>
-                    </div>
+                        {ticket.lokasi && (
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Lokasi: {ticket.lokasi}
+                          </p>
+                        )}
+                      </td>
 
-                    {/* Deadline SLA & Tombol Aksi */}
-                    <div className="flex items-center justify-between gap-2 mt-1">
-                      <div className="flex items-center gap-1.5 text-xs">
-                        <Clock className={`w-3.5 h-3.5 shrink-0 ${dl.isPast ? 'text-rose-500' : 'text-slate-400'}`} />
-                        <span className={`text-[11px] font-semibold ${dl.isPast ? 'text-rose-600 font-bold' : 'text-slate-500'}`}>
-                          {dl.formatted}
-                        </span>
-                        {dl.isPast && (
-                          <span className="text-[9px] font-bold uppercase bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full">
-                            SLA Lewat
+                      <td className="py-3.5 px-4 whitespace-nowrap font-semibold text-slate-700">
+                        {ticket.divisi?.nama || '-'}
+                      </td>
+
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        {ticket.pelaksana?.nama ? (
+                          <span className="font-medium text-slate-700">
+                            {ticket.pelaksana.nama}
+                          </span>
+                        ) : (
+                          <span className="italic text-amber-600 font-semibold">
+                            Belum ditunjuk
                           </span>
                         )}
-                      </div>
+                      </td>
 
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/detail-tugas/${ticket.id}`);
-                        }}
-                        className="h-10 px-4 bg-[#0f5c43] group-hover:bg-[#f47a45] text-white rounded-2xl text-xs font-bold transition flex items-center gap-1 shrink-0 shadow-xs"
-                      >
-                        <span>Periksa Tiket</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span
+                          className={
+                            dl.isPast
+                              ? 'font-bold text-rose-600'
+                              : 'font-medium text-slate-600'
+                          }
+                        >
+                          {dl.formatted}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 py-0.5 rounded-md border text-[10px] font-extrabold uppercase ${prioBadge.badge}`}
+                        >
+                          {prioBadge.label}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span
+                          className={`px-2.5 py-1 rounded-full border text-[10px] font-extrabold uppercase ${statusBadge.style}`}
+                        >
+                          {statusBadge.label}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-6 text-right whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-[#0f5c43] group-hover:underline">
+                          <span>Tinjau</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
+
+        {/* Footer Tabel menuju Semua Tugas RS */}
+        <div className="px-6 py-3.5 bg-slate-50/70 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <span className="text-slate-500">
+            Menampilkan {Math.min(executiveWatchlist.length, 8)} dari{' '}
+            <strong className="text-slate-700">{executiveWatchlist.length}</strong> tiket perhatian
+            eksekutif.
+          </span>
+          <button
+            type="button"
+            onClick={() => navigate('/semua-tugas')}
+            className="inline-flex items-center gap-1.5 font-bold text-[#0f5c43] hover:underline self-start sm:self-auto"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Lihat Seluruh {metrics.aktif.length} Tiket Aktif RS</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </section>
     </div>
   );
