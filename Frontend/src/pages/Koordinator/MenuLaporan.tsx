@@ -48,6 +48,11 @@ interface Ticket {
     nama: string;
     divisi?: { id?: number; nama: string } | null;
   };
+  childTickets?: Array<{
+    id: number;
+    status: string;
+    pelaksana?: { id: number; nama: string; role: string } | null;
+  }>;
 }
 
 export default function AntreanLaporan() {
@@ -83,6 +88,19 @@ export default function AntreanLaporan() {
     };
     fetchData();
   }, []);
+
+  // Sinkronkan status efektif jika seluruh tugas turunan (childTickets) sudah SELESAI
+  const getEffectiveStatus = (laporan: Ticket) => {
+    if (
+      laporan.status === 'DIPROSES' &&
+      laporan.childTickets &&
+      laporan.childTickets.length > 0 &&
+      laporan.childTickets.every((c) => c.status === 'SELESAI')
+    ) {
+      return 'SELESAI';
+    }
+    return laporan.status;
+  };
 
   // 1. Saring laporan agar HANYA menampilkan laporan yang tertuju ke divisi pengguna
   const laporanUntukDivisiSaya = useMemo(() => {
@@ -130,7 +148,7 @@ export default function AntreanLaporan() {
     switch (status) {
       case 'MENUNGGU_TRIASE':
         return {
-          label: 'Menunggu Evaluasi',
+          label: 'Menunggu Triase',
           badge: 'bg-amber-50 text-amber-800 border-amber-200',
           dot: 'bg-amber-500',
         };
@@ -184,8 +202,9 @@ export default function AntreanLaporan() {
 
   // 3. Filter Tab, Divisi Asal Pelapor, dan Pencarian Teks
   const dataTertampil = laporanUntukDivisiSaya.filter((laporan) => {
-    if (activeTab === 'MENUNGGU' && !activeStatuses.includes(laporan.status)) return false;
-    if (activeTab === 'RIWAYAT' && !historyStatuses.includes(laporan.status)) return false;
+    const effectiveStatus = getEffectiveStatus(laporan);
+    if (activeTab === 'MENUNGGU' && !activeStatuses.includes(effectiveStatus)) return false;
+    if (activeTab === 'RIWAYAT' && !historyStatuses.includes(effectiveStatus)) return false;
 
     const divisiAsal = getDivisiAsalNama(laporan);
     if (filterDivisiAsal !== 'Semua' && divisiAsal !== filterDivisiAsal) {
@@ -199,7 +218,9 @@ export default function AntreanLaporan() {
       const lokasi = (laporan.lokasi || '').toLowerCase();
       const pelapor = (laporan.pembuat?.nama || laporan.pelapor?.nama || '').toLowerCase();
       const asal = divisiAsal.toLowerCase();
-      const formattedId = `t-${String(laporan.id).padStart(3, '0')}`;
+      const paddedId = String(laporan.id).padStart(3, '0');
+      const formattedIdL = `l-${paddedId}`;
+      const formattedIdT = `t-${paddedId}`;
       const rawId = String(laporan.id);
 
       const isMatch =
@@ -207,21 +228,21 @@ export default function AntreanLaporan() {
         lokasi.includes(q) ||
         pelapor.includes(q) ||
         asal.includes(q) ||
-        formattedId.includes(q) ||
+        formattedIdL.includes(q) ||
+        formattedIdT.includes(q) ||
         rawId.includes(q);
 
       if (!isMatch) return false;
     }
-  
 
     return true;
-    });
+  });
 
   const jumlahLaporanAktif = laporanUntukDivisiSaya.filter((l) =>
-    activeStatuses.includes(l.status)
+    activeStatuses.includes(getEffectiveStatus(l))
   ).length;
   const jumlahLaporanSelesai = laporanUntukDivisiSaya.filter((l) =>
-    historyStatuses.includes(l.status)
+    historyStatuses.includes(getEffectiveStatus(l))
   ).length;
 
   return (
@@ -354,7 +375,8 @@ export default function AntreanLaporan() {
               ) : dataTertampil.length > 0 ? (
                 dataTertampil.map((laporan) => {
                   const isBaru = isLaporanBaru(laporan.createdAt);
-                  const statusMeta = getStatusMeta(laporan.status);
+                  const effectiveStatus = getEffectiveStatus(laporan);
+                  const statusMeta = getStatusMeta(effectiveStatus);
                   const namaPelapor =
                     laporan.pembuat?.nama || laporan.pelapor?.nama || 'Staf Unit';
                   const divisiAsal = getDivisiAsalNama(laporan);
@@ -369,7 +391,7 @@ export default function AntreanLaporan() {
                       <td className="py-4 px-6 align-top whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-sm font-extrabold text-brand-deep">
-                            #T-{String(laporan.id).padStart(3, '0')}
+                            #L-{String(laporan.id).padStart(3, '0')}
                           </span>
                           {isBaru && activeTab === 'MENUNGGU' && (
                             <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-rose-500 text-white tracking-wider">

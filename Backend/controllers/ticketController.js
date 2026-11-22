@@ -765,18 +765,17 @@ const updateTicketStatus = async (req, res) => {
       },
     });
 
-    // Sinkronisasi otomatis tiket laporan induk jika seluruh tugas turunannya sudah SELESAI
+    // Sinkronisasi otomatis tiket induk (LAPORAN maupun TUGAS) jika seluruh tugas turunannya sudah SELESAI
     if (status === 'SELESAI' && updatedTicket.parentTicketId) {
       const parentTicket = await prisma.ticket.findUnique({
         where: { id: updatedTicket.parentTicketId },
         include: {
-          childTickets: { select: { id: true, status: true } },
+          childTickets: { select: { id: true, status: true, pelaksanaId: true } },
         },
       });
 
       if (
         parentTicket &&
-        parentTicket.jenisTiket === 'LAPORAN' &&
         parentTicket.status !== 'SELESAI' &&
         parentTicket.childTickets.length > 0 &&
         parentTicket.childTickets.every((child) => child.status === 'SELESAI')
@@ -786,6 +785,9 @@ const updateTicketStatus = async (req, res) => {
           data: {
             status: 'SELESAI',
             completedAt: new Date(),
+            ...(parentTicket.pelaksanaId
+              ? {}
+              : { pelaksanaId: updatedTicket.pelaksanaId || null }),
           },
         });
       }

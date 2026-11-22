@@ -14,11 +14,11 @@ import {
   Building2,
   ExternalLink,
   AlertCircle,
-  ShieldAlert,
   Layers,
+  Award,
 } from 'lucide-react';
 import api from '../services/api';
-import { getAuthUserName, getAuthRole, getAuthUserId } from '../utils/authStorage';
+import { getAuthUserName, getAuthRole } from '../utils/authStorage';
 
 interface SmSummarySnippet {
   kpi_total_rs?: {
@@ -63,13 +63,12 @@ interface Ticket {
   }>;
 }
 
-type ExecutiveTab = 'PRIORITY_ATTENTION' | 'ESKALASI' | 'ARAHAN_SAYA' | 'OVERDUE';
+type PriorityTab = 'ALL_CRITICAL' | 'HIGH' | 'ESKALASI' | 'OVERDUE';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const userName = getAuthUserName('Direktur RSIA');
   const userRole = getAuthRole() || 'DIREKTUR';
-  const currentUserId = getAuthUserId();
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -77,7 +76,7 @@ export default function Dashboard() {
 
   // Filter State
   const [selectedDivisi, setSelectedDivisi] = useState<string>('SEMUA');
-  const [activeTab, setActiveTab] = useState<ExecutiveTab>('PRIORITY_ATTENTION');
+  const [activeTab, setActiveTab] = useState<PriorityTab>('ALL_CRITICAL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const getGreeting = () => {
@@ -149,17 +148,11 @@ export default function Dashboard() {
 
     const selesai = ticketsByDivisi.filter((t) => getEffectiveStatus(t) === 'SELESAI');
 
-    const ditolak = ticketsByDivisi.filter((t) => getEffectiveStatus(t) === 'DITOLAK');
-
     const darurat = aktif.filter((t) => t.prioritas === 'HIGH');
 
     const terlambat = aktif.filter((t) => Boolean(t.deadline && new Date(t.deadline) < now));
 
     const eskalasi = aktif.filter((t) => getEffectiveStatus(t) === 'HOLD_ESKALASI');
-
-    const arahanSaya = aktif.filter(
-      (t) => currentUserId && String(t.pembuat?.id) === String(currentUserId)
-    );
 
     const totalValid = aktif.length + selesai.length;
     const completionRate = totalValid > 0 ? Math.round((selesai.length / totalValid) * 100) : 0;
@@ -167,17 +160,86 @@ export default function Dashboard() {
     return {
       aktif,
       selesai,
-      ditolak,
       darurat,
       terlambat,
       eskalasi,
-      arahanSaya,
       totalValid,
       completionRate,
     };
-  }, [ticketsByDivisi, currentUserId]);
+  }, [ticketsByDivisi]);
 
-  // Ringkasan Kinerja & Beban Kerja Lintas Divisi
+  // Tabel Kiri: Pencapaian Kecil (HANYA tugas SELESAI yang dibuat oleh KADIV atau DIREKTUR)
+  const leadershipAchievements = useMemo(() => {
+    return ticketsByDivisi
+      .filter((t) => {
+        const st = getEffectiveStatus(t);
+        const creatorRole = t.pembuat?.role;
+        return st === 'SELESAI' && (creatorRole === 'DIREKTUR' || creatorRole === 'KADIV');
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.completedAt || a.createdAt).getTime();
+        const timeB = new Date(b.completedAt || b.createdAt).getTime();
+        return timeB - timeA;
+      });
+  }, [ticketsByDivisi]);
+
+  // Tabel Kanan: Tugas Prioritas Tinggi (Urgensi Tinggi, Terkendala, dan Terlambat)
+  const highPriorityTickets = useMemo(() => {
+    const now = new Date();
+
+    const filtered = metrics.aktif.filter((ticket) => {
+      const st = getEffectiveStatus(ticket);
+      const isOverdue = Boolean(ticket.deadline && new Date(ticket.deadline) < now);
+      const isEscalated = st === 'HOLD_ESKALASI';
+      const isHigh = ticket.prioritas === 'HIGH';
+
+      if (activeTab === 'ALL_CRITICAL') {
+        if (!isHigh && !isEscalated && !isOverdue) return false;
+      } else if (activeTab === 'HIGH') {
+        if (!isHigh) return false;
+      } else if (activeTab === 'ESKALASI') {
+        if (!isEscalated) return false;
+      } else if (activeTab === 'OVERDUE') {
+        if (!isOverdue) return false;
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const paddedId = String(ticket.id).padStart(3, '0');
+        const matchTitle = ticket.judul.toLowerCase().includes(q);
+        const matchDivisi = (ticket.divisi?.nama || '').toLowerCase().includes(q);
+        const matchPelaksana = (ticket.pelaksana?.nama || '').toLowerCase().includes(q);
+        const matchId = `t-${paddedId}`.includes(q) || `l-${paddedId}`.includes(q);
+
+        if (!matchTitle && !matchDivisi && !matchPelaksana && !matchId) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // Urutkan berdasarkan urgensi: Terkendala/Eskalasi -> Terlambat -> Urgensi Tinggi -> Terbaru
+    return [...filtered].sort((a, b) => {
+      const stA = getEffectiveStatus(a);
+      const stB = getEffectiveStatus(b);
+      if (stA === 'HOLD_ESKALASI' && stB !== 'HOLD_ESKALASI') return -1;
+      if (stB === 'HOLD_ESKALASI' && stA !== 'HOLD_ESKALASI') return 1;
+
+      const overA = a.deadline && new Date(a.deadline) < now ? 1 : 0;
+      const overB = b.deadline && new Date(b.deadline) < now ? 1 : 0;
+      if (overA !== overB) return overB - overA;
+
+      const prioScore = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+      if (prioScore[a.prioritas] !== prioScore[b.prioritas]) {
+        return prioScore[b.prioritas] - prioScore[a.prioritas];
+      }
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [metrics.aktif, activeTab, searchQuery]);
+
+  // Tabel Bawah: Ringkasan Kinerja & Beban Kerja Lintas Divisi
   const divisiPerformance = useMemo(() => {
     const now = new Date();
     const map = new Map<
@@ -229,64 +291,6 @@ export default function Dashboard() {
       .sort((a, b) => b.terlambat - a.terlambat || b.aktif - a.aktif);
   }, [tickets]);
 
-  // Daftar Tiket Krusial untuk Perhatian Eksekutif (Maksimal 8 baris teratas)
-  const executiveWatchlist = useMemo(() => {
-    const now = new Date();
-
-    const filtered = metrics.aktif.filter((ticket) => {
-      const st = getEffectiveStatus(ticket);
-      const isOverdue = Boolean(ticket.deadline && new Date(ticket.deadline) < now);
-      const isMyDirective =
-        Boolean(currentUserId) && String(ticket.pembuat?.id) === String(currentUserId);
-      const isEscalated = st === 'HOLD_ESKALASI';
-      const isHigh = ticket.prioritas === 'HIGH';
-
-      if (activeTab === 'PRIORITY_ATTENTION') {
-        if (!isEscalated && !isMyDirective && !isHigh && !isOverdue) return false;
-      } else if (activeTab === 'ESKALASI') {
-        if (!isEscalated) return false;
-      } else if (activeTab === 'ARAHAN_SAYA') {
-        if (!isMyDirective) return false;
-      } else if (activeTab === 'OVERDUE') {
-        if (!isOverdue) return false;
-      }
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const paddedId = String(ticket.id).padStart(3, '0');
-        const matchTitle = ticket.judul.toLowerCase().includes(q);
-        const matchDivisi = (ticket.divisi?.nama || '').toLowerCase().includes(q);
-        const matchPelaksana = (ticket.pelaksana?.nama || '').toLowerCase().includes(q);
-        const matchId = `t-${paddedId}`.includes(q) || `l-${paddedId}`.includes(q);
-
-        if (!matchTitle && !matchDivisi && !matchPelaksana && !matchId) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    // Urutkan berdasarkan urgensi: Eskalasi -> Overdue -> Prioritas HIGH -> Terbaru
-    return [...filtered].sort((a, b) => {
-      const stA = getEffectiveStatus(a);
-      const stB = getEffectiveStatus(b);
-      if (stA === 'HOLD_ESKALASI' && stB !== 'HOLD_ESKALASI') return -1;
-      if (stB === 'HOLD_ESKALASI' && stA !== 'HOLD_ESKALASI') return 1;
-
-      const overA = a.deadline && new Date(a.deadline) < now ? 1 : 0;
-      const overB = b.deadline && new Date(b.deadline) < now ? 1 : 0;
-      if (overA !== overB) return overB - overA;
-
-      const prioScore = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-      if (prioScore[a.prioritas] !== prioScore[b.prioritas]) {
-        return prioScore[b.prioritas] - prioScore[a.prioritas];
-      }
-
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-  }, [metrics.aktif, activeTab, searchQuery, currentUserId]);
-
   const getPriorityBadge = (prioritas: Ticket['prioritas']) => {
     switch (prioritas) {
       case 'HIGH':
@@ -326,7 +330,7 @@ export default function Dashboard() {
         };
       case 'HOLD_ESKALASI':
         return {
-          label: 'Eskalasi / Kendala',
+          label: 'Terkendala',
           style: 'bg-rose-50 text-rose-700 border-rose-200',
         };
       default:
@@ -359,7 +363,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 pb-24 md:pb-12">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6 pb-24 md:pb-12">
       {/* 1. HERO GREETING KHUSUS DIREKTUR */}
       <section className="relative bg-[#0f5c43] text-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-[#0f5c43]/15 overflow-hidden">
         <div
@@ -388,7 +392,7 @@ export default function Dashboard() {
               </span>{' '}
               dan{' '}
               <span className="font-bold text-amber-200">
-                {metrics.eskalasi.length} eskalasi pimpinan
+                {metrics.eskalasi.length} tugas terkendala
               </span>{' '}
               dalam pengawasan operasional rumah sakit hari ini.
             </p>
@@ -437,7 +441,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Tugas Selesai (Dihitung dari total tiket valid tanpa DITOLAK) */}
+        {/* Tugas Selesai */}
         <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-md transition flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -462,7 +466,7 @@ export default function Dashboard() {
         {/* Prioritas Tinggi */}
         <button
           type="button"
-          onClick={() => setActiveTab('PRIORITY_ATTENTION')}
+          onClick={() => setActiveTab('HIGH')}
           className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-md transition flex flex-col justify-between text-left"
         >
           <div className="flex items-center justify-between w-full">
@@ -576,7 +580,320 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* 4. RINGKASAN KINERJA & BEBAN KERJA LINTAS DIVISI */}
+      {/* 4. GRID 2 KOLOM: PENCAPAIAN PIMPINAN (KIRI) & TUGAS PRIORITAS TINGGI (KANAN) */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* KOLOM KIRI (4/12): TABEL KECIL PENCAPAIAN ARAHAN KADIV & DIREKTUR */}
+        <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden flex flex-col">
+          <div className="p-5 border-b border-slate-100">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                <Award className="w-5 h-5 text-[#0f5c43]" />
+                <span>Pencapaian Pimpinan</span>
+              </h2>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-[#0f5c43] border border-emerald-200">
+                {leadershipAchievements.length}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Tugas selesai yang dibuat oleh Direktur dan Kepala Divisi.
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="py-10 text-center space-y-2">
+              <div className="w-7 h-7 border-3 border-[#0f5c43] border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs font-bold text-slate-400">Memuat pencapaian...</p>
+            </div>
+          ) : leadershipAchievements.length === 0 ? (
+            <div className="py-10 px-4 text-center space-y-1.5">
+              <CheckCircle2 className="w-8 h-8 text-slate-300 mx-auto" />
+              <p className="text-xs font-bold text-slate-600">Belum Ada Tugas Tuntas</p>
+              <p className="text-[11px] text-slate-400">
+                Arahan Direktur atau Kadiv yang selesai akan tercatat di sini.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider bg-slate-50/50">
+                    <th className="py-2.5 px-4">Tugas Selesai</th>
+                    <th className="py-2.5 px-4 text-right">Pembuat</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {leadershipAchievements.slice(0, 7).map((item) => {
+                    const prefix = item.jenisTiket === 'LAPORAN' ? 'L' : 'T';
+                    return (
+                      <tr
+                        key={item.id}
+                        onClick={() => handleOpenTicket(item)}
+                        className="hover:bg-slate-50/90 cursor-pointer transition group"
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-[11px] font-extrabold text-[#0f5c43]">
+                              #{prefix}-{String(item.id).padStart(3, '0')}
+                            </span>
+                            <span className="font-bold text-slate-800 group-hover:text-[#0f5c43] transition line-clamp-1">
+                              {item.judul}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                            {item.divisi?.nama || '-'}
+                          </p>
+                        </td>
+                        <td className="py-3 px-4 text-right whitespace-nowrap align-top">
+                          <span className="block font-semibold text-slate-700 text-[11px]">
+                            {item.pembuat?.nama || '-'}
+                          </span>
+                          <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-emerald-50 text-[#0f5c43] text-[9px] font-extrabold uppercase">
+                            {item.pembuat?.role}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="px-4 py-3 bg-slate-50/70 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
+            <span>
+              Menampilkan {Math.min(leadershipAchievements.length, 7)} dari{' '}
+              <strong className="text-slate-700">{leadershipAchievements.length}</strong> tuntas
+            </span>
+            <button
+              type="button"
+              onClick={() => navigate('/semua-tugas')}
+              className="font-bold text-[#0f5c43] hover:underline"
+            >
+              Semua →
+            </button>
+          </div>
+        </div>
+
+        {/* KOLOM KANAN (8/12): TABEL TUGAS PRIORITAS TINGGI (URGENSI TINGGI, TERKENDALA, TERLAMBAT) */}
+        <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden flex flex-col">
+          <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                <Flame className="w-5 h-5 text-[#f47a45]" />
+                <span>Tugas Prioritas Tinggi</span>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                  {highPriorityTickets.length}
+                </span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Daftar tugas dengan urgensi tinggi, status terkendala, dan melewati batas waktu.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              {/* Filter Divisi */}
+              <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                <Building2 className="w-3.5 h-3.5 text-[#0f5c43] shrink-0" />
+                <select
+                  value={selectedDivisi}
+                  onChange={(e) => setSelectedDivisi(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer pr-1"
+                >
+                  <option value="SEMUA">Semua Divisi</option>
+                  {daftarDivisi.map((div) => (
+                    <option key={div} value={div}>
+                      {div}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Input Pencarian */}
+              <div className="relative w-full sm:w-48">
+                <input
+                  type="text"
+                  placeholder="Cari tiket, divisi..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full h-9 pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0f5c43] focus:bg-white transition"
+                />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              </div>
+            </div>
+          </div>
+
+          {/* Tab Filter Cepat */}
+          <div className="px-5 py-3 bg-slate-50/70 border-b border-slate-100 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('ALL_CRITICAL')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                activeTab === 'ALL_CRITICAL'
+                  ? 'bg-[#0f5c43] text-white shadow-xs'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              Semua Prioritas
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('HIGH')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                activeTab === 'HIGH'
+                  ? 'bg-[#f47a45] text-white shadow-xs'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              Urgensi Tinggi ({metrics.darurat.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('ESKALASI')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 ${
+                activeTab === 'ESKALASI'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'bg-white text-rose-700 border border-rose-200 hover:bg-rose-50'
+              }`}
+            >
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>Terkendala ({metrics.eskalasi.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('OVERDUE')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                activeTab === 'OVERDUE'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              Terlambat ({metrics.terlambat.length})
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="py-12 text-center space-y-2">
+              <div className="w-8 h-8 border-3 border-[#0f5c43] border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs font-bold text-slate-400">Memuat tugas prioritas...</p>
+            </div>
+          ) : highPriorityTickets.length === 0 ? (
+            <div className="py-12 px-4 text-center space-y-2">
+              <div className="w-11 h-11 bg-emerald-50 text-[#0f5c43] rounded-2xl flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-bold text-slate-800">Tidak Ada Tugas Mendesak</p>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Tidak ada tugas dengan urgensi tinggi, kendala, maupun keterlambatan pada filter ini.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider bg-slate-50/40">
+                    <th className="py-3 px-5">Tiket & Judul</th>
+                    <th className="py-3 px-3">Divisi</th>
+                    <th className="py-3 px-3">Batas Waktu</th>
+                    <th className="py-3 px-3">Urgensi</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-5 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {highPriorityTickets.slice(0, 7).map((ticket) => {
+                    const st = getEffectiveStatus(ticket);
+                    const statusBadge = getStatusBadge(st);
+                    const prioBadge = getPriorityBadge(ticket.prioritas);
+                    const dl = formatDeadline(ticket.deadline);
+                    const prefix = ticket.jenisTiket === 'LAPORAN' ? 'L' : 'T';
+
+                    return (
+                      <tr
+                        key={ticket.id}
+                        onClick={() => handleOpenTicket(ticket)}
+                        className="hover:bg-slate-50/90 cursor-pointer transition group"
+                      >
+                        <td className="py-3 px-5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-extrabold text-[#0f5c43]">
+                              #{prefix}-{String(ticket.id).padStart(3, '0')}
+                            </span>
+                            <span className="font-bold text-slate-900 group-hover:text-[#0f5c43] transition line-clamp-1">
+                              {ticket.judul}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                            Pelaksana: {ticket.pelaksana?.nama || 'Belum ditunjuk'}
+                          </p>
+                        </td>
+
+                        <td className="py-3 px-3 whitespace-nowrap font-medium text-slate-700">
+                          {ticket.divisi?.nama || '-'}
+                        </td>
+
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <span
+                            className={
+                              dl.isPast
+                                ? 'font-bold text-rose-600'
+                                : 'font-medium text-slate-600'
+                            }
+                          >
+                            {dl.formatted}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-0.5 rounded-md border text-[10px] font-extrabold uppercase ${prioBadge.badge}`}
+                          >
+                            {prioBadge.label}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <span
+                            className={`px-2.5 py-1 rounded-full border text-[10px] font-extrabold uppercase ${statusBadge.style}`}
+                          >
+                            {statusBadge.label}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-5 text-right whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-[#0f5c43] group-hover:underline">
+                            <span>Tinjau</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Footer Tabel */}
+          <div className="px-5 py-3 bg-slate-50/70 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <span className="text-slate-500">
+              Menampilkan {Math.min(highPriorityTickets.length, 7)} dari{' '}
+              <strong className="text-slate-700">{highPriorityTickets.length}</strong> tugas
+              prioritas.
+            </span>
+            <button
+              type="button"
+              onClick={() => navigate('/semua-tugas')}
+              className="inline-flex items-center gap-1.5 font-bold text-[#0f5c43] hover:underline self-start sm:self-auto"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Lihat Seluruh {metrics.aktif.length} Tiket Aktif RS</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. BAGIAN BAWAH: RINGKASAN KINERJA & BEBAN KERJA LINTAS DIVISI */}
       <section className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
         <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
@@ -585,7 +902,7 @@ export default function Dashboard() {
               <span>Kinerja & Beban Kerja Lintas Divisi</span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Klik salah satu divisi untuk memfilter daftar perhatian eksekutif di bawah.
+              Klik salah satu divisi untuk memfilter daftar pencapaian pimpinan dan tugas prioritas tinggi di atas.
             </p>
           </div>
           {selectedDivisi !== 'SEMUA' && (
@@ -606,7 +923,7 @@ export default function Dashboard() {
                 <th className="py-3 px-6">Unit / Divisi</th>
                 <th className="py-3 px-4 text-center">Aktif</th>
                 <th className="py-3 px-4 text-center">Selesai</th>
-                <th className="py-3 px-4 text-center">Eskalasi</th>
+                <th className="py-3 px-4 text-center">Terkendala</th>
                 <th className="py-3 px-4 text-center">Terlambat SLA</th>
                 <th className="py-3 px-6 w-48">Tingkat Tuntas</th>
               </tr>
@@ -667,239 +984,6 @@ export default function Dashboard() {
               })}
             </tbody>
           </table>
-        </div>
-      </section>
-
-      {/* 5. TABEL PADAT: PERLU PERHATIAN EKSEKUTIF */}
-      <section className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-[#f47a45]" />
-              <span>Perlu Perhatian Eksekutif</span>
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                {executiveWatchlist.length}
-              </span>
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Fokus pada tiket eskalasi pimpinan, arahan langsung Direktur, prioritas tinggi, dan keterlambatan SLA.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-            {/* Filter Lingkup Divisi */}
-            <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
-              <Building2 className="w-4 h-4 text-[#0f5c43] shrink-0" />
-              <select
-                value={selectedDivisi}
-                onChange={(e) => setSelectedDivisi(e.target.value)}
-                className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer pr-2"
-              >
-                <option value="SEMUA">Semua Divisi</option>
-                {daftarDivisi.map((div) => (
-                  <option key={div} value={div}>
-                    {div}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Input Pencarian */}
-            <div className="relative w-full sm:w-60">
-              <input
-                type="text"
-                placeholder="Cari tiket, divisi, pelaksana..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-10 pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0f5c43] focus:bg-white transition"
-              />
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
-            </div>
-          </div>
-        </div>
-
-        {/* Tab Filter Eksekutif */}
-        <div className="px-5 py-3 bg-slate-50/70 border-b border-slate-100 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('PRIORITY_ATTENTION')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
-              activeTab === 'PRIORITY_ATTENTION'
-                ? 'bg-[#0f5c43] text-white shadow-xs'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            Semua Perhatian Utama
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('ESKALASI')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-              activeTab === 'ESKALASI'
-                ? 'bg-rose-600 text-white shadow-xs'
-                : 'bg-white text-rose-700 border border-rose-200 hover:bg-rose-50'
-            }`}
-          >
-            <AlertCircle className="w-3.5 h-3.5" />
-            <span>Eskalasi Pimpinan ({metrics.eskalasi.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('ARAHAN_SAYA')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
-              activeTab === 'ARAHAN_SAYA'
-                ? 'bg-[#0f5c43] text-white shadow-xs'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            Arahan Saya ({metrics.arahanSaya.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('OVERDUE')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
-              activeTab === 'OVERDUE'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            Terlambat SLA ({metrics.terlambat.length})
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="py-12 text-center space-y-2">
-            <div className="w-8 h-8 border-3 border-[#0f5c43] border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-xs font-bold text-slate-400">Memuat daftar pengawasan...</p>
-          </div>
-        ) : executiveWatchlist.length === 0 ? (
-          <div className="py-12 px-4 text-center space-y-2">
-            <div className="w-11 h-11 bg-emerald-50 text-[#0f5c43] rounded-2xl flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <p className="text-sm font-bold text-slate-800">Tidak Ada Tiket Mendesak</p>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              Tidak ditemukan eskalasi, keterlambatan SLA, maupun tiket prioritas tinggi pada filter ini.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider bg-slate-50/40">
-                  <th className="py-3.5 px-6">Tiket & Judul</th>
-                  <th className="py-3.5 px-4">Divisi Tujuan</th>
-                  <th className="py-3.5 px-4">Pelaksana</th>
-                  <th className="py-3.5 px-4">Batas Waktu</th>
-                  <th className="py-3.5 px-4">Prioritas</th>
-                  <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-6 text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
-                {executiveWatchlist.slice(0, 8).map((ticket) => {
-                  const st = getEffectiveStatus(ticket);
-                  const statusBadge = getStatusBadge(st);
-                  const prioBadge = getPriorityBadge(ticket.prioritas);
-                  const dl = formatDeadline(ticket.deadline);
-                  const prefix = ticket.jenisTiket === 'LAPORAN' ? 'L' : 'T';
-
-                  return (
-                    <tr
-                      key={ticket.id}
-                      onClick={() => handleOpenTicket(ticket)}
-                      className="hover:bg-slate-50/90 cursor-pointer transition group"
-                    >
-                      <td className="py-3.5 px-6">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-extrabold text-[#0f5c43]">
-                            #{prefix}-{String(ticket.id).padStart(3, '0')}
-                          </span>
-                          <span className="font-bold text-slate-900 group-hover:text-[#0f5c43] transition line-clamp-1">
-                            {ticket.judul}
-                          </span>
-                        </div>
-                        {ticket.lokasi && (
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            Lokasi: {ticket.lokasi}
-                          </p>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-4 whitespace-nowrap font-semibold text-slate-700">
-                        {ticket.divisi?.nama || '-'}
-                      </td>
-
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        {ticket.pelaksana?.nama ? (
-                          <span className="font-medium text-slate-700">
-                            {ticket.pelaksana.nama}
-                          </span>
-                        ) : (
-                          <span className="italic text-amber-600 font-semibold">
-                            Belum ditunjuk
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span
-                          className={
-                            dl.isPast
-                              ? 'font-bold text-rose-600'
-                              : 'font-medium text-slate-600'
-                          }
-                        >
-                          {dl.formatted}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-0.5 rounded-md border text-[10px] font-extrabold uppercase ${prioBadge.badge}`}
-                        >
-                          {prioBadge.label}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span
-                          className={`px-2.5 py-1 rounded-full border text-[10px] font-extrabold uppercase ${statusBadge.style}`}
-                        >
-                          {statusBadge.label}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-6 text-right whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-[#0f5c43] group-hover:underline">
-                          <span>Tinjau</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Footer Tabel menuju Semua Tugas RS */}
-        <div className="px-6 py-3.5 bg-slate-50/70 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-          <span className="text-slate-500">
-            Menampilkan {Math.min(executiveWatchlist.length, 8)} dari{' '}
-            <strong className="text-slate-700">{executiveWatchlist.length}</strong> tiket perhatian
-            eksekutif.
-          </span>
-          <button
-            type="button"
-            onClick={() => navigate('/semua-tugas')}
-            className="inline-flex items-center gap-1.5 font-bold text-[#0f5c43] hover:underline self-start sm:self-auto"
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Lihat Seluruh {metrics.aktif.length} Tiket Aktif RS</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
         </div>
       </section>
     </div>

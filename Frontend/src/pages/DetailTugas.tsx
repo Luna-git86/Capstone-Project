@@ -1,10 +1,11 @@
 // Frontend/src/pages/DetailTugas.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowUpRight,
+  CalendarClock,
   Check,
   CheckCircle2,
   MapPin,
@@ -88,6 +89,12 @@ const compressImageToBase64 = (file: File): Promise<string> => {
   });
 };
 
+const getMinDateTimeLocal = () => {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 16);
+};
+
 export default function DetailTugas() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -107,6 +114,8 @@ export default function DetailTugas() {
   const [kendalaText, setKendalaText] = useState('');
   const [evaluasiNote, setEvaluasiNote] = useState('');
   const [tindakLanjutKendalaNote, setTindakLanjutKendalaNote] = useState('');
+  const [perpanjangDeadline, setPerpanjangDeadline] = useState(false);
+  const [newDeadline, setNewDeadline] = useState('');
   const [isKerjakanSendiri, setIsKerjakanSendiri] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -140,6 +149,24 @@ export default function DetailTugas() {
       return () => clearInterval(intervalId);
     }
   }, [id]);
+
+  // Ambil seluruh jejak catatan eskalasi berurutan sejak kendala pertama kali dilaporkan
+  const escalationChainLogs = useMemo(() => {
+    if (!ticket?.logs || ticket.logs.length === 0) return [];
+    const sorted = [...ticket.logs].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    let lastHoldStartIndex = -1;
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (sorted[i].statusBaru === 'HOLD_ESKALASI') {
+        lastHoldStartIndex = i;
+      } else if (lastHoldStartIndex !== -1) {
+        break;
+      }
+    }
+    if (lastHoldStartIndex === -1) return [];
+    return sorted.slice(lastHoldStartIndex).filter((log) => log.statusBaru === 'HOLD_ESKALASI');
+  }, [ticket?.logs]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -264,20 +291,45 @@ export default function DetailTugas() {
         `Mohon tulis alasan eskalasi masalah ke ${isKadiv ? 'Direktur' : 'Kadiv'}.`
       );
     }
+
+    if (perpanjangDeadline) {
+      if (!newDeadline) {
+        return alert('Mohon pilih tanggal dan waktu perpanjangan batas waktu (SLA).');
+      }
+      if (new Date(newDeadline) < new Date()) {
+        return alert('Batas waktu baru tidak boleh lebih awal dari waktu saat ini.');
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const targetEskalasi = isKadiv ? 'DIREKTUR' : 'KADIV';
       const statusTujuan = aksi === 'LANJUTKAN' ? 'DIPROSES' : 'HOLD_ESKALASI';
+      const formattedNewDeadline =
+        perpanjangDeadline && newDeadline
+          ? new Intl.DateTimeFormat('id-ID', {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+            }).format(new Date(newDeadline))
+          : null;
+
+      const infoPerpanjangan = formattedNewDeadline
+        ? ` (Batas waktu diperpanjang hingga ${formattedNewDeadline})`
+        : '';
+
       const catatanFinal =
         aksi === 'LANJUTKAN'
           ? tindakLanjutKendalaNote.trim()
-            ? `[Arahan ${userRole}]: ${tindakLanjutKendalaNote.trim()}`
-            : `[Arahan ${userRole}]: Kendala telah ditindaklanjuti, silakan lanjutkan pengerjaan tugas.`
-          : `[Eskalasi ${userRole} ke ${targetEskalasi}]: ${tindakLanjutKendalaNote.trim()}`;
+            ? `[Arahan ${userRole}]: ${tindakLanjutKendalaNote.trim()}${infoPerpanjangan}`
+            : `[Arahan ${userRole}]: Kendala telah ditindaklanjuti, silakan lanjutkan pengerjaan tugas.${infoPerpanjangan}`
+          : `[Eskalasi ${userRole} ke ${targetEskalasi}]: ${tindakLanjutKendalaNote.trim()}${infoPerpanjangan}`;
 
       await api.patch(`/tickets/${id}/status`, {
         status: statusTujuan,
         catatanRevisi: catatanFinal,
+        ...(perpanjangDeadline && newDeadline
+          ? { deadline: new Date(newDeadline).toISOString() }
+          : {}),
       });
 
       alert(
@@ -286,6 +338,8 @@ export default function DetailTugas() {
           : `Masalah berhasil dieskalasikan ke ${isKadiv ? 'Direktur' : 'Kadiv'}.`
       );
       setTindakLanjutKendalaNote('');
+      setPerpanjangDeadline(false);
+      setNewDeadline('');
       await fetchDetail(true);
     } catch (error: any) {
       alert(error.response?.data?.message || 'Gagal memproses tindak lanjut kendala.');
@@ -356,6 +410,36 @@ export default function DetailTugas() {
         String(ticket.pelaksana.id) === String(currentUserId)
     ) ||
     (!ticket.pelaksana && isKadiv && ticket.pembuat?.role === 'DIREKTUR');
+
+  const isCreatorOfTicket = Boolean(
+    currentUserId && ticket.pembuat?.id && String(ticket.pembuat.id) === String(currentUserId)
+  );
+
+  const canEvaluate =
+    ticket.status === 'MENUNGGU_VALIDASI' &&
+    isAtasan &&
+    isCreatorOfTicket &&
+    !isAssignedToCurrentUser;
+
+  const isEscalatedToKadiv = Boolean(
+    ticket.catatanRevisi?.includes('[Eskalasi KOORDINATOR ke KADIV]')
+  );
+  const isEscalatedToDirektur = Boolean(
+    ticket.catatanRevisi?.includes('[Eskalasi KADIV ke DIREKTUR]')
+  );
+
+  const canHandleEscalation =
+    ticket.status === 'HOLD_ESKALASI' &&
+    !isAssignedToCurrentUser &&
+    ((isKoor && !isEscalatedToKadiv && !isEscalatedToDirektur) ||
+      (isKadiv &&
+        (isEscalatedToKadiv ||
+          (!isEscalatedToDirektur && ticket.pembuat?.role !== 'KOORDINATOR'))) ||
+      (userRole === 'DIREKTUR' &&
+        (isEscalatedToDirektur ||
+          (!isEscalatedToKadiv &&
+            ticket.pembuat?.role !== 'KOORDINATOR' &&
+            ticket.pembuat?.role !== 'KADIV'))));
 
   const canMulaiKerjakan =
     isAssignedToCurrentUser &&
@@ -528,15 +612,44 @@ export default function DetailTugas() {
                       : 'Catatan Arahan / Revisi Terbaru'}
                   </h3>
                 </div>
-                <p
-                  className={`text-sm font-medium bg-white/90 p-4 rounded-2xl border leading-relaxed whitespace-pre-wrap ${
-                    ticket.status === 'HOLD_ESKALASI'
-                      ? 'text-rose-950 border-rose-200/80'
-                      : 'text-amber-950 border-amber-200/80'
-                  }`}
-                >
-                  {ticket.catatanRevisi || 'Pelaksana melaporkan kendala tanpa rincian tambahan.'}
-                </p>
+
+                {ticket.status === 'HOLD_ESKALASI' && escalationChainLogs.length > 0 ? (
+                  <div className="space-y-2">
+                    {escalationChainLogs.map((log, idx) => (
+                      <div
+                        key={log.id}
+                        className="bg-white/90 p-3.5 rounded-2xl border border-rose-200/80 space-y-1"
+                      >
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="font-extrabold text-rose-800">
+                            {idx === 0
+                              ? `1. Laporan Awal (${log.user.nama} - ${log.user.role})`
+                              : `${idx + 1}. Tindak Lanjut (${log.user.nama} - ${log.user.role})`}
+                          </span>
+                          <span className="text-slate-400 font-medium">
+                            {new Intl.DateTimeFormat('id-ID', {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                            }).format(new Date(log.createdAt))}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-rose-950 leading-relaxed whitespace-pre-wrap">
+                          {log.catatan || 'Melaporkan kendala tanpa rincian tambahan.'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p
+                    className={`text-sm font-medium bg-white/90 p-4 rounded-2xl border leading-relaxed whitespace-pre-wrap ${
+                      ticket.status === 'HOLD_ESKALASI'
+                        ? 'text-rose-950 border-rose-200/80'
+                        : 'text-amber-950 border-amber-200/80'
+                    }`}
+                  >
+                    {ticket.catatanRevisi || 'Pelaksana melaporkan kendala tanpa rincian tambahan.'}
+                  </p>
+                )}
               </div>
             )}
 
@@ -895,7 +1008,7 @@ export default function DetailTugas() {
             )}
 
             {/* B. ATASAN: EVALUASI VALIDASI */}
-            {isAtasan && ticket.status === 'MENUNGGU_VALIDASI' && (
+            {canEvaluate && (
               <div className="bg-clinical-surface p-5 rounded-3xl border-2 border-indigo-200 shadow-md space-y-4">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-ping" />
@@ -939,7 +1052,7 @@ export default function DetailTugas() {
             )}
 
             {/* B2. ATASAN: TINDAK LANJUT KENDALA / ESKALASI */}
-            {isAtasan && ticket.status === 'HOLD_ESKALASI' && (
+            {canHandleEscalation && (
               <div className="bg-clinical-surface p-5 rounded-3xl border-2 border-rose-200 shadow-md space-y-4">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping" />
@@ -965,6 +1078,40 @@ export default function DetailTugas() {
                   }
                   className="w-full p-3 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
+
+                {/* Opsi Perpanjangan Batas Waktu (Opsional) */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-clinical-border space-y-2.5">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={perpanjangDeadline}
+                      onChange={(e) => {
+                        setPerpanjangDeadline(e.target.checked);
+                        if (!e.target.checked) setNewDeadline('');
+                      }}
+                      className="w-4 h-4 rounded border-slate-300 text-brand-deep focus:ring-brand-deep cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-clinical-ink flex items-center gap-1.5">
+                      <CalendarClock className="w-3.5 h-3.5 text-brand-deep" />
+                      <span>Perpanjang Batas Waktu (Opsional)</span>
+                    </span>
+                  </label>
+
+                  {perpanjangDeadline && (
+                    <div className="space-y-1 pt-1">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase">
+                        Batas Waktu (SLA) Baru
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={newDeadline}
+                        min={getMinDateTimeLocal()}
+                        onChange={(e) => setNewDeadline(e.target.value)}
+                        className="w-full h-10 px-3 bg-white border border-clinical-border rounded-xl text-xs font-semibold text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
+                      />
+                    </div>
+                  )}
+                </div>
 
                 <div className="space-y-2 pt-1">
                   <button
