@@ -4,9 +4,11 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   Calendar,
   CheckCircle2,
+  FileText,
   FolderOpen,
   Image as ImageIcon,
   MapPin,
+  Plus,
   Send,
   Trash2,
   Users,
@@ -27,20 +29,6 @@ interface Pelaksana {
   role: string;
   divisiId: number | null;
   divisi?: { id: number; nama: string };
-}
-
-interface IncomingTicket {
-  id: number;
-  judul: string;
-  lokasi: string | null;
-  deskripsi: string;
-  prioritas: 'LOW' | 'MEDIUM' | 'HIGH';
-  status: string;
-  deadline?: string | null;
-  divisiId?: number | null;
-  divisi?: { id: number; nama: string } | null;
-  pembuat?: { id?: number; nama: string; role: string };
-  pelaksana?: { id?: number; nama: string; role: string } | null;
 }
 
 const compressImageToBase64 = (file: File): Promise<string> => {
@@ -66,10 +54,25 @@ const compressImageToBase64 = (file: File): Promise<string> => {
   });
 };
 
+const readPdfToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 export default function TambahTugas() {
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const successAlertRef = useRef<HTMLDivElement>(null);
+  const judulInputRef = useRef<HTMLInputElement>(null);
+  const lokasiInputRef = useRef<HTMLInputElement>(null);
+  const deskripsiInputRef = useRef<HTMLTextAreaElement>(null);
+  const deadlineInputRef = useRef<HTMLInputElement>(null);
+  const pelaksanaSectionRef = useRef<HTMLDivElement>(null);
   const [searchParams] = useSearchParams();
 
   const paramParentId = searchParams.get('parentId');
@@ -83,9 +86,6 @@ export default function TambahTugas() {
   const userRole = getAuthRole() || 'KOORDINATOR';
   const userDivisiId = getAuthDivisiId() || '';
   const currentUserId = getAuthUserId();
-
-  const [incomingTickets, setIncomingTickets] = useState<IncomingTicket[]>([]);
-  const [selectedTicketId, setSelectedTicketId] = useState<string>(String(sourceTicketId));
 
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
   const [allStaffList, setAllStaffList] = useState<Pelaksana[]>([]);
@@ -110,6 +110,13 @@ export default function TambahTugas() {
   const [staffSearch, setStaffSearch] = useState('');
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [deadlineError, setDeadlineError] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<{
+    judul?: string;
+    lokasi?: string;
+    deskripsi?: string;
+    pelaksana?: string;
+  }>({});
   const [successCount, setSuccessCount] = useState<number>(0);
 
   const getCurrentLocalDateTime = () => {
@@ -127,43 +134,26 @@ export default function TambahTugas() {
     return () => clearInterval(timer);
   }, []);
 
-  const toDateTimeLocalInput = (dateStr: string | null | undefined) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    if (Number.isNaN(d.getTime())) return '';
-    const tzOffset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
-  };
-
   useEffect(() => {
     const loadInitialData = async () => {
-      try {
-        const ticketRes = await api.get('/tickets');
-        const allTickets: IncomingTicket[] = Array.isArray(ticketRes.data)
-          ? ticketRes.data
-          : ticketRes.data?.data || [];
-
-        const delegatableTickets = allTickets.filter((t) => {
-          if (t.status === 'MENUNGGU_TRIASE') return true;
-          if (userRole === 'KADIV') {
-            const isAssignedToKadiv =
-              !t.pelaksana ||
-              t.pelaksana.role === 'KADIV' ||
-              (currentUserId && String(t.pelaksana.id) === String(currentUserId));
-            return t.pembuat?.role === 'DIREKTUR' && isAssignedToKadiv && t.status !== 'SELESAI';
+      if (sourceTicketId && !location.state?.lokasi) {
+        try {
+          const ticketRes = await api.get(`/tickets/${sourceTicketId}`);
+          const sourceFromList = ticketRes.data?.data || ticketRes.data;
+          if (sourceFromList) {
+            setFormData((prev) => ({
+              ...prev,
+              judul: prev.judul || sourceFromList.judul || '',
+              lokasi: prev.lokasi || sourceFromList.lokasi || '',
+              deskripsi: prev.deskripsi || sourceFromList.deskripsi || '',
+              divisiId:
+                prev.divisiId ||
+                (sourceFromList.divisiId ? String(sourceFromList.divisiId) : ''),
+            }));
           }
-          if (userRole === 'KOORDINATOR') {
-            const isAssignedToKoor =
-              (currentUserId && String(t.pelaksana?.id) === String(currentUserId)) ||
-              t.pelaksana?.role === 'KOORDINATOR';
-            const isDirective = ['KADIV', 'DIREKTUR'].includes(t.pembuat?.role || '');
-            return isDirective && isAssignedToKoor && t.status !== 'SELESAI';
-          }
-          return false;
-        });
-        setIncomingTickets(delegatableTickets);
-      } catch (e) {
-        console.warn('Gagal memuat tiket masuk:', e);
+        } catch (e) {
+          console.warn('Gagal memuat tiket sumber:', e);
+        }
       }
 
       try {
@@ -194,7 +184,7 @@ export default function TambahTugas() {
     };
 
     loadInitialData();
-  }, [userRole, currentUserId]);
+  }, [userRole, currentUserId, sourceTicketId]);
 
   useEffect(() => {
     if (!formData.divisiId) {
@@ -215,64 +205,56 @@ export default function TambahTugas() {
     fetchPelaksanaByDivisi();
   }, [formData.divisiId]);
 
-  const handleSelectIncomingTicket = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    setSelectedTicketId(val);
-    if (!val) {
-      setFormData((prev) => ({
-        ...prev,
-        judul: '',
-        lokasi: '',
-        deskripsi: '',
-        fotoInstruksi: '',
-      }));
-      setPreviewName('');
-      return;
-    }
-    const found = incomingTickets.find((t) => String(t.id) === val);
-    if (found) {
-      setFormData((prev) => ({
-        ...prev,
-        judul: found.judul,
-        lokasi: found.lokasi || '',
-        deskripsi: found.deskripsi,
-        prioritas: found.prioritas || 'MEDIUM',
-        divisiId: found.divisi?.id ? String(found.divisi.id) : prev.divisiId,
-        pelaksanaIds: [],
-        deadline: found.deadline ? toDateTimeLocalInput(found.deadline) : prev.deadline,
-      }));
-      setPreviewName('');
-    }
-  };
-
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    if (name === 'deadline' && value) {
+    if (name === 'judul' && value.trim()) {
+      setFieldErrors((prev) => ({ ...prev, judul: undefined }));
+    }
+    if (name === 'lokasi' && value.trim()) {
+      setFieldErrors((prev) => ({ ...prev, lokasi: undefined }));
+    }
+    if (name === 'deskripsi' && value.trim()) {
+      setFieldErrors((prev) => ({ ...prev, deskripsi: undefined }));
+    }
+    if (name === 'deadline') {
       const currentMin = getCurrentLocalDateTime();
       setMinDeadline(currentMin);
-      if (new Date(value).getTime() < new Date().getTime()) {
-        setError('Batas waktu target tidak boleh berada di masa lalu.');
-        setFormData((prev) => ({ ...prev, deadline: currentMin }));
-        return;
+      if (!value) {
+        setDeadlineError('Batas waktu target wajib diisi');
+      } else if (new Date(value).getTime() < new Date().getTime()) {
+        setDeadlineError('Batas waktu tidak boleh berada di masa lalu');
+      } else {
+        setDeadlineError('');
+        setError('');
       }
-      setError('');
     }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleFileProcess = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      alert('Mohon pilih file foto gambar (JPG/PNG).');
+    const isImage = file.type.startsWith('image/');
+    const isPdf = file.type === 'application/pdf';
+
+    if (!isImage && !isPdf) {
+      alert('Mohon pilih file foto (JPG/PNG) atau dokumen PDF.');
       return;
     }
+
+    if (isPdf && file.size > 5 * 1024 * 1024) {
+      alert('Ukuran file PDF maksimal 5 MB.');
+      return;
+    }
+
     try {
-      const base64Str = await compressImageToBase64(file);
+      const base64Str = isPdf
+        ? await readPdfToBase64(file)
+        : await compressImageToBase64(file);
       setFormData((prev) => ({ ...prev, fotoInstruksi: base64Str }));
       setPreviewName(file.name);
     } catch {
-      alert('Gagal memproses gambar foto.');
+      alert('Gagal memproses file lampiran.');
     }
   };
 
@@ -310,27 +292,76 @@ export default function TambahTugas() {
   const togglePelaksana = (staffId: string) => {
     setFormData((prev) => {
       const exists = prev.pelaksanaIds.includes(staffId);
+      const updated = exists
+        ? prev.pelaksanaIds.filter((id) => id !== staffId)
+        : [...prev.pelaksanaIds, staffId];
+      if (updated.length > 0) {
+        setFieldErrors((errPrev) => ({ ...errPrev, pelaksana: undefined }));
+      }
       return {
         ...prev,
-        pelaksanaIds: exists
-          ? prev.pelaksanaIds.filter((id) => id !== staffId)
-          : [...prev.pelaksanaIds, staffId],
+        pelaksanaIds: updated,
       };
     });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.pelaksanaIds.length === 0) {
-      setError('Wajib menunjuk minimal 1 staf pelaksana untuk tugas ini.');
-      return;
+
+    const nextFieldErrors: {
+      judul?: string;
+      lokasi?: string;
+      deskripsi?: string;
+      pelaksana?: string;
+    } = {};
+    let nextDeadlineError = '';
+
+    if (!formData.judul.trim()) {
+      nextFieldErrors.judul = 'Judul tugas wajib diisi';
+    }
+    if (!formData.lokasi.trim()) {
+      nextFieldErrors.lokasi = 'Lokasi / area wajib diisi';
+    }
+    if (!formData.deskripsi.trim()) {
+      nextFieldErrors.deskripsi = 'Instruksi detail pekerjaan wajib diisi';
     }
     if (!formData.deadline) {
-      setError('Wajib menentukan batas waktu (SLA deadline).');
-      return;
+      nextDeadlineError = 'Batas waktu target wajib diisi';
+    } else if (new Date(formData.deadline).getTime() < new Date().getTime()) {
+      nextDeadlineError = 'Batas waktu tidak boleh berada di masa lalu';
     }
-    if (new Date(formData.deadline).getTime() < new Date().getTime()) {
-      setError('Batas waktu target tidak boleh kurang dari waktu sekarang.');
+    if (formData.pelaksanaIds.length === 0) {
+      nextFieldErrors.pelaksana = 'Pilih minimal 1 staf pelaksana';
+    }
+
+    setFieldErrors(nextFieldErrors);
+    setDeadlineError(nextDeadlineError);
+
+    if (
+      nextFieldErrors.judul ||
+      nextFieldErrors.lokasi ||
+      nextFieldErrors.deskripsi ||
+      nextDeadlineError ||
+      nextFieldErrors.pelaksana ||
+      !formData.divisiId
+    ) {
+      setError('Mohon lengkapi semua kolom wajib yang ditandai merah sebelum menerbitkan tugas.');
+
+      if (nextFieldErrors.judul) {
+        judulInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        judulInputRef.current?.focus();
+      } else if (nextFieldErrors.lokasi) {
+        lokasiInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        lokasiInputRef.current?.focus();
+      } else if (nextFieldErrors.deskripsi) {
+        deskripsiInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        deskripsiInputRef.current?.focus();
+      } else if (nextDeadlineError) {
+        deadlineInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        deadlineInputRef.current?.focus();
+      } else if (nextFieldErrors.pelaksana) {
+        pelaksanaSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
 
@@ -342,10 +373,10 @@ export default function TambahTugas() {
       const promises = formData.pelaksanaIds.map((pelaksanaId) => {
         const payload: any = {
           tipe: 'BUAT_TUGAS',
-          ticketId: selectedTicketId ? Number(selectedTicketId) : undefined,
-          judul: formData.judul,
-          lokasi: formData.lokasi,
-          deskripsi: formData.deskripsi,
+          ticketId: sourceTicketId ? Number(sourceTicketId) : undefined,
+          judul: formData.judul.trim(),
+          lokasi: formData.lokasi.trim(),
+          deskripsi: formData.deskripsi.trim(),
           prioritas: formData.prioritas,
           divisiId: Number(formData.divisiId),
           pelaksanaId: Number(pelaksanaId),
@@ -363,10 +394,6 @@ export default function TambahTugas() {
       await Promise.all(promises);
       setSuccessCount(promises.length);
 
-      if (!sourceTicketId) {
-        setSelectedTicketId('');
-      }
-
       setFormData((prev) => ({
         ...prev,
         judul: '',
@@ -376,8 +403,13 @@ export default function TambahTugas() {
         deadline: '',
         fotoInstruksi: '',
       }));
+      setFieldErrors({});
+      setDeadlineError('');
       setPreviewName('');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => {
+        successAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        successAlertRef.current?.focus();
+      }, 100);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Terjadi kesalahan saat menerbitkan tugas.');
     } finally {
@@ -421,7 +453,7 @@ export default function TambahTugas() {
           <p className="text-xs sm:text-sm text-slate-500 mt-1 leading-relaxed">
             {sourceTicketId
               ? `Anda sedang menugaskan staf untuk menangani laporan / tiket #T-${String(sourceTicketId).padStart(3, '0')}.`
-              : 'Delegasikan instruksi operasional, target SLA, dan tunjuk pelaksana lapangan.'}
+              : 'Delegasikan instruksi operasional, target batas waktu, dan tunjuk pelaksana lapangan.'}
           </p>
         </div>
       </div>
@@ -451,7 +483,11 @@ export default function TambahTugas() {
 
         {/* Sukses Alert */}
         {successCount > 0 && (
-          <div className="p-6 bg-brand-deep text-white rounded-3xl shadow-lg shadow-brand-deep/20 space-y-3">
+          <div
+            ref={successAlertRef}
+            tabIndex={-1}
+            className="p-6 bg-brand-deep text-white rounded-3xl shadow-lg shadow-brand-deep/20 ring-4 ring-brand-mint/50 transition-all space-y-4 focus:outline-none"
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-6 h-6 text-white" />
@@ -463,13 +499,31 @@ export default function TambahTugas() {
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => navigate('/semua-tugas')}
-              className="h-11 px-5 bg-white text-brand-deep font-bold text-xs rounded-2xl shadow-sm hover:bg-slate-100 active:scale-95 transition"
-            >
-              Lihat di Daftar Tugas →
-            </button>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => navigate('/semua-tugas')}
+                className="h-11 px-5 bg-white text-brand-deep font-bold text-xs rounded-2xl shadow-sm hover:bg-slate-100 active:scale-95 transition"
+              >
+                Lihat di Daftar Tugas →
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSuccessCount(0);
+                  setError('');
+                  setDeadlineError('');
+                  setFieldErrors({});
+                  if (sourceTicketId) {
+                    navigate('/tambah-tugas', { replace: true });
+                  }
+                }}
+                className="h-11 px-5 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl active:scale-95 transition inline-flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Buat Tugas Baru</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -480,7 +534,7 @@ export default function TambahTugas() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="space-y-6">
           {/* STEP 1: Info Utama & Lokasi */}
           <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
             <div className="flex items-center justify-between">
@@ -493,82 +547,90 @@ export default function TambahTugas() {
               <span className="text-[11px] font-semibold text-slate-400">Tahap 1</span>
             </div>
 
-            {['KADIV', 'KOORDINATOR'].includes(userRole) && !sourceTicketId && (
-              <div className="space-y-1.5 p-3.5 bg-slate-50 border border-clinical-border rounded-2xl">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                  Tautkan dengan Keluhan / Arahan Masuk (Opsional)
-                </label>
-                <select
-                  value={selectedTicketId}
-                  onChange={handleSelectIncomingTicket}
-                  className="w-full h-11 px-3 bg-white border border-clinical-border rounded-xl text-xs sm:text-sm font-semibold text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
-                >
-                  <option value="">-- Buat Penugasan Baru (Mandiri) --</option>
-                  {incomingTickets.map((t) => (
-                    <option key={t.id} value={String(t.id)}>
-                      [#T-{String(t.id).padStart(3, '0')}] {t.judul}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-clinical-ink">
-                Judul Tugas / Arahan *
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-bold text-clinical-ink">
+                  Judul Tugas / Arahan <span className="text-rose-600">*</span>
+                </label>
+                {fieldErrors.judul && (
+                  <span className="text-xs font-bold text-rose-600">{fieldErrors.judul}</span>
+                )}
+              </div>
               <input
+                ref={judulInputRef}
                 type="text"
                 name="judul"
                 value={formData.judul}
                 onChange={handleChange}
-                required
                 placeholder="Contoh: Perbaikan & Cuci AC Ruang Nifas"
-                className="w-full h-12 px-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
+                className={`w-full h-12 px-4 rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none transition ${
+                  fieldErrors.judul
+                    ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
+                    : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-brand-deep focus:bg-white'
+                }`}
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-clinical-ink">
-                Lokasi / Area
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-bold text-clinical-ink">
+                  Lokasi / Area <span className="text-rose-600">*</span>
+                </label>
+                {fieldErrors.lokasi && (
+                  <span className="text-xs font-bold text-rose-600">{fieldErrors.lokasi}</span>
+                )}
+              </div>
               <div className="relative">
                 <input
+                  ref={lokasiInputRef}
                   type="text"
                   name="lokasi"
                   value={formData.lokasi}
                   onChange={handleChange}
                   placeholder="Contoh: Gedung Utama Lt. 2"
-                  className="w-full h-12 pl-11 pr-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
+                  className={`w-full h-12 pl-11 pr-4 rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none transition ${
+                    fieldErrors.lokasi
+                      ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
+                      : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-brand-deep focus:bg-white'
+                  }`}
                 />
                 <MapPin className="w-4 h-4 text-slate-400 absolute left-4 top-4" />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-clinical-ink">
-                Instruksi Detail Pekerjaan *
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-bold text-clinical-ink">
+                  Instruksi Detail Pekerjaan <span className="text-rose-600">*</span>
+                </label>
+                {fieldErrors.deskripsi && (
+                  <span className="text-xs font-bold text-rose-600">{fieldErrors.deskripsi}</span>
+                )}
+              </div>
               <textarea
+                ref={deskripsiInputRef}
                 name="deskripsi"
                 rows={3}
                 value={formData.deskripsi}
                 onChange={handleChange}
-                required
                 placeholder="Tuliskan standar hasil kerja yang Anda harapkan..."
-                className="w-full p-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition leading-relaxed"
+                className={`w-full p-4 rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none transition leading-relaxed ${
+                  fieldErrors.deskripsi
+                    ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
+                    : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-brand-deep focus:bg-white'
+                }`}
               />
             </div>
           </div>
 
-          {/* STEP 2: Prioritas SLA & Batas Waktu */}
+          {/* STEP 2: Prioritas & Batas Waktu */}
           <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
                   2
                 </span>
-                <span>Tingkat Prioritas & Batas Waktu (SLA) *</span>
+                <span>Tingkat Prioritas & Batas Waktu *</span>
               </label>
               <span className="text-[11px] font-semibold text-slate-400">Target Waktu</span>
             </div>
@@ -625,29 +687,29 @@ export default function TambahTugas() {
             </div>
 
             <div className="space-y-1.5 pt-2">
-              <label className="block text-xs font-bold text-clinical-ink">
-                Batas Waktu Target *
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-bold text-clinical-ink">
+                  Batas Waktu Target <span className="text-rose-600">*</span>
+                </label>
+                {deadlineError && (
+                  <span className="text-xs font-bold text-rose-600">
+                    {deadlineError}
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <input
+                  ref={deadlineInputRef}
                   type="datetime-local"
                   name="deadline"
                   min={minDeadline}
                   value={formData.deadline}
                   onChange={handleChange}
-                  onBlur={() => {
-                    if (
-                      formData.deadline &&
-                      new Date(formData.deadline).getTime() < new Date().getTime()
-                    ) {
-                      const currentMin = getCurrentLocalDateTime();
-                      setMinDeadline(currentMin);
-                      setFormData((prev) => ({ ...prev, deadline: currentMin }));
-                      setError('Batas waktu target tidak boleh berada di masa lalu.');
-                    }
-                  }}
-                  required
-                  className="w-full h-12 pl-11 pr-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs sm:text-sm font-bold text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep focus:bg-white transition"
+                  className={`w-full h-12 pl-11 pr-4 rounded-2xl text-xs sm:text-sm font-bold text-clinical-ink focus:outline-none transition ${
+                    deadlineError
+                      ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
+                      : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-brand-deep focus:bg-white'
+                  }`}
                 />
                 <Calendar className="w-4 h-4 text-slate-400 absolute left-4 top-4" />
               </div>
@@ -655,17 +717,31 @@ export default function TambahTugas() {
           </div>
 
           {/* STEP 3: Multi-Delegasi Tim Pelaksana */}
-          <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
+          <div
+            ref={pelaksanaSectionRef}
+            className={`bg-clinical-surface p-5 sm:p-7 rounded-3xl shadow-xs space-y-4 transition ${
+              fieldErrors.pelaksana
+                ? 'border-2 border-rose-500 ring-2 ring-rose-500/15'
+                : 'border border-clinical-border'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
               <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
                   3
                 </span>
                 <span>Pemilihan Tim Pelaksana (Multi-Select) *</span>
               </label>
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-brand-deep">
-                {formData.pelaksanaIds.length} Terpilih
-              </span>
+              <div className="flex items-center gap-2">
+                {fieldErrors.pelaksana && (
+                  <span className="text-xs font-bold text-rose-600">
+                    {fieldErrors.pelaksana}
+                  </span>
+                )}
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-brand-deep">
+                  {formData.pelaksanaIds.length} Terpilih
+                </span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -784,16 +860,16 @@ export default function TambahTugas() {
             </div>
           </div>
 
-          {/* STEP 4: Foto Referensi / Instruksi */}
+          {/* STEP 4: Lampiran Referensi / Instruksi (Gambar atau PDF) */}
           <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
                   4
                 </span>
-                <span>Lampiran Foto Referensi / Instruksi (Opsional)</span>
+                <span>Lampiran Referensi / Instruksi (Opsional)</span>
               </label>
-              <span className="text-[11px] font-semibold text-slate-400">Gambar</span>
+              <span className="text-[11px] font-semibold text-slate-400">Gambar / PDF</span>
             </div>
 
             <div
@@ -808,19 +884,37 @@ export default function TambahTugas() {
             >
               {formData.fotoInstruksi ? (
                 <div className="w-full max-w-sm space-y-3">
-                  <img
-                    src={formData.fotoInstruksi}
-                    alt="Preview Instruksi"
-                    className="h-44 w-full object-cover rounded-2xl border border-clinical-border shadow-xs"
-                  />
-                  <p className="text-xs font-bold text-clinical-ink truncate px-2">{previewName}</p>
+                  {formData.fotoInstruksi.startsWith('data:application/pdf') ? (
+                    <div className="p-4 bg-white rounded-2xl border border-clinical-border shadow-xs flex items-center gap-3 text-left">
+                      <div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-extrabold text-clinical-ink truncate">
+                          {previewName || 'Dokumen_Referensi.pdf'}
+                        </p>
+                        <p className="text-[11px] text-slate-400">Dokumen PDF Terlampir</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <img
+                        src={formData.fotoInstruksi}
+                        alt="Preview Instruksi"
+                        className="h-44 w-full object-cover rounded-2xl border border-clinical-border shadow-xs"
+                      />
+                      <p className="text-xs font-bold text-clinical-ink truncate px-2">
+                        {previewName}
+                      </p>
+                    </>
+                  )}
                   <button
                     type="button"
                     onClick={hapusFoto}
                     className="inline-flex items-center gap-1.5 h-9 px-4 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Hapus & Ganti Foto</span>
+                    <span>Hapus & Ganti File</span>
                   </button>
                 </div>
               ) : (
@@ -829,8 +923,12 @@ export default function TambahTugas() {
                     <ImageIcon className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-clinical-ink">Tarik & Lepas foto referensi ke sini</p>
-                    <p className="text-xs text-slate-400 mt-0.5">atau klik tombol di bawah untuk memilih file</p>
+                    <p className="text-sm font-bold text-clinical-ink">
+                      Tarik & Lepas foto atau file PDF ke sini
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Format JPG, PNG, atau PDF (Maks. 5 MB)
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -844,7 +942,7 @@ export default function TambahTugas() {
                     type="file"
                     ref={fileInputRef}
                     onChange={onFileInputChange}
-                    accept="image/png, image/jpeg, image/jpg"
+                    accept="image/png, image/jpeg, image/jpg, application/pdf"
                     className="hidden"
                   />
                 </div>
@@ -865,7 +963,7 @@ export default function TambahTugas() {
 
               <button
                 type="submit"
-                disabled={submitting || formData.pelaksanaIds.length === 0}
+                disabled={submitting}
                 className="flex-1 sm:flex-initial h-12 px-8 bg-brand-orange hover:bg-brand-orange/90 active:scale-98 disabled:opacity-50 text-white font-extrabold text-sm rounded-2xl shadow-md shadow-brand-orange/20 transition flex items-center justify-center gap-2"
               >
                 {submitting ? (

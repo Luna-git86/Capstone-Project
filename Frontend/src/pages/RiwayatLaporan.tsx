@@ -126,7 +126,7 @@ export default function RiwayatLaporan() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'MENUNGGU_TRIASE':
-        return { text: 'Menunggu Triase', bg: 'bg-amber-100 text-amber-800 border-amber-300' };
+        return { text: 'Menunggu Evaluasi', bg: 'bg-amber-100 text-amber-800 border-amber-300' };
       case 'DIPROSES':
         return { text: 'Diproses', bg: 'bg-blue-100 text-blue-800 border-blue-200' };
       case 'MENUNGGU_VALIDASI':

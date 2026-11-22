@@ -439,13 +439,18 @@ const triageTicket = async (req, res) => {
   try {
     const id = Number(req.params.id);
     const {
-      prioritas,
-      divisiId,
-      pelaksanaId,
-      deadline,
       status,
+      prioritas,    
+      pelaksanaId, 
       catatanRevisi,
-      fotoInstruksi, // Mendukung penambahan/pembaruan fotoInstruksi saat triase
+      laporanPenyelesaian,
+      fotoBukti,
+      fotoInstruksi,
+      judul,
+      deskripsi,
+      lokasi,
+      divisiId,
+      deadline
     } = req.body;
     const role = req.user.role;
     const userDivisiId = req.user.divisiId ? Number(req.user.divisiId) : null;
@@ -598,7 +603,6 @@ const triageTicket = async (req, res) => {
 const updateTicketStatus = async (req, res) => {
   try {
     const id = Number(req.params.id);
-    // [BARU] Tambahkan judul, deskripsi, dan fotoInstruksi ke dalam destructuring
     const {
       status,
       catatanRevisi,
@@ -607,6 +611,8 @@ const updateTicketStatus = async (req, res) => {
       fotoInstruksi,
       judul,
       deskripsi,
+      lokasi,
+      divisiId,
       deadline
     } = req.body;
     const role = req.user.role;
@@ -669,7 +675,9 @@ const updateTicketStatus = async (req, res) => {
 
     // 2. Validasi Isolasi Divisi & Kepemilikan Tugas Berdasarkan Role
     if (role === 'KADIV') {
-      if (userDivisiId && currentTicket.divisiId && currentTicket.divisiId !== userDivisiId) {
+      const isPembuat = currentTicket.pembuatId === userId;
+      const isDivisiSama = userDivisiId && currentTicket.divisiId === userDivisiId;
+      if (!isPembuat && !isDivisiSama) {
         return res.status(403).json({ message: 'Anda tidak memiliki hak akses untuk mengubah tiket dari divisi lain.' });
       }
     } else if (role === 'KOORDINATOR') {
@@ -722,6 +730,18 @@ const updateTicketStatus = async (req, res) => {
       }
     }
 
+    // Wajib menyertakan catatan saat menolak laporan, eskalasi kendala, atau meminta revisi bukti kerja
+    const isMintaRevisiBukti =
+      currentTicket.status === 'MENUNGGU_VALIDASI' && status === 'DIPROSES';
+
+    if (['DITOLAK', 'HOLD_ESKALASI'].includes(status) || isMintaRevisiBukti) {
+      if (!catatanRevisi || !String(catatanRevisi).trim()) {
+        return res.status(400).json({
+          message: 'Catatan alasan / keterangan tindak lanjut wajib diisi.',
+        });
+      }
+    }
+
     const dataToUpdate = {
       status,
       catatanRevisi:
@@ -737,6 +757,8 @@ const updateTicketStatus = async (req, res) => {
       // [BARU] Simpan teks judul dan deskripsi baru (jika ada kiriman)
       judul: judul !== undefined ? judul : currentTicket.judul,
       deskripsi: deskripsi !== undefined ? deskripsi : currentTicket.deskripsi,
+      lokasi: lokasi !== undefined ? lokasi : currentTicket.lokasi,
+      divisiId: divisiId !== undefined && divisiId !== '' ? Number(divisiId) : currentTicket.divisiId,
       deadline: updatedDeadline,
       completedAt:
         status === 'SELESAI'
@@ -892,6 +914,9 @@ const getSops = async (req, res) => {
 
 const createOrUpdateSop = async (req, res) => {
   try {
+    if (!['KADIV', 'DIREKTUR'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Hanya Kepala Divisi dan Direktur yang berwenang mengelola SOP.' });
+    }
     const { nomorSop, judul, revisi, deskripsi, fileUrl, divisiId } = req.body;
     if (!nomorSop || !judul) {
       return res.status(400).json({ message: 'Nomor SOP dan Judul wajib diisi.' });
@@ -1001,14 +1026,16 @@ const getTicketById = async (req, res) => {
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
       include: {
-        pembuat: { select: { id: true, nama: true, noHp: true, role: true } },
+        pembuat: { select: { id: true, nama: true, noHp: true, role: true, divisi: { select: { id: true, nama: true } } } },
         penanggungJawab: { select: { id: true, nama: true, noHp: true, role: true } },
+        // Backend/controllers/ticketController.js (sekitar baris 826–862)
         divisi: { select: { id: true, nama: true } },
         pelaksana: { select: { id: true, nama: true, noHp: true, role: true, telegramChatId: true } },
         parentTicket: {
           select: {
             id: true,
             judul: true,
+            jenisTiket: true,
             status: true,
             prioritas: true,
             deadline: true,
@@ -1024,7 +1051,21 @@ const getTicketById = async (req, res) => {
             prioritas: true,
             deadline: true,
             completedAt: true,
+            pembuat: { select: { id: true, nama: true, role: true } },
             pelaksana: { select: { id: true, nama: true, role: true } },
+            childTickets: {
+              select: {
+                id: true,
+                judul: true,
+                status: true,
+                prioritas: true,
+                deadline: true,
+                completedAt: true,
+                pembuat: { select: { id: true, nama: true, role: true } },
+                pelaksana: { select: { id: true, nama: true, role: true } },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
           },
           orderBy: { createdAt: 'desc' },
         },

@@ -30,6 +30,27 @@ interface TicketLog {
   user: { id: number; nama: string; role: string };
 }
 
+interface SubTicketItem {
+  id: number;
+  judul: string;
+  status: string;
+  prioritas: string;
+  deadline: string | null;
+  completedAt: string | null;
+  pembuat?: { id: number; nama: string; role: string };
+  pelaksana?: { id: number; nama: string; role: string };
+  childTickets?: Array<{
+    id: number;
+    judul: string;
+    status: string;
+    prioritas: string;
+    deadline: string | null;
+    completedAt: string | null;
+    pembuat?: { id: number; nama: string; role: string };
+    pelaksana?: { id: number; nama: string; role: string };
+  }>;
+}
+
 interface TicketDetail {
   id: number;
   judul: string;
@@ -50,20 +71,13 @@ interface TicketDetail {
   parentTicket?: {
     id: number;
     judul: string;
+    jenisTiket?: string;
     status: string;
     prioritas: string;
     deadline: string | null;
     pembuat?: { id: number; nama: string; role: string };
   } | null;
-  childTickets?: Array<{
-    id: number;
-    judul: string;
-    status: string;
-    prioritas: string;
-    deadline: string | null;
-    completedAt: string | null;
-    pelaksana?: { id: number; nama: string; role: string };
-  }>;
+  childTickets?: SubTicketItem[];
 }
 
 const compressImageToBase64 = (file: File): Promise<string> => {
@@ -119,6 +133,36 @@ export default function DetailTugas() {
   const [isKerjakanSendiri, setIsKerjakanSendiri] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
+
+  const isPdfInstruction = Boolean(
+    ticket?.fotoInstruksi?.startsWith('data:application/pdf')
+  );
+
+  const instructionPdfBlobUrl = React.useMemo(() => {
+    if (!ticket?.fotoInstruksi || !isPdfInstruction) return null;
+    try {
+      const base64Data = ticket.fotoInstruksi.split(',')[1];
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      return URL.createObjectURL(blob);
+    } catch {
+      return null;
+    }
+  }, [ticket?.fotoInstruksi, isPdfInstruction]);
+
+  useEffect(() => {
+    return () => {
+      if (instructionPdfBlobUrl) {
+        URL.revokeObjectURL(instructionPdfBlobUrl);
+      }
+    };
+  }, [instructionPdfBlobUrl]);
 
   const fetchDetail = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
@@ -167,6 +211,19 @@ export default function DetailTugas() {
     if (lastHoldStartIndex === -1) return [];
     return sorted.slice(lastHoldStartIndex).filter((log) => log.statusBaru === 'HOLD_ESKALASI');
   }, [ticket?.logs]);
+
+  // Kumpulkan seluruh sub-tugas langsung maupun sub-tugas lanjutan buatan Koordinator
+  const allDescendantTickets = useMemo(() => {
+    if (!ticket?.childTickets) return [];
+    const list: Array<{ id: number; status: string }> = [];
+    ticket.childTickets.forEach((child) => {
+      list.push(child);
+      if (child.childTickets && child.childTickets.length > 0) {
+        child.childTickets.forEach((grandChild) => list.push(grandChild));
+      }
+    });
+    return list;
+  }, [ticket?.childTickets]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -294,7 +351,7 @@ export default function DetailTugas() {
 
     if (perpanjangDeadline) {
       if (!newDeadline) {
-        return alert('Mohon pilih tanggal dan waktu perpanjangan batas waktu (SLA).');
+        return alert('Mohon pilih tanggal dan waktu perpanjangan batas waktu .');
       }
       if (new Date(newDeadline) < new Date()) {
         return alert('Batas waktu baru tidak boleh lebih awal dari waktu saat ini.');
@@ -398,9 +455,8 @@ export default function DetailTugas() {
     ticket.status !== 'SELESAI' &&
     ticket.status !== 'DITOLAK';
 
-  const totalChild = ticket.childTickets?.length || 0;
-  const completedChild =
-    ticket.childTickets?.filter((c) => c.status === 'SELESAI').length || 0;
+  const totalChild = allDescendantTickets.length;
+  const completedChild = allDescendantTickets.filter((c) => c.status === 'SELESAI').length;
   const progressPercent = totalChild === 0 ? 0 : Math.round((completedChild / totalChild) * 100);
 
   const isAssignedToCurrentUser =
@@ -478,6 +534,43 @@ export default function DetailTugas() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-6 space-y-6">
+        {/* SUMBER TUGAS / TIKET INDUK */}
+        {ticket.parentTicket && (
+          <div className="p-4 sm:p-5 bg-blue-50/70 border border-brand-mint/40 rounded-3xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs">
+            <div className="min-w-0">
+              <span className="text-[10px] font-extrabold text-brand-deep uppercase tracking-widest bg-white/90 px-2.5 py-0.5 rounded-full">
+                Sumber Tugas (Tiket Induk)
+              </span>
+              <p className="text-sm font-extrabold text-clinical-ink mt-1.5 truncate">
+                #{ticket.parentTicket.jenisTiket === 'LAPORAN' ? 'L' : 'T'}-
+                {String(ticket.parentTicket.id).padStart(3, '0')} — {ticket.parentTicket.judul}
+              </p>
+              {ticket.parentTicket.pembuat?.nama && (
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dibuat oleh{' '}
+                  <strong className="text-slate-700">
+                    {ticket.parentTicket.pembuat.nama}
+                  </strong>{' '}
+                  ({ticket.parentTicket.pembuat.role})
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  ticket.parentTicket!.jenisTiket === 'LAPORAN'
+                    ? `/detail-laporan/${ticket.parentTicket!.id}`
+                    : `/detail-tugas/${ticket.parentTicket!.id}`
+                )
+              }
+              className="h-10 px-4 bg-white hover:bg-slate-50 border border-clinical-border text-brand-deep font-bold text-xs rounded-2xl shadow-xs transition whitespace-nowrap self-start sm:self-auto"
+            >
+              Lihat Tiket Sumber
+            </button>
+          </div>
+        )}
+
         {/* 2. SLA HEADER CARD */}
         <div className="bg-clinical-surface rounded-3xl border border-clinical-border shadow-xs p-5 sm:p-7 relative overflow-hidden">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-5">
@@ -523,7 +616,7 @@ export default function DetailTugas() {
               }`}
             >
               <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-                Target Batas Waktu (SLA)
+                Target Batas Waktu
               </span>
               <p className="text-sm sm:text-base font-extrabold mt-1">
                 {ticket.deadline
@@ -536,7 +629,7 @@ export default function DetailTugas() {
               {isOverdue && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-700 mt-1 uppercase">
                   <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
-                  <span>SLA Terlewati (Urgent)</span>
+                  <span>Tenggat Waktu Terlewati (Urgent)</span>
                 </span>
               )}
             </div>
@@ -560,29 +653,58 @@ export default function DetailTugas() {
               {ticket.fotoInstruksi && (
                 <div className="space-y-2 pt-2">
                   <p className="text-xs font-bold text-clinical-ink">
-                    Foto Bukti Masalah / Panduan Awal:
+                    Lampiran Bukti Masalah / Panduan Awal:
                   </p>
-                  <div
-                    onClick={() => setPreviewImage(ticket.fotoInstruksi!)}
-                    className="relative group cursor-pointer rounded-2xl overflow-hidden border border-clinical-border shadow-xs hover:shadow-md transition max-w-md bg-slate-50"
-                  >
-                    <img
-                      src={ticket.fotoInstruksi}
-                      alt="Referensi Tugas"
-                      className="w-full h-48 sm:h-60 object-cover group-hover:scale-102 transition duration-300"
-                    />
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPreviewImage(ticket.fotoInstruksi!);
-                      }}
-                      title="Perbesar Gambar"
-                      className="absolute top-3 right-3 p-2 bg-slate-900/75 hover:bg-slate-900 text-white rounded-xl shadow-md backdrop-blur-xs transition"
+                  {isPdfInstruction && instructionPdfBlobUrl ? (
+                    <div className="space-y-2.5 max-w-2xl">
+                      <div className="rounded-2xl overflow-hidden border border-clinical-border bg-slate-100 shadow-xs">
+                        <iframe
+                          src={`${instructionPdfBlobUrl}#toolbar=1&navpanes=0`}
+                          title={`Lampiran PDF Tugas #T-${String(ticket.id).padStart(3, '0')}`}
+                          className="w-full h-80 sm:h-96 border-0"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewPdfUrl(instructionPdfBlobUrl)}
+                          className="inline-flex items-center gap-1.5 h-9 px-4 bg-brand-deep hover:bg-brand-deep/90 text-white text-xs font-bold rounded-xl shadow-xs transition"
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span>Layar Penuh</span>
+                        </button>
+                        <a
+                          href={instructionPdfBlobUrl}
+                          download={`Lampiran_Tugas_${ticket.id}.pdf`}
+                          className="inline-flex items-center gap-1.5 h-9 px-4 bg-white hover:bg-slate-50 border border-clinical-border text-clinical-ink text-xs font-bold rounded-xl shadow-xs transition"
+                        >
+                          <span>Unduh PDF</span>
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => setPreviewImage(ticket.fotoInstruksi!)}
+                      className="relative group cursor-pointer rounded-2xl overflow-hidden border border-clinical-border shadow-xs hover:shadow-md transition max-w-md bg-slate-50"
                     >
-                      <Maximize2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                      <img
+                        src={ticket.fotoInstruksi}
+                        alt="Referensi Tugas"
+                        className="w-full h-48 sm:h-60 object-cover group-hover:scale-102 transition duration-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewImage(ticket.fotoInstruksi!);
+                        }}
+                        title="Perbesar Gambar"
+                        className="absolute top-3 right-3 p-2 bg-slate-900/75 hover:bg-slate-900 text-white rounded-xl shadow-md backdrop-blur-xs transition"
+                      >
+                        <Maximize2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -653,7 +775,7 @@ export default function DetailTugas() {
               </div>
             )}
 
-            {/* Sub-Tugas / Delegasi */}
+            {/* Sub-Tugas / Delegasi (Termasuk Delegasi Lanjutan Koordinator ke Staf) */}
             {ticket.childTickets && ticket.childTickets.length > 0 && (
               <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
                 <div className="flex items-center justify-between border-b border-clinical-border/60 pb-3">
@@ -673,38 +795,88 @@ export default function DetailTugas() {
                   </div>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {ticket.childTickets.map((child) => (
-                    <div
-                      key={child.id}
-                      onClick={() => navigate(`/detail-tugas/${child.id}`)}
-                      className="p-3.5 bg-slate-50 hover:bg-blue-50/50 border border-clinical-border rounded-2xl cursor-pointer transition flex items-center justify-between gap-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-brand-deep">
-                            #T-{String(child.id).padStart(3, '0')}
-                          </span>
-                          <span className="text-xs font-bold text-clinical-ink truncate">
-                            {child.judul}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Pelaksana:{' '}
-                          <strong className="text-slate-700">
-                            {child.pelaksana?.nama || 'Belum ditunjuk'}
-                          </strong>
-                        </p>
-                      </div>
-                      <span
-                        className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap ${
-                          child.status === 'SELESAI'
-                            ? 'bg-blue-100 text-brand-deep'
-                            : 'bg-slate-200 text-slate-700'
-                        }`}
+                    <div key={child.id} className="space-y-2">
+                      <div
+                        onClick={() => navigate(`/detail-tugas/${child.id}`)}
+                        className="p-3.5 bg-slate-50 hover:bg-blue-50/50 border border-clinical-border rounded-2xl cursor-pointer transition flex items-center justify-between gap-3"
                       >
-                        {child.status.replace('_', ' ')}
-                      </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-brand-deep">
+                              #T-{String(child.id).padStart(3, '0')}
+                            </span>
+                            <span className="text-xs font-bold text-clinical-ink truncate">
+                              {child.judul}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Pelaksana:{' '}
+                            <strong className="text-slate-700">
+                              {child.pelaksana?.nama || 'Belum ditunjuk'}
+                            </strong>
+                            {child.pembuat?.nama && (
+                              <span>
+                                {' '}
+                                • Dibuat oleh {child.pembuat.nama} ({child.pembuat.role})
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <span
+                          className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap ${
+                            child.status === 'SELESAI'
+                              ? 'bg-blue-100 text-brand-deep'
+                              : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {child.status.replace('_', ' ')}
+                        </span>
+                      </div>
+
+                      {/* Sub-tugas lanjutan yang dibuat oleh Koordinator untuk Staf */}
+                      {child.childTickets && child.childTickets.length > 0 && (
+                        <div className="pl-4 sm:pl-6 space-y-2 border-l-2 border-brand-mint/50 ml-3">
+                          {child.childTickets.map((sub) => (
+                            <div
+                              key={sub.id}
+                              onClick={() => navigate(`/detail-tugas/${sub.id}`)}
+                              className="p-3 bg-blue-50/40 hover:bg-blue-50 border border-brand-mint/30 rounded-2xl cursor-pointer transition flex items-center justify-between gap-3"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[10px] font-bold text-brand-deep bg-white px-2 py-0.5 rounded-full border border-brand-mint/30">
+                                    Delegasi Koordinator
+                                  </span>
+                                  <span className="font-mono text-xs font-bold text-brand-deep">
+                                    #T-{String(sub.id).padStart(3, '0')}
+                                  </span>
+                                  <span className="text-xs font-bold text-clinical-ink truncate">
+                                    {sub.judul}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                  Staf Pelaksana:{' '}
+                                  <strong className="text-slate-700">
+                                    {sub.pelaksana?.nama || 'Belum ditunjuk'}
+                                  </strong>
+                                  {sub.pembuat?.nama && <span> • Oleh {sub.pembuat.nama}</span>}
+                                </p>
+                              </div>
+                              <span
+                                className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap ${
+                                  sub.status === 'SELESAI'
+                                    ? 'bg-blue-100 text-brand-deep'
+                                    : 'bg-slate-200 text-slate-700'
+                                }`}
+                              >
+                                {sub.status.replace('_', ' ')}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1100,7 +1272,7 @@ export default function DetailTugas() {
                   {perpanjangDeadline && (
                     <div className="space-y-1 pt-1">
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">
-                        Batas Waktu (SLA) Baru
+                        Batas Waktu Baru
                       </label>
                       <input
                         type="datetime-local"
@@ -1199,6 +1371,46 @@ export default function DetailTugas() {
           </div>
         </div>
       )}
+
+      {previewPdfUrl && (
+        <div
+          onClick={() => setPreviewPdfUrl(null)}
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full max-w-5xl h-[88vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+          >
+            <div className="px-5 py-3.5 border-b border-clinical-border flex items-center justify-between bg-clinical-surface">
+              <span className="text-xs sm:text-sm font-extrabold text-clinical-ink">
+                Pratinjau Dokumen Lampiran Tugas (#T-{String(ticket.id).padStart(3, '0')})
+              </span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewPdfUrl}
+                  download={`Lampiran_Tugas_${ticket.id}.pdf`}
+                  className="h-9 px-3.5 bg-brand-deep text-white text-xs font-bold rounded-xl inline-flex items-center"
+                >
+                  Unduh PDF
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewPdfUrl(null)}
+                  className="h-9 px-3.5 bg-slate-100 hover:bg-slate-200 text-clinical-ink text-xs font-bold rounded-xl"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+            <iframe
+              src={previewPdfUrl}
+              title="Pratinjau Dokumen PDF"
+              className="w-full flex-1 border-0"
+            />
+          </div>
+        </div>
+      )}
     </div>
+    
   );
 }
