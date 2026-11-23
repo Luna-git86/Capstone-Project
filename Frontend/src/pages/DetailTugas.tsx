@@ -125,11 +125,19 @@ export default function DetailTugas() {
 
   const [laporanText, setLaporanText] = useState('');
   const [fotoBase64, setFotoBase64] = useState('');
+  const [laporSelesaiErrors, setLaporSelesaiErrors] = useState<{
+    foto?: string;
+    catatan?: string;
+  }>({});
   const [kendalaText, setKendalaText] = useState('');
+  const [kendalaError, setKendalaError] = useState('');
   const [evaluasiNote, setEvaluasiNote] = useState('');
+  const [evaluasiError, setEvaluasiError] = useState('');
   const [tindakLanjutKendalaNote, setTindakLanjutKendalaNote] = useState('');
+  const [tindakLanjutError, setTindakLanjutError] = useState('');
   const [perpanjangDeadline, setPerpanjangDeadline] = useState(false);
   const [newDeadline, setNewDeadline] = useState('');
+  const [deadlineError, setDeadlineError] = useState('');
   const [isKerjakanSendiri, setIsKerjakanSendiri] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -283,12 +291,24 @@ export default function DetailTugas() {
 
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) setFotoBase64(await compressImageToBase64(file));
+    if (file) {
+      setFotoBase64(await compressImageToBase64(file));
+      setLaporSelesaiErrors((prev) => ({ ...prev, foto: undefined }));
+    }
   };
 
   const handleLaporSelesai = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fotoBase64) return alert('Foto dokumentasi bukti pekerjaan wajib diunggah!');
+    const errors: { foto?: string; catatan?: string } = {};
+    if (!fotoBase64) errors.foto = 'Foto bukti dokumentasi wajib diunggah';
+    if (!laporanText.trim()) errors.catatan = 'Catatan penyelesaian wajib diisi';
+
+    if (errors.foto || errors.catatan) {
+      setLaporSelesaiErrors(errors);
+      return;
+    }
+
+    setLaporSelesaiErrors({});
     setIsSubmitting(true);
     try {
       await api.patch(`/tickets/${id}/status`, {
@@ -307,7 +327,11 @@ export default function DetailTugas() {
 
   const handleLaporKendala = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!kendalaText) return alert('Tuliskan alasan kendala pekerjaan.');
+    if (!kendalaText.trim()) {
+      setKendalaError('Alasan kendala wajib diisi');
+      return;
+    }
+    setKendalaError('');
     setIsSubmitting(true);
     try {
       await api.patch(`/tickets/${id}/status`, {
@@ -325,8 +349,10 @@ export default function DetailTugas() {
 
   const handleEvaluasi = async (keputusan: 'SELESAI' | 'DIPROSES') => {
     if (keputusan === 'DIPROSES' && !evaluasiNote.trim()) {
-      return alert('Mohon tulis catatan revisi untuk staf pelaksana.');
+      setEvaluasiError('Catatan revisi wajib diisi');
+      return;
     }
+    setEvaluasiError('');
     setIsSubmitting(true);
     try {
       await api.patch(`/tickets/${id}/status`, {
@@ -343,20 +369,29 @@ export default function DetailTugas() {
   };
 
   const handleTindakLanjutKendala = async (aksi: 'LANJUTKAN' | 'ESKALASI') => {
+    let hasError = false;
     if (aksi === 'ESKALASI' && !tindakLanjutKendalaNote.trim()) {
-      return alert(
-        `Mohon tulis alasan eskalasi masalah ke ${isKadiv ? 'Direktur' : 'Kadiv'}.`
-      );
+      setTindakLanjutError(`Alasan eskalasi ke ${isKadiv ? 'Direktur' : 'Kadiv'} wajib diisi`);
+      hasError = true;
+    } else {
+      setTindakLanjutError('');
     }
 
     if (perpanjangDeadline) {
       if (!newDeadline) {
-        return alert('Mohon pilih tanggal dan waktu perpanjangan batas waktu .');
+        setDeadlineError('Batas waktu baru wajib diisi');
+        hasError = true;
+      } else if (new Date(newDeadline) < new Date()) {
+        setDeadlineError('Batas waktu tidak boleh di masa lalu');
+        hasError = true;
+      } else {
+        setDeadlineError('');
       }
-      if (new Date(newDeadline) < new Date()) {
-        return alert('Batas waktu baru tidak boleh lebih awal dari waktu saat ini.');
-      }
+    } else {
+      setDeadlineError('');
     }
+
+    if (hasError) return;
 
     setIsSubmitting(true);
     try {
@@ -709,28 +744,40 @@ export default function DetailTugas() {
               )}
             </div>
 
-            {/* Banner Laporan Kendala / Catatan Arahan & Revisi */}
+            {/* Banner Laporan Kendala / Catatan Arahan, Revisi & Evaluasi */}
             {(ticket.status === 'HOLD_ESKALASI' || ticket.catatanRevisi) && (
               <div
                 className={`p-5 sm:p-6 rounded-3xl border shadow-xs space-y-2.5 ${
                   ticket.status === 'HOLD_ESKALASI'
                     ? 'bg-rose-50/70 border-rose-200'
+                    : ticket.status === 'SELESAI'
+                    ? 'bg-emerald-50/70 border-emerald-200'
                     : 'bg-amber-50/70 border-amber-200'
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <AlertTriangle
-                    className={`w-4 h-4 shrink-0 ${
-                      ticket.status === 'HOLD_ESKALASI' ? 'text-rose-600' : 'text-amber-600'
-                    }`}
-                  />
+                  {ticket.status === 'SELESAI' ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  ) : (
+                    <AlertTriangle
+                      className={`w-4 h-4 shrink-0 ${
+                        ticket.status === 'HOLD_ESKALASI' ? 'text-rose-600' : 'text-amber-600'
+                      }`}
+                    />
+                  )}
                   <h3
                     className={`text-xs font-extrabold uppercase tracking-widest ${
-                      ticket.status === 'HOLD_ESKALASI' ? 'text-rose-700' : 'text-amber-800'
+                      ticket.status === 'HOLD_ESKALASI'
+                        ? 'text-rose-700'
+                        : ticket.status === 'SELESAI'
+                        ? 'text-emerald-800'
+                        : 'text-amber-800'
                     }`}
                   >
                     {ticket.status === 'HOLD_ESKALASI'
                       ? 'Laporan Kendala Lapangan (Eskalasi)'
+                      : ticket.status === 'SELESAI'
+                      ? 'Catatan Persetujuan / Evaluasi Akhir'
                       : 'Catatan Arahan / Revisi Terbaru'}
                   </h3>
                 </div>
@@ -766,6 +813,8 @@ export default function DetailTugas() {
                     className={`text-sm font-medium bg-white/90 p-4 rounded-2xl border leading-relaxed whitespace-pre-wrap ${
                       ticket.status === 'HOLD_ESKALASI'
                         ? 'text-rose-950 border-rose-200/80'
+                        : ticket.status === 'SELESAI'
+                        ? 'text-emerald-950 border-emerald-200/80'
                         : 'text-amber-950 border-amber-200/80'
                     }`}
                   >
@@ -1087,17 +1136,27 @@ export default function DetailTugas() {
                   )}
                 </div>
 
-                <form onSubmit={handleLaporSelesai} className="space-y-3.5">
+                <form onSubmit={handleLaporSelesai} noValidate className="space-y-3.5">
                   <div>
-                    <label className="block text-[11px] font-bold text-clinical-ink uppercase mb-1">
-                      Foto Bukti Dokumentasi *
-                    </label>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <label className="block text-[11px] font-bold text-clinical-ink uppercase">
+                        Foto Bukti Dokumentasi <span className="text-rose-600">*</span>
+                      </label>
+                      {laporSelesaiErrors.foto && (
+                        <span className="text-[11px] font-bold text-rose-600">
+                          {laporSelesaiErrors.foto}
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handlePhotoChange}
-                      required
-                      className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-brand-deep"
+                      className={`w-full text-xs text-slate-600 rounded-xl p-1 transition file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-brand-deep ${
+                        laporSelesaiErrors.foto
+                          ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
+                          : 'border border-transparent'
+                      }`}
                     />
                     {fotoBase64 && (
                       <div
@@ -1125,16 +1184,31 @@ export default function DetailTugas() {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-clinical-ink uppercase mb-1">
-                      Catatan Penyelesaian *
-                    </label>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <label className="block text-[11px] font-bold text-clinical-ink uppercase">
+                        Catatan Penyelesaian <span className="text-rose-600">*</span>
+                      </label>
+                      {laporSelesaiErrors.catatan && (
+                        <span className="text-[11px] font-bold text-rose-600">
+                          {laporSelesaiErrors.catatan}
+                        </span>
+                      )}
+                    </div>
                     <textarea
                       rows={3}
                       value={laporanText}
-                      onChange={(e) => setLaporanText(e.target.value)}
-                      required
+                      onChange={(e) => {
+                        setLaporanText(e.target.value);
+                        if (e.target.value.trim()) {
+                          setLaporSelesaiErrors((prev) => ({ ...prev, catatan: undefined }));
+                        }
+                      }}
                       placeholder="Jelaskan tindakan yang telah Anda selesaikan..."
-                      className="w-full p-3 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
+                      className={`w-full p-3 rounded-2xl text-xs font-medium text-clinical-ink focus:outline-none transition ${
+                        laporSelesaiErrors.catatan
+                          ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
+                          : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-brand-deep'
+                      }`}
                     />
                   </div>
 
@@ -1156,14 +1230,23 @@ export default function DetailTugas() {
                         <span>Lapor Kendala Biaya / Alat</span>
                         <span className="text-xs group-open:rotate-180 transition">▼</span>
                       </summary>
-                      <form onSubmit={handleLaporKendala} className="mt-3 space-y-2.5">
+                      <form onSubmit={handleLaporKendala} noValidate className="mt-3 space-y-2.5">
+                        {kendalaError && (
+                          <p className="text-[11px] font-bold text-rose-600">{kendalaError}</p>
+                        )}
                         <textarea
                           rows={2}
                           value={kendalaText}
-                          onChange={(e) => setKendalaText(e.target.value)}
-                          required
+                          onChange={(e) => {
+                            setKendalaText(e.target.value);
+                            if (e.target.value.trim()) setKendalaError('');
+                          }}
                           placeholder="Sebutkan kendala biaya, sparepart, atau koordinasi..."
-                          className="w-full p-2.5 bg-brand-orange-soft/50 border border-brand-orange/40 rounded-xl text-xs font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-orange"
+                          className={`w-full p-2.5 rounded-xl text-xs font-medium text-clinical-ink focus:outline-none transition ${
+                            kendalaError
+                              ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
+                              : 'bg-brand-orange-soft/50 border border-brand-orange/40 focus:ring-2 focus:ring-brand-orange'
+                          }`}
                         />
                         <button
                           type="submit"
@@ -1192,12 +1275,22 @@ export default function DetailTugas() {
                   Tinjau foto dokumentasi sebelum memberi persetujuan:
                 </p>
 
+                {evaluasiError && (
+                  <p className="text-[11px] font-bold text-rose-600">{evaluasiError}</p>
+                )}
                 <textarea
                   rows={2}
                   value={evaluasiNote}
-                  onChange={(e) => setEvaluasiNote(e.target.value)}
+                  onChange={(e) => {
+                    setEvaluasiNote(e.target.value);
+                    if (e.target.value.trim()) setEvaluasiError('');
+                  }}
                   placeholder="Catatan evaluasi atau instruksi revisi..."
-                  className="w-full p-3 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  className={`w-full p-3 rounded-2xl text-xs font-medium text-clinical-ink focus:outline-none transition ${
+                    evaluasiError
+                      ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
+                      : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-indigo-600'
+                  }`}
                 />
 
                 <div className="space-y-2 pt-1">
@@ -1239,16 +1332,26 @@ export default function DetailTugas() {
                     : '.'}
                 </p>
 
+                {tindakLanjutError && (
+                  <p className="text-[11px] font-bold text-rose-600">{tindakLanjutError}</p>
+                )}
                 <textarea
                   rows={3}
                   value={tindakLanjutKendalaNote}
-                  onChange={(e) => setTindakLanjutKendalaNote(e.target.value)}
+                  onChange={(e) => {
+                    setTindakLanjutKendalaNote(e.target.value);
+                    if (e.target.value.trim()) setTindakLanjutError('');
+                  }}
                   placeholder={
                     userRole !== 'DIREKTUR'
                       ? `Tulis arahan tindak lanjut, persetujuan biaya/sparepart, atau alasan eskalasi ke ${isKadiv ? 'Direktur' : 'Kadiv'}...`
                       : 'Tulis arahan tindak lanjut atau persetujuan biaya/sparepart...'
                   }
-                  className="w-full p-3 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  className={`w-full p-3 rounded-2xl text-xs font-medium text-clinical-ink focus:outline-none transition ${
+                    tindakLanjutError
+                      ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
+                      : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-rose-500'
+                  }`}
                 />
 
                 {/* Opsi Perpanjangan Batas Waktu (Opsional) */}
@@ -1259,7 +1362,10 @@ export default function DetailTugas() {
                       checked={perpanjangDeadline}
                       onChange={(e) => {
                         setPerpanjangDeadline(e.target.checked);
-                        if (!e.target.checked) setNewDeadline('');
+                        if (!e.target.checked) {
+                          setNewDeadline('');
+                          setDeadlineError('');
+                        }
                       }}
                       className="w-4 h-4 rounded border-slate-300 text-brand-deep focus:ring-brand-deep cursor-pointer"
                     />
@@ -1271,15 +1377,35 @@ export default function DetailTugas() {
 
                   {perpanjangDeadline && (
                     <div className="space-y-1 pt-1">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">
-                        Batas Waktu Baru
-                      </label>
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase">
+                          Batas Waktu Baru
+                        </label>
+                        {deadlineError && (
+                          <span className="text-[10px] font-bold text-rose-600">
+                            {deadlineError}
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="datetime-local"
                         value={newDeadline}
                         min={getMinDateTimeLocal()}
-                        onChange={(e) => setNewDeadline(e.target.value)}
-                        className="w-full h-10 px-3 bg-white border border-clinical-border rounded-xl text-xs font-semibold text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
+                        onChange={(e) => {
+                          setNewDeadline(e.target.value);
+                          if (!e.target.value) {
+                            setDeadlineError('Batas waktu baru wajib diisi');
+                          } else if (new Date(e.target.value) < new Date()) {
+                            setDeadlineError('Batas waktu tidak boleh di masa lalu');
+                          } else {
+                            setDeadlineError('');
+                          }
+                        }}
+                        className={`w-full h-10 px-3 rounded-xl text-xs font-semibold text-clinical-ink focus:outline-none transition ${
+                          deadlineError
+                            ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
+                            : 'bg-white border border-clinical-border focus:ring-2 focus:ring-brand-deep'
+                        }`}
                       />
                     </div>
                   )}
@@ -1411,6 +1537,5 @@ export default function DetailTugas() {
         </div>
       )}
     </div>
-    
   );
 }

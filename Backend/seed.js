@@ -70,14 +70,6 @@ async function main() {
       divisiId: divisiMap['Divisi IT & SIMRS'],
     },
     {
-      nama: 'Penguji UAT RSIA / POLNES',
-      noHp: '081100000006',
-      email: 'penguji@rsia.com',
-      password: defaultPassword,
-      role: 'PENGUJI',
-      divisiId: null,
-    },
-    {
       nama: 'Kepala Divisi Pelayanan Medis',
       noHp: '081100000007',
       email: 'kadiv.medis@rsia.com',

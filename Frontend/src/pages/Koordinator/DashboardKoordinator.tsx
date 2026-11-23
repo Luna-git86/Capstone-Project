@@ -123,7 +123,7 @@ const DashboardKoordinator: React.FC = () => {
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <p className="text-xs sm:text-sm font-semibold text-slate-500">Menunggu Triase</p>
+          <p className="text-xs sm:text-sm font-semibold text-slate-500">Menunggu Evaluasi</p>
           <div className="mt-2">
             <p className="text-2xl sm:text-3xl font-extrabold text-amber-600">
               {daftarTugas.filter((t) => t.status === 'MENUNGGU_TRIASE').length}
@@ -229,7 +229,9 @@ const DashboardKoordinator: React.FC = () => {
                               : 'bg-blue-50 text-blue-700'
                           }`}
                         >
-                          {l.status.replace('_', ' ')}
+                          {l.status === 'MENUNGGU_TRIASE'
+                            ? 'MENUNGGU EVALUASI'
+                            : l.status.replace('_', ' ')}
                         </span>
                       </td>
                     </tr>

@@ -71,7 +71,7 @@ export default function AntreanLaporan() {
   const userDivisiNama = getAuthDivisiNama('');
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchData = async (isBackground = false) => {
       try {
         const [ticketRes, divisiRes] = await Promise.all([
           api.get('/tickets?jenis=LAPORAN'),
@@ -81,12 +81,19 @@ export default function AntreanLaporan() {
         setDaftarLaporan(ticketRes.data?.data || ticketRes.data || []);
         setDivisiList(divisiRes.data?.data || divisiRes.data || []);
       } catch (error) {
-        console.error('Gagal mengambil data laporan:', error);
+        if (!isBackground) {
+          console.error('Gagal mengambil data laporan:', error);
+        }
       } finally {
-        setLoading(false);
+        if (!isBackground) {
+          setLoading(false);
+        }
       }
     };
-    fetchData();
+
+    fetchData(false);
+    const intervalId = setInterval(() => fetchData(true), 10000);
+    return () => clearInterval(intervalId);
   }, []);
 
   // Sinkronkan status efektif jika seluruh tugas turunan (childTickets) sudah SELESAI
@@ -109,7 +116,7 @@ export default function AntreanLaporan() {
     }
 
     return daftarLaporan.filter((laporan) => {
-      const targetDivisiId = Number(laporan.divisi?.id || laporan.divisiId || 0);
+      const targetDivisiId = Number(laporan.divisi?.id ?? laporan.divisiId ?? 0);
       if (userDivisiId > 0 && targetDivisiId > 0) {
         return targetDivisiId === userDivisiId;
       }

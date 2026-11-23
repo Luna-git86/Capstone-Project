@@ -13,7 +13,7 @@ import {
   Sparkles,
   Camera,
   X,
-  SlidersHorizontal
+  SlidersHorizontal,
 } from 'lucide-react';
 import api from '../services/api';
 import {
@@ -21,7 +21,7 @@ import {
   getAuthUserName,
   getAuthDivisiNama,
   getAuthUserId,
-  getAuthToken
+  getAuthToken,
 } from '../utils/authStorage';
 import TaskSubNav from '../components/TaskSubNav';
 
@@ -92,12 +92,10 @@ export default function RiwayatTugas() {
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
   const [selectedDivisiIds, setSelectedDivisiIds] = useState<number[]>([]);
   const [selectedOwnership, setSelectedOwnership] = useState<string[]>([]);
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
 
   const [openSections, setOpenSections] = useState({
     prioritas: true,
     kepemilikan: true,
-    status: true,
     divisi: true,
   });
 
@@ -148,13 +146,6 @@ export default function RiwayatTugas() {
     }).format(new Date(dateStr));
   };
 
-  const getMappedStatus = (t: TicketItem): 'Disetujui' | 'Menunggu Evaluasi' | 'Revisi' | null => {
-    if (t.status === 'SELESAI') return 'Disetujui';
-    if (t.status === 'MENUNGGU_VALIDASI') return 'Menunggu Evaluasi';
-    if (t.status === 'DIPROSES' && Boolean(t.catatanRevisi)) return 'Revisi';
-    return null;
-  };
-
   // HITUNG ANGKA UNTUK MENU SAMPING
   const activeCount = useMemo(
     () =>
@@ -166,33 +157,17 @@ export default function RiwayatTugas() {
       ).length,
     [allTickets]
   );
-  const completedCount = useMemo(
-    () => allTickets.filter((t) => getMappedStatus(t) !== null).length,
-    [allTickets]
-  );
-  const totalCount = allTickets.length;
 
-  // FILTER TIKET KHUSUS UNTUK DITAMPILKAN DI HALAMAN RIWAYAT
+  // FILTER TIKET KHUSUS BERSTATUS SELESAI
   const historyTickets = useMemo(() => {
-    return allTickets.filter((t) => getMappedStatus(t) !== null);
+    return allTickets.filter((t) => t.status === 'SELESAI');
   }, [allTickets]);
 
-  const countDisetujui = useMemo(
-    () => historyTickets.filter((t) => getMappedStatus(t) === 'Disetujui').length,
-    [historyTickets]
-  );
-  const countEvaluasi = useMemo(
-    () => historyTickets.filter((t) => getMappedStatus(t) === 'Menunggu Evaluasi').length,
-    [historyTickets]
-  );
-  const countRevisi = useMemo(
-    () => historyTickets.filter((t) => getMappedStatus(t) === 'Revisi').length,
-    [historyTickets]
-  );
+  const completedCount = historyTickets.length;
+  const totalCount = allTickets.length;
 
   // Hitungan dinamis untuk opsi filter sidebar
   const sidebarCounts = useMemo(() => {
-    const now = new Date();
     const divisiMap: Record<number, number> = {};
     historyTickets.forEach((t) => {
       if (t.divisi?.id) {
@@ -206,17 +181,9 @@ export default function RiwayatTugas() {
       low: historyTickets.filter((t) => t.prioritas === 'LOW').length,
       assignedToMe: historyTickets.filter((t) => Number(t.pelaksana?.id) === currentUserId).length,
       createdByMe: historyTickets.filter((t) => Number(t.pembuat?.id) === currentUserId).length,
-      disetujui: countDisetujui,
-      evaluasi: countEvaluasi,
-      revisi: countRevisi,
-      overdue: historyTickets.filter(
-        (t) =>
-          t.status !== 'SELESAI' &&
-          Boolean(t.deadline && new Date(t.deadline) < now)
-      ).length,
       divisiMap,
     };
-  }, [historyTickets, currentUserId, countDisetujui, countEvaluasi, countRevisi]);
+  }, [historyTickets, currentUserId]);
 
   const toggleStringFilter = (
     value: string,
@@ -235,29 +202,17 @@ export default function RiwayatTugas() {
   const totalSidebarFilters =
     selectedPriorities.length +
     selectedDivisiIds.length +
-    selectedOwnership.length +
-    selectedStatuses.length;
+    selectedOwnership.length;
 
   const resetSidebarFilters = () => {
     setSelectedPriorities([]);
     setSelectedDivisiIds([]);
     setSelectedOwnership([]);
-    setSelectedStatuses([]);
-  };
-
-  const toggleQuickMetricFilter = (statusKey: 'Disetujui' | 'Menunggu Evaluasi' | 'Revisi') => {
-    if (selectedStatuses.length === 1 && selectedStatuses[0] === statusKey) {
-      setSelectedStatuses([]);
-    } else {
-      setSelectedStatuses([statusKey]);
-    }
   };
 
   const filteredTasks = useMemo(() => {
     const now = new Date();
     return historyTickets.filter((t) => {
-      const mappedStatus = getMappedStatus(t);
-
       // 1. Filter Sidebar: Prioritas
       if (selectedPriorities.length > 0 && !selectedPriorities.includes(t.prioritas)) {
         return false;
@@ -277,27 +232,14 @@ export default function RiwayatTugas() {
         }
       }
 
-      // 3. Filter Sidebar: Status Tugas (Disetujui, Sedang Dievaluasi, Revisi, Lewat Tenggat)
-      if (selectedStatuses.length > 0) {
-        const isOverdue =
-          t.status !== 'SELESAI' &&
-          Boolean(t.deadline && new Date(t.deadline) < now);
-        const matchOverdue = selectedStatuses.includes('OVERDUE') && isOverdue;
-        const matchStatus = mappedStatus ? selectedStatuses.includes(mappedStatus) : false;
-
-        if (!matchOverdue && !matchStatus) {
-          return false;
-        }
-      }
-
-      // 4. Filter Sidebar: Divisi / Unit (Hanya DIREKTUR)
+      // 3. Filter Sidebar: Divisi / Unit (Hanya DIREKTUR)
       if (userRole === 'DIREKTUR' && selectedDivisiIds.length > 0) {
         if (!t.divisi?.id || !selectedDivisiIds.includes(t.divisi.id)) {
           return false;
         }
       }
 
-      // 5. Filter Pencarian Teks
+      // 4. Filter Pencarian Teks
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTitle = t.judul.toLowerCase().includes(q);
@@ -311,7 +253,7 @@ export default function RiwayatTugas() {
         }
       }
 
-      // 6. Filter Waktu
+      // 5. Filter Waktu
       if (timeFilter !== 'Semua Waktu') {
         const targetDate = new Date(t.completedAt || t.updatedAt || t.createdAt);
         if (timeFilter === 'Minggu Ini') {
@@ -329,7 +271,6 @@ export default function RiwayatTugas() {
     historyTickets,
     selectedPriorities,
     selectedOwnership,
-    selectedStatuses,
     selectedDivisiIds,
     searchQuery,
     timeFilter,
@@ -358,7 +299,7 @@ export default function RiwayatTugas() {
               <Sparkles className="w-6 h-6 text-[#f47a45]" />
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Arsip tugas yang telah diselesaikan, hasil evaluasi pimpinan, dan riwayat revisi pengerjaan tim.
+              Arsip tugas yang telah diselesaikan dan disetujui oleh penanggung jawab.
             </p>
           </div>
         </div>
@@ -373,7 +314,6 @@ export default function RiwayatTugas() {
 
       {/* Main Container: Sidebar Kiri (Sub-Nav + Filter) & Konten Kanan */}
       <div className="flex flex-col lg:flex-row items-start gap-6">
-        
         {/* KOLOM KIRI */}
         <div className="w-full lg:w-64 shrink-0 space-y-4 [&>*]:w-full">
           <TaskSubNav
@@ -490,52 +430,7 @@ export default function RiwayatTugas() {
               </div>
             )}
 
-            {/* Grup 3: Status Tugas */}
-            <div className="py-3.5">
-              <button
-                type="button"
-                onClick={() => setOpenSections((p) => ({ ...p, status: !p.status }))}
-                className="w-full flex items-center justify-between text-left text-[11px] font-extrabold text-slate-700 uppercase tracking-wider"
-              >
-                <span>Status Tugas</span>
-                {openSections.status ? (
-                  <ChevronUp className="w-4 h-4 text-slate-400" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-slate-400" />
-                )}
-              </button>
-
-              {openSections.status && (
-                <div className="mt-3 space-y-2.5">
-                  {[
-                    { key: 'Disetujui', label: 'Disetujui Selesai', count: sidebarCounts.disetujui },
-                    { key: 'Menunggu Evaluasi', label: 'Menunggu Evaluasi', count: sidebarCounts.evaluasi },
-                    { key: 'Revisi', label: 'Perlu Revisi', count: sidebarCounts.revisi },
-                    { key: 'OVERDUE', label: 'Lewat Tenggat', count: sidebarCounts.overdue },
-                  ].map((item) => (
-                    <label
-                      key={item.key}
-                      className="flex items-center gap-2.5 cursor-pointer group select-none"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedStatuses.includes(item.key)}
-                        onChange={() =>
-                          toggleStringFilter(item.key, selectedStatuses, setSelectedStatuses)
-                        }
-                        className="w-4 h-4 rounded border-slate-300 text-[#0f5c43] focus:ring-[#0f5c43] cursor-pointer"
-                      />
-                      <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900">
-                        {item.label}{' '}
-                        <span className="text-slate-400 font-normal">({item.count})</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Grup 4: Divisi / Unit (Hanya DIREKTUR) */}
+            {/* Grup 3: Divisi / Unit (Hanya DIREKTUR) */}
             {userRole === 'DIREKTUR' && divisiList.length > 0 && (
               <div className="pt-3.5">
                 <button
@@ -581,64 +476,7 @@ export default function RiwayatTugas() {
 
         {/* KOLOM KANAN */}
         <div className="flex-1 w-full space-y-6">
-          {/* Quick Metrics Cards (Sinkron dengan selectedStatuses) */}
-          <div className="grid grid-cols-3 gap-3 md:gap-4">
-            <button
-              type="button"
-              onClick={() => toggleQuickMetricFilter('Menunggu Evaluasi')}
-              className={`p-4 rounded-2xl border text-left transition-all ${
-                selectedStatuses.includes('Menunggu Evaluasi')
-                  ? 'bg-amber-500 text-white border-amber-500 shadow-md scale-[1.02]'
-                  : 'bg-white border-slate-200 text-slate-800 hover:border-amber-300'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className={`text-xs font-bold ${selectedStatuses.includes('Menunggu Evaluasi') ? 'text-amber-100' : 'text-slate-500'}`}>
-                  Menunggu Evaluasi
-                </span>
-                <Clock className={`w-4 h-4 ${selectedStatuses.includes('Menunggu Evaluasi') ? 'text-amber-100' : 'text-amber-600'}`} />
-              </div>
-              <div className="text-2xl md:text-3xl font-extrabold">{countEvaluasi}</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => toggleQuickMetricFilter('Menunggu Evaluasi')}
-              className={`p-4 rounded-2xl border text-left transition-all ${
-                selectedStatuses.includes('Menunggu Evaluasi')
-                  ? 'bg-amber-500 text-white border-amber-500 shadow-md scale-[1.02]'
-                  : 'bg-white border-slate-200 text-slate-800 hover:border-amber-300'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className={`text-xs font-bold ${selectedStatuses.includes('Menunggu Evaluasi') ? 'text-amber-100' : 'text-slate-500'}`}>
-                  Dievaluasi
-                </span>
-                <Clock className={`w-4 h-4 ${selectedStatuses.includes('Menunggu Evaluasi') ? 'text-amber-100' : 'text-amber-600'}`} />
-              </div>
-              <div className="text-2xl md:text-3xl font-extrabold">{countEvaluasi}</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => toggleQuickMetricFilter('Revisi')}
-              className={`p-4 rounded-2xl border text-left transition-all ${
-                selectedStatuses.includes('Revisi')
-                  ? 'bg-rose-500 text-white border-rose-500 shadow-md scale-[1.02]'
-                  : 'bg-white border-slate-200 text-slate-800 hover:border-rose-300'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className={`text-xs font-bold ${selectedStatuses.includes('Revisi') ? 'text-rose-100' : 'text-slate-500'}`}>
-                  Perlu Revisi
-                </span>
-                <AlertCircle className={`w-4 h-4 ${selectedStatuses.includes('Revisi') ? 'text-rose-100' : 'text-rose-600'}`} />
-              </div>
-              <div className="text-2xl md:text-3xl font-extrabold">{countRevisi}</div>
-            </button>
-          </div>
-
-          {/* Search & Time Filter Bar (Tanpa Pill Filter Bawah) */}
+          {/* Search & Time Filter Bar */}
           <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm">
             <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
               {/* Search Bar */}
@@ -690,57 +528,24 @@ export default function RiwayatTugas() {
                 <h3 className="text-base font-bold text-slate-800">Tidak ada riwayat ditemukan</h3>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
                   {searchQuery || totalSidebarFilters > 0
-                    ? 'Tidak ada tugas yang cocok dengan kombinasi pencarian dan filter yang dipilih.'
-                    : 'Belum ada tugas yang selesai atau sesuai dengan filter pencarian yang Anda pilih.'}
+                    ? 'Tidak ada tugas selesai yang cocok dengan kombinasi pencarian dan filter yang dipilih.'
+                    : 'Belum ada tugas yang berstatus selesai.'}
                 </p>
               </div>
             ) : (
               filteredTasks.map((task) => {
-                const mappedStatus = getMappedStatus(task) || 'Disetujui';
                 const isExpanded = expandedTaskId === task.id;
-                const dlDate = task.deadline ? new Date(task.deadline) : null;
-                const isOverdue =
-                  task.status !== 'SELESAI' &&
-                  task.status !== 'DITOLAK' &&
-                  dlDate
-                    ? new Date() > dlDate
-                    : false;
-
                 const isArahanDivisi =
                   ['KADIV', 'DIREKTUR'].includes(task.pembuat?.role || '') ||
                   ['KADIV', 'DIREKTUR'].includes(task.parentTicket?.pembuat?.role || '');
 
-                const statusBadges = {
-                  'Disetujui': {
-                    bg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-                    dot: 'bg-emerald-500',
-                    label: 'Disetujui Selesai',
-                    borderLeft: 'border-l-emerald-500'
-                  },
-                  'Menunggu Evaluasi': {
-                    bg: 'bg-amber-50 text-amber-800 border-amber-200',
-                    dot: 'bg-amber-500',
-                    label: 'Menunggu Evaluasi',
-                    borderLeft: 'border-l-amber-500'
-                  },
-                  'Revisi': {
-                    bg: 'bg-rose-50 text-rose-800 border-rose-200',
-                    dot: 'bg-rose-500',
-                    label: 'Perlu Revisi',
-                    borderLeft: 'border-l-rose-500'
-                  },
-                };
-                const badge = statusBadges[mappedStatus];
-                const supervisorName = task.penanggungJawab?.nama || task.pembuat?.nama || 'Atasan / Penanggung Jawab';
+                const supervisorName =
+                  task.penanggungJawab?.nama || task.pembuat?.nama || 'Atasan / Penanggung Jawab';
 
                 return (
                   <div
                     key={task.id}
-                    className={`rounded-2xl border shadow-sm transition-all overflow-hidden border-l-4 ${
-                      isOverdue
-                        ? 'bg-rose-50/70 border-rose-300 border-l-rose-600'
-                        : `bg-white border-slate-200/80 ${badge.borderLeft}`
-                    }`}
+                    className="rounded-2xl border shadow-sm transition-all overflow-hidden border-l-4 bg-white border-slate-200/80 border-l-emerald-500"
                   >
                     {/* Header Card Ringkas & Rapi */}
                     <div className="p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -750,25 +555,24 @@ export default function RiwayatTugas() {
                           <span className="font-mono text-xs font-bold text-slate-400">
                             #T-{String(task.id).padStart(3, '0')}
                           </span>
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${badge.bg}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`}></span>
-                            {badge.label}
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-emerald-50 text-emerald-800 border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            Selesai
                           </span>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                            task.prioritas === 'HIGH' ? 'bg-rose-100 text-rose-800' :
-                            task.prioritas === 'MEDIUM' ? 'bg-amber-100 text-amber-800' :
-                            'bg-blue-100 text-blue-800'
-                          }`}>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              task.prioritas === 'HIGH'
+                                ? 'bg-rose-100 text-rose-800'
+                                : task.prioritas === 'MEDIUM'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}
+                          >
                             {task.prioritas}
                           </span>
                           {isArahanDivisi && (
                             <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-md bg-purple-100 text-purple-800 border border-purple-200 uppercase tracking-wider">
                               Arahan Divisi
-                            </span>
-                          )}
-                          {isOverdue && (
-                            <span className="text-[10px] font-extrabold uppercase bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">
-                              Lewat Tenggat
                             </span>
                           )}
                           {task.divisi?.nama && (
@@ -810,7 +614,11 @@ export default function RiwayatTugas() {
                         >
                           <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
                           <span>{isExpanded ? 'Tutup Catatan' : 'Lihat Hasil'}</span>
-                          <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 text-slate-500 transition-transform ${
+                              isExpanded ? 'rotate-180' : ''
+                            }`}
+                          />
                         </button>
 
                         <button
@@ -818,7 +626,7 @@ export default function RiwayatTugas() {
                           onClick={() => navigate(`/detail-tugas/${task.id}`)}
                           className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-white bg-[#0f5c43] hover:bg-[#0c4935] rounded-xl shadow-sm transition-all"
                         >
-                          <span> Lihat Detail </span>
+                          <span>Lihat Detail</span>
                           <ExternalLink className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -874,7 +682,7 @@ export default function RiwayatTugas() {
                             <div>
                               <div className="flex items-center justify-between mb-2">
                                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                                  <span className={`w-2 h-2 rounded-full ${badge.dot}`}></span>
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                                   Evaluasi Supervisor
                                 </h4>
                                 <span className="text-[11px] font-medium text-slate-500">
@@ -882,24 +690,14 @@ export default function RiwayatTugas() {
                                 </span>
                               </div>
 
-                              <div className={`p-3 rounded-xl border text-xs md:text-sm leading-relaxed ${
-                                mappedStatus === 'Revisi'
-                                  ? 'bg-rose-50 text-rose-800 border-rose-200'
-                                  : mappedStatus === 'Menunggu Evaluasi'
-                                  ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                              }`}>
+                              <div className="p-3 rounded-xl border text-xs md:text-sm leading-relaxed bg-emerald-50 text-emerald-800 border-emerald-200">
                                 <div className="font-bold mb-1 flex items-center gap-1.5">
-                                  {mappedStatus === 'Revisi' && <AlertCircle className="w-4 h-4 text-rose-600" />}
-                                  {mappedStatus === 'Disetujui' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
-                                  {mappedStatus === 'Menunggu Evaluasi' && <Clock className="w-4 h-4 text-amber-600" />}
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                                   <span>Catatan Hasil Evaluasi:</span>
                                 </div>
                                 <p>
                                   {task.catatanRevisi ||
-                                    (mappedStatus === 'Disetujui'
-                                      ? 'Hasil pekerjaan telah divalidasi dan disetujui sesuai standar operasional.'
-                                      : 'Menunggu review dan validasi foto/pekerjaan oleh atasan.')}
+                                    'Hasil pekerjaan telah divalidasi dan disetujui sesuai standar operasional.'}
                                 </p>
                               </div>
                             </div>
