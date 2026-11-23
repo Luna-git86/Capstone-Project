@@ -23,7 +23,8 @@ app.use(
   })
 );
 app.use('/api/uat-sm/check-excel', express.json({ limit: '6mb' }));
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
 const authRoutes = require('./routes/authRoute');
 app.use('/api/auth', authRoutes);

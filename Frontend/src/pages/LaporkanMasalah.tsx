@@ -541,7 +541,7 @@ export default function LaporkanMasalah() {
                     className="inline-flex items-center gap-1.5 h-11 px-5 bg-white border border-clinical-border hover:bg-slate-50 text-clinical-ink text-xs font-bold rounded-2xl shadow-xs transition"
                   >
                     <FolderOpen className="w-4 h-4" />
-                    <span>Jelajahi File / Buka Kamera</span>
+                    <span>Unggah Berkas</span>
                   </button>
                   <input
                     type="file"

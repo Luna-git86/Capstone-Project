@@ -291,9 +291,29 @@ export default function DetailTugas() {
 
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!allowedImageTypes.includes(file.type)) {
+      setFotoBase64('');
+      setLaporSelesaiErrors((prev) => ({
+        ...prev,
+        foto: 'Format file tidak didukung. Unggah gambar (JPG, PNG).',
+      }));
+      e.target.value = '';
+      return;
+    }
+
+    try {
       setFotoBase64(await compressImageToBase64(file));
       setLaporSelesaiErrors((prev) => ({ ...prev, foto: undefined }));
+    } catch {
+      setFotoBase64('');
+      setLaporSelesaiErrors((prev) => ({
+        ...prev,
+        foto: 'File gambar rusak atau tidak dapat diproses.',
+      }));
+      e.target.value = '';
     }
   };
 
@@ -370,8 +390,12 @@ export default function DetailTugas() {
 
   const handleTindakLanjutKendala = async (aksi: 'LANJUTKAN' | 'ESKALASI') => {
     let hasError = false;
-    if (aksi === 'ESKALASI' && !tindakLanjutKendalaNote.trim()) {
-      setTindakLanjutError(`Alasan eskalasi ke ${isKadiv ? 'Direktur' : 'Kadiv'} wajib diisi`);
+    if (!tindakLanjutKendalaNote.trim()) {
+      setTindakLanjutError(
+        aksi === 'ESKALASI'
+          ? `Alasan eskalasi ke ${isKadiv ? 'Direktur' : 'Kadiv'} wajib diisi`
+          : 'Arahan tindak lanjut wajib diisi'
+      );
       hasError = true;
     } else {
       setTindakLanjutError('');
@@ -411,9 +435,7 @@ export default function DetailTugas() {
 
       const catatanFinal =
         aksi === 'LANJUTKAN'
-          ? tindakLanjutKendalaNote.trim()
-            ? `[Arahan ${userRole}]: ${tindakLanjutKendalaNote.trim()}${infoPerpanjangan}`
-            : `[Arahan ${userRole}]: Kendala telah ditindaklanjuti, silakan lanjutkan pengerjaan tugas.${infoPerpanjangan}`
+          ? `[Arahan ${userRole}]: ${tindakLanjutKendalaNote.trim()}${infoPerpanjangan}`
           : `[Eskalasi ${userRole} ke ${targetEskalasi}]: ${tindakLanjutKendalaNote.trim()}${infoPerpanjangan}`;
 
       await api.patch(`/tickets/${id}/status`, {

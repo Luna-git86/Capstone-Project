@@ -86,6 +86,8 @@ export default function TambahTugas() {
   const userRole = getAuthRole() || 'KOORDINATOR';
   const userDivisiId = getAuthDivisiId() || '';
   const currentUserId = getAuthUserId();
+  const isDirektur = userRole === 'DIREKTUR';
+  const isDivisiLocked = !isDirektur && Boolean(userDivisiId);
 
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
   const [allStaffList, setAllStaffList] = useState<Pelaksana[]>([]);
@@ -97,7 +99,13 @@ export default function TambahTugas() {
     lokasi: location.state?.lokasi || '',
     deskripsi: location.state?.deskripsi || '',
     prioritas: (location.state?.prioritas as 'LOW' | 'MEDIUM' | 'HIGH') || 'MEDIUM',
-    divisiId: location.state?.divisiId ? String(location.state.divisiId) : userDivisiId,
+    divisiId: isDivisiLocked
+      ? String(userDivisiId)
+      : location.state?.divisiId
+      ? String(location.state.divisiId)
+      : isDirektur
+      ? ''
+      : userDivisiId,
     pelaksanaIds: [] as string[],
     deadline: '',
     fotoInstruksi: location.state?.fotoInstruksi || '',
@@ -115,6 +123,7 @@ export default function TambahTugas() {
     judul?: string;
     lokasi?: string;
     deskripsi?: string;
+    divisi?: string;
     pelaksana?: string;
   }>({});
   const [successCount, setSuccessCount] = useState<number>(0);
@@ -146,9 +155,10 @@ export default function TambahTugas() {
               judul: prev.judul || sourceFromList.judul || '',
               lokasi: prev.lokasi || sourceFromList.lokasi || '',
               deskripsi: prev.deskripsi || sourceFromList.deskripsi || '',
-              divisiId:
-                prev.divisiId ||
-                (sourceFromList.divisiId ? String(sourceFromList.divisiId) : ''),
+              divisiId: isDivisiLocked
+                ? String(userDivisiId)
+                : prev.divisiId ||
+                  (sourceFromList.divisiId ? String(sourceFromList.divisiId) : ''),
             }));
           }
         } catch (e) {
@@ -160,7 +170,7 @@ export default function TambahTugas() {
         const divRes = await api.get('/auth/divisi');
         const listDivisi: Divisi[] = divRes.data?.data || divRes.data || [];
         setDivisiList(listDivisi);
-        if (!formData.divisiId && listDivisi.length > 0) {
+        if (!isDirektur && !isDivisiLocked && listDivisi.length > 0) {
           setFormData((prev) => ({
             ...prev,
             divisiId: prev.divisiId || String(listDivisi[0].id),
@@ -184,17 +194,15 @@ export default function TambahTugas() {
     };
 
     loadInitialData();
-  }, [userRole, currentUserId, sourceTicketId]);
+  }, [userRole, currentUserId, sourceTicketId, isDirektur, isDivisiLocked, userDivisiId]);
 
   useEffect(() => {
-    if (!formData.divisiId) {
-      setPelaksanaList([]);
-      return;
-    }
     const fetchPelaksanaByDivisi = async () => {
       try {
         setLoadingOptions(true);
-        const res = await api.get(`/tickets/options?divisiId=${formData.divisiId}`);
+        const effectiveDivisiId = isDivisiLocked ? String(userDivisiId) : formData.divisiId;
+        const query = effectiveDivisiId ? `?divisiId=${effectiveDivisiId}` : '';
+        const res = await api.get(`/tickets/options${query}`);
         setPelaksanaList(res.data.pelaksana || []);
       } catch {
         setPelaksanaList([]);
@@ -203,12 +211,14 @@ export default function TambahTugas() {
       }
     };
     fetchPelaksanaByDivisi();
-  }, [formData.divisiId]);
+  }, [formData.divisiId, isDivisiLocked, userDivisiId]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
+    if (name === 'divisiId' && isDivisiLocked) return;
+
     if (name === 'judul' && value.trim()) {
       setFieldErrors((prev) => ({ ...prev, judul: undefined }));
     }
@@ -217,6 +227,9 @@ export default function TambahTugas() {
     }
     if (name === 'deskripsi' && value.trim()) {
       setFieldErrors((prev) => ({ ...prev, deskripsi: undefined }));
+    }
+    if (name === 'divisiId') {
+      setFieldErrors((prev) => ({ ...prev, divisi: undefined, pelaksana: undefined }));
     }
     if (name === 'deadline') {
       const currentMin = getCurrentLocalDateTime();
@@ -230,7 +243,11 @@ export default function TambahTugas() {
         setError('');
       }
     }
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === 'divisiId' ? { pelaksanaIds: [] } : {}),
+    }));
   };
 
   const handleFileProcess = async (file: File) => {
@@ -312,6 +329,7 @@ export default function TambahTugas() {
       judul?: string;
       lokasi?: string;
       deskripsi?: string;
+      divisi?: string;
       pelaksana?: string;
     } = {};
     let nextDeadlineError = '';
@@ -330,7 +348,10 @@ export default function TambahTugas() {
     } else if (new Date(formData.deadline).getTime() < new Date().getTime()) {
       nextDeadlineError = 'Batas waktu tidak boleh berada di masa lalu';
     }
-    if (formData.pelaksanaIds.length === 0) {
+    if (!isDirektur && !formData.divisiId) {
+      nextFieldErrors.divisi = 'Pilih divisi tujuan terlebih dahulu';
+    }
+    if (!isDirektur && formData.pelaksanaIds.length === 0) {
       nextFieldErrors.pelaksana = 'Pilih minimal 1 staf pelaksana';
     }
 
@@ -342,8 +363,8 @@ export default function TambahTugas() {
       nextFieldErrors.lokasi ||
       nextFieldErrors.deskripsi ||
       nextDeadlineError ||
-      nextFieldErrors.pelaksana ||
-      !formData.divisiId
+      nextFieldErrors.divisi ||
+      nextFieldErrors.pelaksana
     ) {
       setError('Mohon lengkapi semua kolom wajib yang ditandai merah sebelum menerbitkan tugas.');
 
@@ -359,7 +380,7 @@ export default function TambahTugas() {
       } else if (nextDeadlineError) {
         deadlineInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         deadlineInputRef.current?.focus();
-      } else if (nextFieldErrors.pelaksana) {
+      } else if (nextFieldErrors.divisi || nextFieldErrors.pelaksana) {
         pelaksanaSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
       return;
@@ -370,7 +391,23 @@ export default function TambahTugas() {
     setSubmitting(true);
 
     try {
-      const promises = formData.pelaksanaIds.map((pelaksanaId) => {
+      const targetPelaksanaIds =
+        formData.pelaksanaIds.length > 0 ? formData.pelaksanaIds : [''];
+
+      const promises = targetPelaksanaIds.map((pelaksanaId) => {
+        const selectedStaff = pelaksanaId
+          ? pelaksanaList.find((s) => String(s.id) === pelaksanaId) ||
+            allStaffList.find((s) => String(s.id) === pelaksanaId)
+          : undefined;
+
+        const resolvedDivisiId = isDivisiLocked
+          ? Number(userDivisiId)
+          : formData.divisiId
+          ? Number(formData.divisiId)
+          : selectedStaff?.divisiId
+          ? Number(selectedStaff.divisiId)
+          : undefined;
+
         const payload: any = {
           tipe: 'BUAT_TUGAS',
           ticketId: sourceTicketId ? Number(sourceTicketId) : undefined,
@@ -378,8 +415,8 @@ export default function TambahTugas() {
           lokasi: formData.lokasi.trim(),
           deskripsi: formData.deskripsi.trim(),
           prioritas: formData.prioritas,
-          divisiId: Number(formData.divisiId),
-          pelaksanaId: Number(pelaksanaId),
+          ...(resolvedDivisiId ? { divisiId: resolvedDivisiId } : {}),
+          ...(pelaksanaId ? { pelaksanaId: Number(pelaksanaId) } : {}),
           deadline: new Date(formData.deadline).toISOString(),
           fotoInstruksi: formData.fotoInstruksi || null,
         };
@@ -418,16 +455,17 @@ export default function TambahTugas() {
   };
 
   const filteredStaff = useMemo(() => {
+    const activeDivisiId = isDivisiLocked ? String(userDivisiId) : formData.divisiId;
     const list =
       pelaksanaList.length > 0
         ? pelaksanaList
         : allStaffList.filter(
-            (s) => !formData.divisiId || String(s.divisiId) === String(formData.divisiId)
+            (s) => !activeDivisiId || String(s.divisiId) === String(activeDivisiId)
           );
 
     if (!staffSearch.trim()) return list;
     return list.filter((s) => s.nama.toLowerCase().includes(staffSearch.toLowerCase()));
-  }, [pelaksanaList, allStaffList, formData.divisiId, staffSearch]);
+  }, [pelaksanaList, allStaffList, formData.divisiId, isDivisiLocked, userDivisiId, staffSearch]);
 
   const pageTitle =
     userRole === 'DIREKTUR'
@@ -495,7 +533,12 @@ export default function TambahTugas() {
               <div>
                 <h3 className="text-base font-extrabold">Penugasan Berhasil Diterbitkan!</h3>
                 <p className="text-xs text-white/80 mt-0.5">
-                  Sebanyak <strong>{successCount} tiket penugasan</strong> telah diteruskan kepada pelaksana yang dipilih.
+                  Sebanyak <strong>{successCount} tiket penugasan</strong> telah diteruskan kepada{' '}
+                  {formData.pelaksanaIds.length > 0
+                    ? 'pelaksana yang dipilih.'
+                    : formData.divisiId
+                    ? 'divisi tujuan.'
+                    : 'semua divisi.'}
                 </p>
               </div>
             </div>
@@ -720,7 +763,7 @@ export default function TambahTugas() {
           <div
             ref={pelaksanaSectionRef}
             className={`bg-clinical-surface p-5 sm:p-7 rounded-3xl shadow-xs space-y-4 transition ${
-              fieldErrors.pelaksana
+              fieldErrors.pelaksana || fieldErrors.divisi
                 ? 'border-2 border-rose-500 ring-2 ring-rose-500/15'
                 : 'border border-clinical-border'
             }`}
@@ -730,12 +773,16 @@ export default function TambahTugas() {
                 <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
                   3
                 </span>
-                <span>Pemilihan Tim Pelaksana (Multi-Select) *</span>
+                <span>
+                  {isDirektur
+                    ? 'Divisi Tujuan & Pelaksana (Opsional)'
+                    : 'Pemilihan Tim Pelaksana (Multi-Select) *'}
+                </span>
               </label>
               <div className="flex items-center gap-2">
-                {fieldErrors.pelaksana && (
+                {(fieldErrors.divisi || fieldErrors.pelaksana) && (
                   <span className="text-xs font-bold text-rose-600">
-                    {fieldErrors.pelaksana}
+                    {fieldErrors.divisi || fieldErrors.pelaksana}
                   </span>
                 )}
                 <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-brand-deep">
@@ -747,15 +794,20 @@ export default function TambahTugas() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1">
-                  Filter Divisi
+                  {isDirektur ? 'Divisi Tujuan' : 'Divisi Anda (Terkunci)'}
                 </label>
                 <select
                   name="divisiId"
                   value={formData.divisiId}
                   onChange={handleChange}
-                  className="w-full h-11 px-3 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-semibold text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
+                  disabled={isDivisiLocked}
+                  className={`w-full h-11 px-3 border border-clinical-border rounded-2xl text-xs font-semibold focus:outline-none ${
+                    isDivisiLocked
+                      ? 'bg-slate-100 text-slate-500 cursor-not-allowed'
+                      : 'bg-slate-50 text-clinical-ink focus:ring-2 focus:ring-brand-deep'
+                  }`}
                 >
-                  <option value="">-- Tampilkan Semua Divisi --</option>
+                  {isDirektur && <option value="">-- Semua Divisi --</option>}
                   {divisiList.map((d) => (
                     <option key={d.id} value={String(d.id)}>
                       {d.nama}
@@ -766,11 +818,11 @@ export default function TambahTugas() {
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1">
-                  Cari Nama Staf
+                  Cari Nama Pelaksana
                 </label>
                 <input
                   type="text"
-                  placeholder="Ketik nama staf..."
+                  placeholder="Ketik nama staf / kadiv..."
                   value={staffSearch}
                   onChange={(e) => setStaffSearch(e.target.value)}
                   className="w-full h-11 px-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
@@ -786,7 +838,9 @@ export default function TambahTugas() {
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {formData.pelaksanaIds.map((id) => {
-                    const st = allStaffList.find((s) => String(s.id) === id);
+                    const st =
+                      pelaksanaList.find((s) => String(s.id) === id) ||
+                      allStaffList.find((s) => String(s.id) === id);
                     if (!st) return null;
                     return (
                       <span
@@ -816,7 +870,9 @@ export default function TambahTugas() {
                 </div>
               ) : filteredStaff.length === 0 ? (
                 <div className="col-span-full py-8 text-center text-xs text-slate-400 font-medium border border-dashed border-clinical-border rounded-2xl">
-                  Tidak ada staf di divisi ini.
+                  {isDirektur
+                    ? 'Belum ada personel terdaftar. Arahan tetap dapat diterbitkan tanpa memilih pelaksana spesifik.'
+                    : 'Tidak ada staf di divisi ini.'}
                 </div>
               ) : (
                 filteredStaff.map((staf) => {
@@ -971,7 +1027,13 @@ export default function TambahTugas() {
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>Terbitkan Tugas ke {formData.pelaksanaIds.length || 0} Orang</span>
+                    <span>
+                      {isDirektur && formData.pelaksanaIds.length === 0
+                        ? formData.divisiId
+                          ? 'Terbitkan Arahan ke Divisi'
+                          : 'Terbitkan Arahan ke Semua Divisi'
+                        : `Terbitkan Tugas ke ${formData.pelaksanaIds.length || 0} Orang`}
+                    </span>
                   </>
                 )}
               </button>
