@@ -255,13 +255,13 @@ export default function DetailTugas() {
         };
       case 'HOLD_ESKALASI':
         return {
-          label: 'Tertahan (Kendala)',
+          label: 'Ada Kendala',
           bg: 'bg-rose-100 text-rose-900 border-rose-300',
           dot: 'bg-rose-600',
         };
       case 'SELESAI':
         return {
-          label: 'Selesai Tuntas',
+          label: 'Selesai',
           bg: 'bg-blue-100 text-brand-deep border-brand-mint/50',
           dot: 'bg-brand-mint',
         };
@@ -562,6 +562,19 @@ export default function DetailTugas() {
     isAssignedToCurrentUser &&
     (ticket.status === 'DIPROSES' || (ticket.status === 'HOLD_ESKALASI' && isKerjakanSendiri));
 
+  const directiveBadge =
+    ticket.pembuat?.role === 'DIREKTUR'
+      ? {
+          label: 'Arahan Direksi',
+          style: 'bg-purple-100 text-purple-800 border border-purple-300',
+        }
+      : ticket.pembuat?.role === 'KADIV'
+      ? {
+          label: 'Arahan Divisi',
+          style: 'bg-indigo-100 text-indigo-800 border border-indigo-300',
+        }
+      : null;
+
   return (
     <div className="min-h-screen bg-clinical-bg pb-28 md:pb-12">
       {/* 1. TOP NAV BAR */}
@@ -579,12 +592,6 @@ export default function DetailTugas() {
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs font-extrabold text-brand-deep bg-blue-50 px-2.5 py-1 rounded-xl">
               #T-{String(ticket.id).padStart(3, '0')}
-            </span>
-            <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border ${badge.bg}`}
-            >
-              <span className={`w-2 h-2 rounded-full ${badge.dot}`} />
-              <span>{badge.label}</span>
             </span>
           </div>
         </div>
@@ -645,8 +652,29 @@ export default function DetailTugas() {
                   Prioritas: {ticket.prioritas}
                 </span>
 
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${badge.bg}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                  <span>{badge.label}</span>
+                </span>
+
+                {directiveBadge && (
+                  <span
+                    className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full uppercase tracking-wider ${directiveBadge.style}`}
+                  >
+                    {directiveBadge.label}
+                  </span>
+                )}
+
+                {ticket.parentTicket && (
+                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold rounded-full uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                    Sub-Tugas
+                  </span>
+                )}
+
                 {ticket.divisi?.nama && (
-                  <span className="px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 text-slate-700">
+                  <span className="px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                     Divisi: {ticket.divisi.nama}
                   </span>
                 )}

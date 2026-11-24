@@ -814,7 +814,7 @@ export default function SemuaTugas() {
                         className="w-full sm:w-auto h-10 px-4 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
                       >
                         <Eye className="w-4 h-4" />
-                        <span>Lihat Detail Tiket</span>
+                        <span>Lihat Detail</span>
                       </button>
                     </div>
                   </div>
