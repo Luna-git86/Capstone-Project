@@ -90,7 +90,9 @@ export default function DashboardKadiv() {
   // 4 Metrik KPI Utama Kadiv
   const kpi = useMemo(() => {
     const now = new Date();
-    const perluTriase = activeTickets.filter((t) => t.status === 'MENUNGGU_TRIASE');
+    const perluTriase = activeTickets.filter(
+      (t) => t.status === 'MENUNGGU_TRIASE' && (t.jenisTiket === 'LAPORAN' || !t.pelaksana)
+    );
     const menungguEvaluasi = activeTickets.filter((t) => t.status === 'MENUNGGU_VALIDASI');
     const kendalaEskalasi = activeTickets.filter((t) => t.status === 'HOLD_ESKALASI');
     const overdue = activeTickets.filter(
@@ -111,9 +113,12 @@ export default function DashboardKadiv() {
 
   // Daftar antrean yang butuh keputusan Kadiv
   const actionQueueTickets = useMemo(() => {
-    const list = activeTickets.filter((t) =>
-      ['MENUNGGU_TRIASE', 'MENUNGGU_VALIDASI', 'HOLD_ESKALASI'].includes(t.status)
-    );
+    const list = activeTickets.filter((t) => {
+      if (t.status === 'MENUNGGU_TRIASE') {
+        return t.jenisTiket === 'LAPORAN' || !t.pelaksana;
+      }
+      return ['MENUNGGU_VALIDASI', 'HOLD_ESKALASI'].includes(t.status);
+    });
 
     if (activeFilter === 'ALL_ACTION') return list;
     return list.filter((t) => t.status === activeFilter);
@@ -128,12 +133,17 @@ export default function DashboardKadiv() {
     }).format(new Date(dateStr));
   };
 
-  const getStatusBadge = (status: TicketItem['status']) => {
-    switch (status) {
+  const getStatusBadge = (item: TicketItem) => {
+    switch (item.status) {
       case 'MENUNGGU_TRIASE':
         return {
-          label: 'PERLU TRIASE',
+          label: item.jenisTiket !== 'LAPORAN' && item.pelaksana ? 'BELUM DIKERJAKAN' : 'PERLU TRIASE',
           style: 'bg-amber-50 text-amber-700 border-amber-200',
+        };
+      case 'DIPROSES':
+        return {
+          label: 'SEDANG DIKERJAKAN',
+          style: 'bg-blue-50 text-blue-700 border-blue-200',
         };
       case 'MENUNGGU_VALIDASI':
         return {
@@ -147,7 +157,7 @@ export default function DashboardKadiv() {
         };
       default:
         return {
-          label: status,
+          label: item.status,
           style: 'bg-slate-100 text-slate-700 border-slate-200',
         };
     }
@@ -381,7 +391,7 @@ export default function DashboardKadiv() {
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
                 {actionQueueTickets.map((item) => {
-                  const statusBadge = getStatusBadge(item.status);
+                  const statusBadge = getStatusBadge(item);
                   const isOverdue =
                     item.status !== 'MENUNGGU_VALIDASI' &&
                     Boolean(item.deadline && new Date(item.deadline) < new Date());

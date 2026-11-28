@@ -123,12 +123,12 @@ const DashboardKoordinator: React.FC = () => {
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <p className="text-xs sm:text-sm font-semibold text-slate-500">Menunggu Evaluasi</p>
+          <p className="text-xs sm:text-sm font-semibold text-slate-500">Belum Dikerjakan</p>
           <div className="mt-2">
             <p className="text-2xl sm:text-3xl font-extrabold text-amber-600">
               {daftarTugas.filter((t) => t.status === 'MENUNGGU_TRIASE').length}
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">Perlu penugasan</p>
+            <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">Menunggu staf mulai</p>
           </div>
         </div>
 
@@ -312,8 +312,30 @@ const DashboardKoordinator: React.FC = () => {
                         </span>
                       </td>
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-blue-50 text-blue-700">
-                          {t.status.replace('_', ' ')}
+                        <span
+                          className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
+                            t.status === 'MENUNGGU_TRIASE'
+                              ? 'bg-amber-50 text-amber-800'
+                              : t.status === 'DIPROSES'
+                              ? 'bg-blue-50 text-blue-700'
+                              : t.status === 'MENUNGGU_VALIDASI'
+                              ? 'bg-indigo-50 text-indigo-700'
+                              : t.status === 'HOLD_ESKALASI'
+                              ? 'bg-rose-50 text-rose-700'
+                              : t.status === 'SELESAI'
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {t.status === 'MENUNGGU_TRIASE'
+                            ? 'BELUM DIKERJAKAN'
+                            : t.status === 'DIPROSES'
+                            ? 'SEDANG DIKERJAKAN'
+                            : t.status === 'MENUNGGU_VALIDASI'
+                            ? 'MENUNGGU VALIDASI'
+                            : t.status === 'HOLD_ESKALASI'
+                            ? 'ADA KENDALA'
+                            : t.status.replace('_', ' ')}
                         </span>
                       </td>
                     </tr>
