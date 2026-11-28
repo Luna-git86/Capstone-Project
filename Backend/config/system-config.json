@@ -1,0 +1,27 @@
+{
+  "telegramEnabled": true,
+  "maxRetryAttempts": 3,
+  "reminderHoursBeforeDeadline": 12,
+  "timeZone": "Asia/Makassar",
+  "cronSchedule": "*/10 * * * * *",
+  "enabledNotificationTypes": {
+    "DIRECTIVE_ASSIGNED": true,
+    "TASK_ASSIGNED": true,
+    "TASK_REASSIGNED": true,
+    "TASK_SUBMITTED": true,
+    "TASK_REVISION_REQUIRED": true,
+    "TASK_VERIFIED": true,
+    "TASK_ESCALATED": true,
+    "REPORT_SUBMITTED": true,
+    "REPORT_REJECTED": true,
+    "REPORT_RESUBMITTED": true,
+    "DEADLINE_SOON": true,
+    "OVERDUE": true
+  },
+  "slaHours": {
+    "RENDAH": 72,
+    "SEDANG": 48,
+    "TINGGI": 24,
+    "URGENT": 8
+  }
+}

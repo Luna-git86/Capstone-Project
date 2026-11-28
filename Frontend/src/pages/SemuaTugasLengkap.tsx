@@ -257,7 +257,7 @@ const SemuaTugasLengkap: React.FC = () => {
     switch (status) {
       case 'MENUNGGU_TRIASE':
         return {
-          label: 'Belum Dikerjakan',
+          label: 'Perlu Petugas',
           bg: 'bg-amber-100 text-amber-900 border-amber-300',
           dot: 'bg-amber-500',
         };

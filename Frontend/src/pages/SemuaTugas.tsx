@@ -73,10 +73,6 @@ export default function SemuaTugas() {
 
   // Modal Preview Foto
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
-  const [startingTaskId, setStartingTaskId] = useState<number | null>(null);
-
-  const isRevisionNote = (note?: string | null) =>
-    Boolean(note && !note.trim().startsWith('[Dikerjakan oleh'));
 
   const getUserId = (): number => {
     const stored = getAuthUserId();
@@ -191,9 +187,9 @@ export default function SemuaTugas() {
       assignedToMe: activeTickets.filter((t) => Number(t.pelaksana?.id) === currentUserId).length,
       createdByMe: activeTickets.filter((t) => Number(t.pembuat?.id) === currentUserId).length,
       belumDikerjakan: activeTickets.filter((t) => t.status === 'MENUNGGU_TRIASE').length,
-      sedangDikerjakan: activeTickets.filter((t) => t.status === 'DIPROSES' && !isRevisionNote(t.catatanRevisi)).length,
+      sedangDikerjakan: activeTickets.filter((t) => t.status === 'DIPROSES' && !t.catatanRevisi).length,
       menungguEvaluasi: activeTickets.filter((t) => t.status === 'MENUNGGU_VALIDASI').length,
-      perluRevisi: activeTickets.filter((t) => t.status === 'DIPROSES' && isRevisionNote(t.catatanRevisi)).length,
+      perluRevisi: activeTickets.filter((t) => t.status === 'DIPROSES' && Boolean(t.catatanRevisi)).length,
       adaKendala: activeTickets.filter((t) => t.status === 'HOLD_ESKALASI').length,
       overdue: activeTickets.filter((t) => Boolean(t.deadline && new Date(t.deadline) < now)).length,
       divisiMap,
@@ -252,8 +248,8 @@ export default function SemuaTugas() {
       // 3. Filter Sidebar: Status Tugas (Termasuk Revisi & Lewat Tenggat)
       if (selectedStatuses.length > 0) {
         const isOverdue = Boolean(t.deadline && new Date(t.deadline) < now);
-        const isRevisi = t.status === 'DIPROSES' && isRevisionNote(t.catatanRevisi);
-        const isDiprosesNormal = t.status === 'DIPROSES' && !isRevisionNote(t.catatanRevisi);
+        const isRevisi = t.status === 'DIPROSES' && Boolean(t.catatanRevisi);
+        const isDiprosesNormal = t.status === 'DIPROSES' && !t.catatanRevisi;
 
         const matchOverdue = selectedStatuses.includes('OVERDUE') && isOverdue;
         const matchRevisi = selectedStatuses.includes('PERLU_REVISI') && isRevisi;
@@ -321,7 +317,7 @@ export default function SemuaTugas() {
       };
     }
 
-    if (t.status === 'DIPROSES' && isRevisionNote(t.catatanRevisi)) {
+    if (t.status === 'DIPROSES' && t.catatanRevisi) {
       return {
         label: 'Perlu Revisi',
         bg: 'bg-rose-100 text-rose-900 border-rose-300',
@@ -332,7 +328,7 @@ export default function SemuaTugas() {
     switch (t.status) {
       case 'MENUNGGU_TRIASE':
         return {
-          label: t.jenisTiket === 'LAPORAN' ? 'Menunggu Triase' : 'Belum Dikerjakan',
+          label: 'Perlu Petugas',
           bg: 'bg-amber-100 text-amber-900 border-amber-300',
           dot: 'bg-amber-500',
         };
@@ -890,37 +886,7 @@ export default function SemuaTugas() {
                     )}
 
                     {/* Baris 4: ACTION BAR */}
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                      {!isLaporanEskalasi &&
-                        t.status === 'MENUNGGU_TRIASE' &&
-                        Number(t.pelaksana?.id) === currentUserId && (
-                          <button
-                            type="button"
-                            disabled={startingTaskId === t.id}
-                            onClick={async () => {
-                              setStartingTaskId(t.id);
-                              try {
-                                await api.patch(`/tickets/${t.id}/status`, {
-                                  status: 'DIPROSES',
-                                });
-                                await fetchData(true);
-                              } catch (err: unknown) {
-                                const msg =
-                                  (err as { response?: { data?: { message?: string } } })?.response
-                                    ?.data?.message ||
-                                  'Gagal memperbarui status pengerjaan tugas.';
-                                alert(msg);
-                              } finally {
-                                setStartingTaskId(null);
-                              }
-                            }}
-                            className="w-full sm:w-auto h-10 px-4 bg-[#f47a45] hover:bg-[#e56832] active:scale-95 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50"
-                          >
-                            <span>
-                              {startingTaskId === t.id ? 'Memproses...' : 'Kerjakan'}
-                            </span>
-                          </button>
-                        )}
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
                       <button
                         type="button"
                         onClick={() =>

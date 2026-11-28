@@ -237,7 +237,7 @@ export default function DetailTugas() {
     switch (status) {
       case 'MENUNGGU_TRIASE':
         return {
-          label: 'Belum Dikerjakan',
+          label: 'Menunggu Triase',
           bg: 'bg-amber-100 text-amber-900 border-amber-300',
           dot: 'bg-amber-500',
         };
@@ -468,6 +468,7 @@ export default function DetailTugas() {
     try {
       await api.patch(`/tickets/${id}/status`, {
         status: 'DIPROSES',
+        catatanRevisi: `[Dikerjakan oleh ${userRole}]`,
       });
       await fetchDetail(true);
       setIsKerjakanSendiri(true);
@@ -935,7 +936,7 @@ export default function DetailTugas() {
                               : 'bg-slate-200 text-slate-700'
                           }`}
                         >
-                          {getStatusBadge(child.status).label}
+                          {child.status.replace('_', ' ')}
                         </span>
                       </div>
 
@@ -975,7 +976,7 @@ export default function DetailTugas() {
                                     : 'bg-slate-200 text-slate-700'
                                 }`}
                               >
-                                {getStatusBadge(sub.status).label}
+                                {sub.status.replace('_', ' ')}
                               </span>
                             </div>
                           ))}

@@ -34,9 +34,8 @@ export default function DashboardStaff() {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [filterPrioritas, setFilterPrioritas] = useState<'ALL' | 'HIGH' | 'MENUNGGU_TRIASE' | 'DIPROSES'>('ALL');
+  const [filterPrioritas, setFilterPrioritas] = useState<'ALL' | 'HIGH' | 'DIPROSES'>('ALL');
   const [loading, setLoading] = useState<boolean>(true);
-  const [startingTaskId, setStartingTaskId] = useState<number | null>(null);
 
   const userName = getAuthUserName('Rekan Staf');
   const userRole = getAuthRole() || 'STAF';
@@ -116,7 +115,6 @@ export default function DashboardStaff() {
           Boolean(t.deadline && new Date(t.deadline) < new Date())
         );
       }
-      if (filterPrioritas === 'MENUNGGU_TRIASE') return t.status === 'MENUNGGU_TRIASE';
       if (filterPrioritas === 'DIPROSES') return t.status === 'DIPROSES';
       return true;
     });
@@ -155,39 +153,6 @@ export default function DashboardStaff() {
         return 'bg-rose-50 text-rose-700 border-rose-200';
       default:
         return 'bg-amber-50 text-amber-800 border-amber-200';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'MENUNGGU_TRIASE':
-        return 'Belum Dikerjakan';
-      case 'DIPROSES':
-        return 'Sedang Dikerjakan';
-      case 'MENUNGGU_VALIDASI':
-        return 'Menunggu Validasi';
-      case 'HOLD_ESKALASI':
-        return 'Ada Kendala';
-      default:
-        return status.replace('_', ' ');
-    }
-  };
-
-  const handleKerjakanTugas = async (e: React.MouseEvent, ticketId: number) => {
-    e.stopPropagation();
-    setStartingTaskId(ticketId);
-    try {
-      await api.patch(`/tickets/${ticketId}/status`, {
-        status: 'DIPROSES',
-      });
-      await fetchTickets();
-    } catch (error: unknown) {
-      const msg =
-        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Gagal memperbarui status pengerjaan tugas.';
-      alert(msg);
-    } finally {
-      setStartingTaskId(null);
     }
   };
 
@@ -369,17 +334,6 @@ export default function DashboardStaff() {
           </button>
           <button
             type="button"
-            onClick={() => setFilterPrioritas('MENUNGGU_TRIASE')}
-            className={`h-9 px-4 rounded-xl text-xs font-bold transition whitespace-nowrap active:scale-95 ${
-              filterPrioritas === 'MENUNGGU_TRIASE'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
-            }`}
-          >
-            Belum Dikerjakan
-          </button>
-          <button
-            type="button"
             onClick={() => setFilterPrioritas('DIPROSES')}
             className={`h-9 px-4 rounded-xl text-xs font-bold transition whitespace-nowrap active:scale-95 ${
               filterPrioritas === 'DIPROSES'
@@ -435,7 +389,7 @@ export default function DashboardStaff() {
                           {pStyle.label}
                         </span>
                         <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase ${getStatusStyle(ticket.status)}`}>
-                          {getStatusLabel(ticket.status)}
+                          {ticket.status.replace('_', ' ')}
                         </span>
                       </div>
                     </div>
@@ -475,29 +429,17 @@ export default function DashboardStaff() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {ticket.status === 'MENUNGGU_TRIASE' && (
-                          <button
-                            type="button"
-                            disabled={startingTaskId === ticket.id}
-                            onClick={(e) => handleKerjakanTugas(e, ticket.id)}
-                            className="h-10 px-3.5 bg-brand-orange hover:bg-brand-orange/90 active:scale-95 text-white rounded-2xl text-xs font-bold transition flex items-center gap-1 disabled:opacity-50"
-                          >
-                            <span>{startingTaskId === ticket.id ? 'Memproses...' : 'Kerjakan'}</span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/detail-tugas/${ticket.id}`);
-                          }}
-                          className="h-10 px-3.5 bg-brand-deep group-hover:bg-brand-orange text-white rounded-2xl text-xs font-bold transition flex items-center gap-1 shrink-0"
-                        >
-                          <span>Lihat</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/detail-tugas/${ticket.id}`);
+                        }}
+                        className="h-10 px-3.5 bg-brand-deep group-hover:bg-brand-orange text-white rounded-2xl text-xs font-bold transition flex items-center gap-1 shrink-0"
+                      >
+                        <span>Lihat</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>

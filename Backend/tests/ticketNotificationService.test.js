@@ -166,25 +166,4 @@ describe('dispatchTicketNotifications', () => {
     assert.deepEqual(sent, [20]);
     assert.equal(results[1].type, EVENT_TASK_SUBMITTED);
   });
-
-  it('tugas baru berstatus MENUNGGU_TRIASE tidak memicu REPORT_SUBMITTED ke koordinator dan menampilkan status Belum Dikerjakan', () => {
-    const newTask = baseTicket({
-      jenisTiket: 'TUGAS',
-      status: 'MENUNGGU_TRIASE',
-      pelaksanaId: 50,
-    });
-    const events = planTicketNotificationEvents(
-      { previous: null, current: newTask, actor: { id: 20, role: 'KOORDINATOR' } },
-      { koordinatorIds: [20, 21] }
-    );
-    assert.equal(events.length, 1);
-    assert.equal(events[0].type, EVENT_TASK_ASSIGNED);
-    assert.equal(events[0].recipientId, 50);
-
-    const msg = buildNotificationMessage({
-      type: EVENT_TASK_ASSIGNED,
-      ticket: newTask,
-    });
-    assert.match(msg, /Status: Belum Dikerjakan/);
-  });
 });

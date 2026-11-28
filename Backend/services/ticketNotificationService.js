@@ -40,14 +40,8 @@ function planTicketNotificationEvents({ previous, current, actor }, options = {}
   const events = [];
   if (!current?.id) return events;
 
-  const isNewReport =
-    !previous &&
-    current.status === 'MENUNGGU_TRIASE' &&
-    current.jenisTiket !== 'TUGAS' &&
-    !current.pelaksanaId;
-
   // Laporan Masalah Baru (MENUNGGU_TRIASE tanpa pelaksana)
-  if (isNewReport && Array.isArray(options.koordinatorIds)) {
+  if (!previous && current.status === 'MENUNGGU_TRIASE' && Array.isArray(options.koordinatorIds)) {
     for (const koorId of options.koordinatorIds) {
       events.push({
         type: EVENT_REPORT_SUBMITTED,
@@ -164,13 +158,7 @@ function formatJenisAwam(type) {
   return map[type] || String(type || '-').replace(/_/g, ' ');
 }
 
-function formatStatusAwam(status, ticket) {
-  if (
-    status === 'MENUNGGU_TRIASE' &&
-    (ticket?.jenisTiket === 'TUGAS' || Boolean(ticket?.pelaksanaId))
-  ) {
-    return 'Belum Dikerjakan';
-  }
+function formatStatusAwam(status) {
   const map = {
     MENUNGGU_TRIASE: 'Menunggu Peninjauan',
     DIPROSES: 'Sedang Dikerjakan',
@@ -226,7 +214,7 @@ function buildNotificationMessage({ type, ticket, actor, timeZone }) {
   };
 
   const jenisText = formatJenisAwam(type);
-  const statusText = formatStatusAwam(ticket.status, ticket);
+  const statusText = formatStatusAwam(ticket.status);
   const prioritasText = formatPrioritasAwam(ticket.prioritas);
 
   const lines = [
@@ -254,15 +242,10 @@ function buildNotificationMessage({ type, ticket, actor, timeZone }) {
 
 async function dispatchTicketNotifications({ previous, current, actor }, deps = {}) {
   let koordinatorIds = deps.koordinatorIds;
-  const isNewReportNeedingTriage =
-    !previous &&
-    current?.status === 'MENUNGGU_TRIASE' &&
-    current?.jenisTiket !== 'TUGAS' &&
-    !current?.pelaksanaId;
-  const isReportResubmitted =
-    previous?.status === 'DITOLAK' && current?.status === 'MENUNGGU_TRIASE';
-
-  if (!koordinatorIds && current?.divisiId && (isNewReportNeedingTriage || isReportResubmitted)) {
+  if (!koordinatorIds && current?.divisiId && (
+    (!previous && current.status === 'MENUNGGU_TRIASE') ||
+    (previous?.status === 'DITOLAK' && current.status === 'MENUNGGU_TRIASE')
+  )) {
     try {
       const db = deps.db || require('../db');
       const koorList = await db.user.findMany({
