@@ -40,8 +40,14 @@ function planTicketNotificationEvents({ previous, current, actor }, options = {}
   const events = [];
   if (!current?.id) return events;
 
+  const isNewReport =
+    !previous &&
+    current.status === 'MENUNGGU_TRIASE' &&
+    current.jenisTiket !== 'TUGAS' &&
+    !current.pelaksanaId;
+
   // Laporan Masalah Baru (MENUNGGU_TRIASE tanpa pelaksana)
-  if (!previous && current.status === 'MENUNGGU_TRIASE' && Array.isArray(options.koordinatorIds)) {
+  if (isNewReport && Array.isArray(options.koordinatorIds)) {
     for (const koorId of options.koordinatorIds) {
       events.push({
         type: EVENT_REPORT_SUBMITTED,
@@ -158,7 +164,13 @@ function formatJenisAwam(type) {
   return map[type] || String(type || '-').replace(/_/g, ' ');
 }
 
-function formatStatusAwam(status) {
+function formatStatusAwam(status, ticket) {
+  if (
+    status === 'MENUNGGU_TRIASE' &&
+    (ticket?.jenisTiket === 'TUGAS' || Boolean(ticket?.pelaksanaId))
+  ) {
+    return 'Belum Dikerjakan';
+  }
   const map = {
     MENUNGGU_TRIASE: 'Menunggu Peninjauan',
     DIPROSES: 'Sedang Dikerjakan',
@@ -214,7 +226,7 @@ function buildNotificationMessage({ type, ticket, actor, timeZone }) {
   };
 
   const jenisText = formatJenisAwam(type);
-  const statusText = formatStatusAwam(ticket.status);
+  const statusText = formatStatusAwam(ticket.status, ticket);
   const prioritasText = formatPrioritasAwam(ticket.prioritas);
 
   const lines = [
@@ -242,10 +254,15 @@ function buildNotificationMessage({ type, ticket, actor, timeZone }) {
 
 async function dispatchTicketNotifications({ previous, current, actor }, deps = {}) {
   let koordinatorIds = deps.koordinatorIds;
-  if (!koordinatorIds && current?.divisiId && (
-    (!previous && current.status === 'MENUNGGU_TRIASE') ||
-    (previous?.status === 'DITOLAK' && current.status === 'MENUNGGU_TRIASE')
-  )) {
+  const isNewReportNeedingTriage =
+    !previous &&
+    current?.status === 'MENUNGGU_TRIASE' &&
+    current?.jenisTiket !== 'TUGAS' &&
+    !current?.pelaksanaId;
+  const isReportResubmitted =
+    previous?.status === 'DITOLAK' && current?.status === 'MENUNGGU_TRIASE';
+
+  if (!koordinatorIds && current?.divisiId && (isNewReportNeedingTriage || isReportResubmitted)) {
     try {
       const db = deps.db || require('../db');
       const koorList = await db.user.findMany({

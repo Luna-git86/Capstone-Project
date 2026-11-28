@@ -311,16 +311,16 @@ export default function Dashboard() {
     }
   };
 
-  const getStatusBadge = (status: Ticket['status']) => {
+  const getStatusBadge = (status: Ticket['status'], jenisTiket?: Ticket['jenisTiket']) => {
     switch (status) {
       case 'MENUNGGU_TRIASE':
         return {
-          label: 'Menunggu Triase',
+          label: jenisTiket === 'LAPORAN' ? 'Menunggu Triase' : 'Belum Dikerjakan',
           style: 'bg-amber-50 text-amber-800 border-amber-200',
         };
       case 'DIPROSES':
         return {
-          label: 'Diproses',
+          label: jenisTiket === 'LAPORAN' ? 'Diproses' : 'Sedang Dikerjakan',
           style: 'bg-blue-50 text-blue-800 border-blue-200',
         };
       case 'MENUNGGU_VALIDASI':
@@ -802,7 +802,7 @@ export default function Dashboard() {
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {highPriorityTickets.slice(0, 7).map((ticket) => {
                     const st = getEffectiveStatus(ticket);
-                    const statusBadge = getStatusBadge(st);
+                    const statusBadge = getStatusBadge(st, ticket.jenisTiket);
                     const prioBadge = getPriorityBadge(ticket.prioritas);
                     const dl = formatDeadline(ticket.deadline);
                     const prefix = ticket.jenisTiket === 'LAPORAN' ? 'L' : 'T';

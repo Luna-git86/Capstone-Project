@@ -201,9 +201,9 @@ const createTicket = async (req, res) => {
     const selectedPrioritas =
       prioritas && validPrioritas.includes(prioritas) ? prioritas : 'MEDIUM';
 
-    // Laporan masalah berstatus MENUNGGU_TRIASE, sedangkan pembuatan tugas yang menunjuk staf langsung DIPROSES
-    const initialStatus =
-      isBuatTugas && selectedPelaksanaId ? 'DIPROSES' : 'MENUNGGU_TRIASE';
+    // Laporan masalah maupun pembuatan tugas baru dimulai dengan status MENUNGGU_TRIASE
+    // ("Belum Dikerjakan" untuk TUGAS) sampai pelaksana menekan tombol "Kerjakan" -> DIPROSES
+    const initialStatus = 'MENUNGGU_TRIASE';
 
     const finalFotoInstruksi =
       fotoInstruksi && String(fotoInstruksi).trim() !== ''
@@ -537,7 +537,7 @@ const triageTicket = async (req, res) => {
       }
     }
 
-    const nextStatus = status || (pelaksanaId ? 'DIPROSES' : currentTicket.status);
+    const nextStatus = status || (pelaksanaId ? 'MENUNGGU_TRIASE' : currentTicket.status);
 
     const updatedTicket = await prisma.ticket.update({
       where: { id },
@@ -684,8 +684,9 @@ const updateTicketStatus = async (req, res) => {
     // 2. Validasi Isolasi Divisi & Kepemilikan Tugas Berdasarkan Role
     if (role === 'KADIV') {
       const isPembuat = currentTicket.pembuatId === userId;
+      const isPelaksana = currentTicket.pelaksanaId === userId;
       const isDivisiSama = userDivisiId && currentTicket.divisiId === userDivisiId;
-      if (!isPembuat && !isDivisiSama) {
+      if (!isPembuat && !isPelaksana && !isDivisiSama) {
         return res.status(403).json({ message: 'Anda tidak memiliki hak akses untuk mengubah tiket dari divisi lain.' });
       }
     } else if (role === 'KOORDINATOR') {
