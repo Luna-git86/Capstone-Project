@@ -1,5 +1,5 @@
 // Frontend/src/pages/DashboardKadiv.tsx
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -8,10 +8,12 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  Inbox,
   Layers,
   Plus,
 } from 'lucide-react';
 import api from '../../services/api';
+import { getAuthDivisiNama, getAuthUserName, isKadivIT } from '../../utils/authStorage';
 
 interface TicketItem {
   id: number;
@@ -40,7 +42,12 @@ interface UserProfile {
   divisi?: { id: number; nama: string } | null;
 }
 
-type QueueFilter = 'ALL_ACTION' | 'MENUNGGU_TRIASE' | 'MENUNGGU_VALIDASI' | 'HOLD_ESKALASI';
+type QueueFilter =
+  | 'ALL_ACTION'
+  | 'MENUNGGU_TRIASE'
+  | 'DIPROSES'
+  | 'MENUNGGU_VALIDASI'
+  | 'HOLD_ESKALASI';
 
 export default function DashboardKadiv() {
   const navigate = useNavigate();
@@ -82,6 +89,10 @@ export default function DashboardKadiv() {
     return () => clearInterval(interval);
   }, []);
 
+  const namaKadiv = profile?.nama || getAuthUserName('Kepala Divisi');
+  const namaDivisi = profile?.divisi?.nama || getAuthDivisiNama('Divisi');
+  const userIsKadivIT = isKadivIT('KADIV', namaDivisi);
+
   // Filter tiket aktif saja (mengabaikan SELESAI & DITOLAK)
   const activeTickets = useMemo(() => {
     return tickets.filter((t) => t.status !== 'SELESAI' && t.status !== 'DITOLAK');
@@ -91,8 +102,12 @@ export default function DashboardKadiv() {
   const kpi = useMemo(() => {
     const now = new Date();
     const perluTriase = activeTickets.filter((t) => t.status === 'MENUNGGU_TRIASE');
+    const sedangDikerjakan = activeTickets.filter((t) => t.status === 'DIPROSES');
     const menungguEvaluasi = activeTickets.filter((t) => t.status === 'MENUNGGU_VALIDASI');
     const kendalaEskalasi = activeTickets.filter((t) => t.status === 'HOLD_ESKALASI');
+    const selesaiTugasCount = tickets.filter(
+      (t) => t.status === 'SELESAI' && (t.jenisTiket || 'TUGAS') === 'TUGAS'
+    ).length;
     const overdue = activeTickets.filter(
       (t) =>
         t.status !== 'MENUNGGU_VALIDASI' &&
@@ -101,23 +116,27 @@ export default function DashboardKadiv() {
 
     return {
       perluTriaseCount: perluTriase.length,
+      sedangDikerjakanCount: sedangDikerjakan.length,
       menungguEvaluasiCount: menungguEvaluasi.length,
       kendalaEskalasiCount: kendalaEskalasi.length,
+      selesaiTugasCount,
       overdueCount: overdue.length,
-      totalActionNeeded:
-        perluTriase.length + menungguEvaluasi.length + kendalaEskalasi.length,
+      totalActionNeeded: userIsKadivIT
+        ? perluTriase.length + sedangDikerjakan.length + kendalaEskalasi.length
+        : perluTriase.length + menungguEvaluasi.length + kendalaEskalasi.length,
     };
-  }, [activeTickets]);
+  }, [activeTickets, tickets, userIsKadivIT]);
 
   // Daftar antrean yang butuh keputusan Kadiv
   const actionQueueTickets = useMemo(() => {
-    const list = activeTickets.filter((t) =>
-      ['MENUNGGU_TRIASE', 'MENUNGGU_VALIDASI', 'HOLD_ESKALASI'].includes(t.status)
-    );
+    const targetStatuses = userIsKadivIT
+      ? ['MENUNGGU_TRIASE', 'DIPROSES', 'HOLD_ESKALASI']
+      : ['MENUNGGU_TRIASE', 'MENUNGGU_VALIDASI', 'HOLD_ESKALASI'];
+    const list = activeTickets.filter((t) => targetStatuses.includes(t.status));
 
     if (activeFilter === 'ALL_ACTION') return list;
     return list.filter((t) => t.status === activeFilter);
-  }, [activeTickets, activeFilter]);
+  }, [activeTickets, activeFilter, userIsKadivIT]);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Belum ditentukan';
@@ -132,8 +151,13 @@ export default function DashboardKadiv() {
     switch (status) {
       case 'MENUNGGU_TRIASE':
         return {
-          label: 'PERLU TRIASE',
+          label: userIsKadivIT ? 'LAPORAN MASUK' : 'PERLU TRIASE',
           style: 'bg-amber-50 text-amber-700 border-amber-200',
+        };
+      case 'DIPROSES':
+        return {
+          label: 'SEDANG DIKERJAKAN',
+          style: 'bg-blue-50 text-blue-700 border-blue-200',
         };
       case 'MENUNGGU_VALIDASI':
         return {
@@ -172,47 +196,60 @@ export default function DashboardKadiv() {
     }
   };
 
-  const namaKadiv = profile?.nama || 'Kepala Divisi';
-  const namaDivisi = profile?.divisi?.nama || 'Divisi';
-
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6 pb-28 md:pb-12">
       {/* 1. HEADER MANAJERIAL KADIV */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-xs">
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-            Dashboard Manajerial (Kepala Divisi)
+            {userIsKadivIT
+              ? 'Dashboard Kepala Divisi IT & SIMRS'
+              : 'Dashboard Manajerial (Kepala Divisi)'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Selamat bertugas, <strong className="text-slate-700">{namaKadiv}</strong> (KADIV •{' '}
-            {namaDivisi}) — Panel Triase, Evaluasi & Tindak Lanjut Tugas Divisi.
+            {namaDivisi}) —{' '}
+            {userIsKadivIT
+              ? 'Panel Pembuatan Laporan Tugas Mandiri & Penanganan Langsung Laporan IT.'
+              : 'Panel Triase, Evaluasi & Tindak Lanjut Tugas Divisi.'}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {userIsKadivIT && (
+            <button
+              type="button"
+              onClick={() => navigate('/menu-laporan')}
+              className="h-11 px-4 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs sm:text-sm rounded-2xl transition flex items-center gap-2"
+            >
+              <Inbox className="w-4 h-4 text-[#0f5c43]" />
+              <span>Laporan Masuk IT</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => navigate('/tambah-tugas')}
             className="h-11 px-4 bg-white hover:bg-slate-50 text-[#0f5c43] border border-[#0f5c43]/30 font-bold text-xs sm:text-sm rounded-2xl transition flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            <span>Buat Tugas</span>
+            <span>{userIsKadivIT ? 'Buat Laporan Tugas Mandiri' : 'Buat Tugas'}</span>
           </button>
 
           <button
             type="button"
-            onClick={() => navigate('/semua-tugas')}
+            onClick={() => navigate(userIsKadivIT ? '/riwayat' : '/semua-tugas')}
             className="h-11 px-5 bg-[#0f5c43] hover:bg-[#0b4633] active:scale-95 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-xs transition flex items-center gap-2"
           >
             <Layers className="w-4 h-4" />
-            <span>Semua Tugas Divisi</span>
+            <span>{userIsKadivIT ? 'Riwayat Tugas Selesai' : 'Semua Tugas Divisi'}</span>
           </button>
         </div>
       </div>
 
       {/* 2. EMPAT KARTU KPI KEPUTUSAN HARIAN */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Kartu 1: Perlu Triase & Delegasi */}
+        {/* Kartu 1: Perlu Triase / Laporan Masuk */}
         <button
           type="button"
           onClick={() =>
@@ -227,40 +264,49 @@ export default function DashboardKadiv() {
           }`}
         >
           <div className="flex items-center justify-between w-full">
-            <span className="text-xs font-bold text-slate-500">Perlu Triase & Delegasi</span>
+            <span className="text-xs font-bold text-slate-500">
+              {userIsKadivIT ? 'Laporan Masuk IT' : 'Perlu Triase & Delegasi'}
+            </span>
             <ClipboardList className="w-4 h-4 text-amber-500" />
           </div>
           <p className="text-3xl font-extrabold text-amber-600 mt-3">
             {kpi.perluTriaseCount}
           </p>
           <span className="text-[11px] text-slate-400 mt-1">
-            Menunggu penunjukan staf & SLA
+            {userIsKadivIT
+              ? 'Menunggu penanganan langsung Kadiv IT'
+              : 'Menunggu penunjukan staf & SLA'}
           </span>
         </button>
 
-        {/* Kartu 2: Menunggu Evaluasi */}
+        {/* Kartu 2: Sedang Dikerjakan (Kadiv IT) / Menunggu Evaluasi (Kadiv Lain) */}
         <button
           type="button"
           onClick={() =>
-            setActiveFilter((prev) =>
-              prev === 'MENUNGGU_VALIDASI' ? 'ALL_ACTION' : 'MENUNGGU_VALIDASI'
-            )
+            setActiveFilter((prev) => {
+              const target = userIsKadivIT ? 'DIPROSES' : 'MENUNGGU_VALIDASI';
+              return prev === target ? 'ALL_ACTION' : target;
+            })
           }
           className={`bg-white p-5 rounded-3xl border text-left shadow-xs hover:shadow-md transition flex flex-col justify-between ${
-            activeFilter === 'MENUNGGU_VALIDASI'
+            activeFilter === (userIsKadivIT ? 'DIPROSES' : 'MENUNGGU_VALIDASI')
               ? 'border-indigo-400 ring-2 ring-indigo-200'
               : 'border-slate-200/90'
           }`}
         >
           <div className="flex items-center justify-between w-full">
-            <span className="text-xs font-bold text-slate-500">Menunggu Evaluasi</span>
+            <span className="text-xs font-bold text-slate-500">
+              {userIsKadivIT ? 'Sedang Dikerjakan' : 'Menunggu Evaluasi'}
+            </span>
             <CheckCircle2 className="w-4 h-4 text-indigo-500" />
           </div>
           <p className="text-3xl font-extrabold text-indigo-600 mt-3">
-            {kpi.menungguEvaluasiCount}
+            {userIsKadivIT ? kpi.sedangDikerjakanCount : kpi.menungguEvaluasiCount}
           </p>
           <span className="text-[11px] text-slate-400 mt-1">
-            Bukti pekerjaan siap ditinjau
+            {userIsKadivIT
+              ? 'Arahan / laporan yang sedang ditangani'
+              : 'Bukti pekerjaan siap ditinjau'}
           </span>
         </button>
 
@@ -290,21 +336,33 @@ export default function DashboardKadiv() {
           </span>
         </button>
 
-        {/* Kartu 4: Tugas Terlambat (Overdue) */}
+        {/* Kartu 4: Laporan Tugas Selesai (Kadiv IT) / Tugas Terlambat (Kadiv Lain) */}
         <button
           type="button"
-          onClick={() => navigate('/semua-tugas')}
+          onClick={() => navigate(userIsKadivIT ? '/riwayat' : '/semua-tugas')}
           className="bg-white p-5 rounded-3xl border border-slate-200/90 text-left shadow-xs hover:shadow-md transition flex flex-col justify-between"
         >
           <div className="flex items-center justify-between w-full">
-            <span className="text-xs font-bold text-slate-500">Tugas Terlambat</span>
-            <AlertTriangle className="w-4 h-4 text-rose-600" />
+            <span className="text-xs font-bold text-slate-500">
+              {userIsKadivIT ? 'Laporan Tugas Selesai' : 'Tugas Terlambat'}
+            </span>
+            {userIsKadivIT ? (
+              <CheckCircle2 className="w-4 h-4 text-[#0f5c43]" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
+            )}
           </div>
-          <p className="text-3xl font-extrabold text-slate-900 mt-3">
-            {kpi.overdueCount}
+          <p
+            className={`text-3xl font-extrabold mt-3 ${
+              userIsKadivIT ? 'text-[#0f5c43]' : 'text-slate-900'
+            }`}
+          >
+            {userIsKadivIT ? kpi.selesaiTugasCount : kpi.overdueCount}
           </p>
           <span className="text-[11px] text-slate-400 mt-1">
-            Melewati batas waktu pengerjaan
+            {userIsKadivIT
+              ? 'Laporan tugas mandiri IT berstatus selesai'
+              : 'Melewati batas waktu pengerjaan'}
           </span>
         </button>
       </div>
@@ -314,10 +372,14 @@ export default function DashboardKadiv() {
         <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-base sm:text-lg font-extrabold text-slate-900">
-              Monitoring Antrean Divisi
+              {userIsKadivIT
+                ? 'Antrean Pekerjaan & Laporan Masuk IT'
+                : 'Monitoring Antrean Divisi'}
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Rangkuman tiket divisi yang sedang menunggu penunjukan staf, proses evaluasi, atau respon kendala.
+              {userIsKadivIT
+                ? 'Rangkuman laporan masalah IT yang masuk serta arahan aktif yang siap ditangani mandiri.'
+                : 'Rangkuman tiket divisi yang sedang menunggu penunjukan staf, proses evaluasi, atau respon kendala.'}
             </p>
           </div>
 
@@ -329,12 +391,20 @@ export default function DashboardKadiv() {
 
         {/* Filter Tab Cepat */}
         <div className="px-5 py-3 bg-slate-50/70 border-b border-slate-100 flex flex-wrap items-center gap-2">
-          {[
-            { key: 'ALL_ACTION', label: `Semua Antrean (${kpi.totalActionNeeded})` },
-            { key: 'MENUNGGU_TRIASE', label: `Perlu Triase (${kpi.perluTriaseCount})` },
-            { key: 'MENUNGGU_VALIDASI', label: `Menunggu Evaluasi (${kpi.menungguEvaluasiCount})` },
-            { key: 'HOLD_ESKALASI', label: `Kendala / Eskalasi (${kpi.kendalaEskalasiCount})` },
-          ].map((tab) => (
+          {(userIsKadivIT
+            ? [
+                { key: 'ALL_ACTION', label: `Semua Antrean (${kpi.totalActionNeeded})` },
+                { key: 'MENUNGGU_TRIASE', label: `Laporan Masuk (${kpi.perluTriaseCount})` },
+                { key: 'DIPROSES', label: `Sedang Dikerjakan (${kpi.sedangDikerjakanCount})` },
+                { key: 'HOLD_ESKALASI', label: `Kendala / Eskalasi (${kpi.kendalaEskalasiCount})` },
+              ]
+            : [
+                { key: 'ALL_ACTION', label: `Semua Antrean (${kpi.totalActionNeeded})` },
+                { key: 'MENUNGGU_TRIASE', label: `Perlu Triase (${kpi.perluTriaseCount})` },
+                { key: 'MENUNGGU_VALIDASI', label: `Menunggu Evaluasi (${kpi.menungguEvaluasiCount})` },
+                { key: 'HOLD_ESKALASI', label: `Kendala / Eskalasi (${kpi.kendalaEskalasiCount})` },
+              ]
+          ).map((tab) => (
             <button
               key={tab.key}
               type="button"

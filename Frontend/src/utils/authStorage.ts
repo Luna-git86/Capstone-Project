@@ -130,6 +130,33 @@ export const isKadivPelayananMedis = (divisiNama?: string | null): boolean => {
 };
 
 /**
+ * Memeriksa apakah divisi merupakan Divisi IT & SIMRS.
+ */
+export const isDivisiIT = (divisiNama?: string | null): boolean => {
+  const normalized = (divisiNama ?? getAuthDivisiNama('')).trim();
+  return /\bit\b|simrs/i.test(normalized);
+};
+
+/**
+ * Memeriksa apakah pengguna aktif merupakan Kepala Divisi IT & SIMRS (tanpa bawahan).
+ */
+export const isKadivIT = (role?: string | null, divisiNama?: string | null): boolean => {
+  const activeRole = role ?? getAuthRole();
+  if (activeRole !== 'KADIV') return false;
+  return isDivisiIT(divisiNama);
+};
+
+/**
+ * Hanya KOORDINATOR dan khusus KADIV IT & SIMRS yang dapat mengakses Menu Laporan Masuk divisi.
+ */
+export const canAccessMenuLaporan = (role?: string | null, divisiNama?: string | null): boolean => {
+  const activeRole = role ?? getAuthRole();
+  if (activeRole === 'KOORDINATOR') return true;
+  if (activeRole === 'KADIV') return isDivisiIT(divisiNama);
+  return false;
+};
+
+/**
  * Hanya DIREKTUR dan KADIV Pelayanan Medis yang berwenang melihat Analisis Kunjungan.
  */
 export const canAccessAnalisisKunjungan = (role?: string | null, divisiNama?: string | null): boolean => {

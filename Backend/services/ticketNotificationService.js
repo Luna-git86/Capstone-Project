@@ -248,17 +248,32 @@ async function dispatchTicketNotifications({ previous, current, actor }, deps = 
   )) {
     try {
       const db = deps.db || require('../db');
-      const koorList = await db.user.findMany({
-        where: { divisiId: current.divisiId, role: 'KOORDINATOR' },
-        select: { id: true },
-      });
-      koordinatorIds = koorList.map((k) => k.id);
-      if (koordinatorIds.length === 0) {
+      const divisiNama =
+        current?.divisi?.nama ||
+        (db.divisi?.findUnique
+          ? (await db.divisi.findUnique({ where: { id: current.divisiId }, select: { nama: true } }))?.nama
+          : null);
+      const targetIsDivisiIT = Boolean(divisiNama && /\bit\b|simrs/i.test(String(divisiNama).trim()));
+
+      if (targetIsDivisiIT) {
         const kadivList = await db.user.findMany({
           where: { divisiId: current.divisiId, role: 'KADIV' },
           select: { id: true },
         });
         koordinatorIds = kadivList.map((k) => k.id);
+      } else {
+        const koorList = await db.user.findMany({
+          where: { divisiId: current.divisiId, role: 'KOORDINATOR' },
+          select: { id: true },
+        });
+        koordinatorIds = koorList.map((k) => k.id);
+        if (koordinatorIds.length === 0) {
+          const kadivList = await db.user.findMany({
+            where: { divisiId: current.divisiId, role: 'KADIV' },
+            select: { id: true },
+          });
+          koordinatorIds = kadivList.map((k) => k.id);
+        }
       }
     } catch (e) {
       // ignore

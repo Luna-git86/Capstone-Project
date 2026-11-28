@@ -17,7 +17,13 @@ import {
   X,
 } from 'lucide-react';
 import api from '../services/api';
-import { getAuthUserId, getAuthRole, getAuthToken } from '../utils/authStorage';
+import {
+  getAuthUserId,
+  getAuthRole,
+  getAuthToken,
+  getAuthDivisiNama,
+  isKadivIT,
+} from '../utils/authStorage';
 import TaskSubNav from '../components/TaskSubNav';
 
 interface Ticket {
@@ -345,7 +351,11 @@ const SemuaTugasLengkap: React.FC = () => {
             className="h-11 px-5 bg-gradient-to-r from-[#0f5c43] to-teal-700 hover:opacity-95 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-sm flex items-center justify-center gap-2 transition shrink-0"
           >
             <Plus className="w-4 h-4" />
-            <span>Buat Tugas Baru</span>
+            <span>
+              {isKadivIT(userRole, getAuthDivisiNama(''))
+                ? 'Buat Laporan Tugas Mandiri'
+                : 'Buat Tugas Baru'}
+            </span>
           </button>
         )}
       </div>

@@ -2,7 +2,29 @@
 const prisma = require('../db');
 const { dispatchTicketNotifications } = require('../services/ticketNotificationService');
 
-// 1. Pengajuan Laporan Masalah (Semua Pegawai Operasional) & Pembuatan Tugas (Koordinator s/d Direktur)
+const isDivisiIT = (namaDivisi) => {
+  if (!namaDivisi) return false;
+  return /\bit\b|simrs/i.test(String(namaDivisi).trim());
+};
+
+const checkIsKadivIT = async (user, preloadedDivisi = null) => {
+  if (!user || user.role !== 'KADIV') return false;
+  if (user.divisi && typeof user.divisi === 'string') {
+    return isDivisiIT(user.divisi);
+  }
+  const userDivisiId = user.divisiId ? Number(user.divisiId) : null;
+  if (!userDivisiId) return false;
+  if (preloadedDivisi && Number(preloadedDivisi.id) === userDivisiId) {
+    return isDivisiIT(preloadedDivisi.nama);
+  }
+  try {
+    const div = await prisma.divisi.findUnique({ where: { id: userDivisiId } });
+    return isDivisiIT(div?.nama);
+  } catch {
+    return false;
+  }
+};
+
 // 1. Pengajuan Laporan Masalah (Semua Pegawai Operasional) & Pembuatan Tugas (Koordinator s/d Direktur)
 const createTicket = async (req, res) => {
   try {
@@ -34,7 +56,9 @@ const createTicket = async (req, res) => {
       pelaksanaId,
       deadline,
       fotoInstruksi, // Menangkap foto instruksi / foto awal laporan masalah dari Frontend
-      tipe, // 'LAPORAN_MASALAH' atau 'BUAT_TUGAS'
+      fotoBukti, // Bukti penyelesaian langsung (khusus laporan tugas mandiri Kadiv IT)
+      laporanPenyelesaian, // Catatan penyelesaian langsung (khusus laporan tugas mandiri Kadiv IT)
+      tipe, // 'LAPORAN_MASALAH', 'BUAT_TUGAS', atau 'LAPORAN_TUGAS_MANDIRI'
       isBuatTugas: bodyIsBuatTugas,
       parentTicketId, // Hubungan relasi arahan induk (Kadiv -> Koordinator -> Staf)
     } = req.body;
@@ -60,8 +84,24 @@ const createTicket = async (req, res) => {
       return res.status(400).json({ message: 'Divisi tujuan tidak ditemukan.' });
     }
 
+    const callerIsKadivIT = await checkIsKadivIT(req.user, divisi);
     const isAtasan = ['DIREKTUR', 'KADIV', 'KOORDINATOR'].includes(role);
-    const isBuatTugas = tipe === 'BUAT_TUGAS' || bodyIsBuatTugas === true || bodyIsBuatTugas === 'true' || (parentTicketId !== undefined && parentTicketId !== null && parentTicketId !== '');
+    const isBuatTugasReguler =
+      tipe === 'BUAT_TUGAS' ||
+      bodyIsBuatTugas === true ||
+      bodyIsBuatTugas === 'true' ||
+      (parentTicketId !== undefined && parentTicketId !== null && parentTicketId !== '');
+
+    if (tipe === 'LAPORAN_TUGAS_MANDIRI' && !callerIsKadivIT) {
+      return res.status(403).json({
+        message: 'Fitur pembuatan laporan tugas mandiri hanya tersedia khusus untuk Kepala Divisi IT & SIMRS.',
+      });
+    }
+
+    // Khusus Kadiv IT: karena tidak memiliki bawahan (Koordinator/Staf), pembuatan tugas dialihkan ke Laporan Tugas Mandiri (1 form langsung selesai)
+    const isLaporanTugasMandiri =
+      tipe === 'LAPORAN_TUGAS_MANDIRI' || (callerIsKadivIT && isBuatTugasReguler);
+    const isBuatTugas = isBuatTugasReguler || isLaporanTugasMandiri;
 
     // Jika melalui menu Buat Tugas, wajib memiliki role Koordinator, Kadiv, atau Direktur
     if (isBuatTugas && !isAtasan) {
@@ -70,9 +110,30 @@ const createTicket = async (req, res) => {
       });
     }
 
-    // Saat membuat tugas langsung, batas waktu (tanggal & jam) wajib diisi
+    if (isLaporanTugasMandiri) {
+      if ((userDivisiId && selectedDivisiId !== userDivisiId) || !isDivisiIT(divisi.nama)) {
+        return res.status(403).json({
+          message: 'Kepala Divisi IT hanya dapat membuat laporan tugas mandiri pada Divisi IT & SIMRS.',
+        });
+      }
+      if (!fotoBukti || !String(fotoBukti).trim()) {
+        return res.status(400).json({
+          message: 'Foto bukti dokumentasi pekerjaan wajib diunggah saat membuat laporan tugas mandiri!',
+        });
+      }
+      if (!laporanPenyelesaian || !String(laporanPenyelesaian).trim()) {
+        return res.status(400).json({
+          message: 'Catatan laporan penyelesaian pekerjaan wajib diisi!',
+        });
+      }
+    }
+
+    const now = new Date();
+
+    // Saat membuat tugas reguler, batas waktu (tanggal & jam) wajib diisi.
+    // Untuk laporan tugas mandiri Kadiv IT (1 form langsung selesai), deadline bersifat opsional (default ke waktu selesai saat ini agar tercatat di SLA).
     let selectedDeadline = null;
-    if (isBuatTugas && (!deadline || String(deadline).trim() === '')) {
+    if (isBuatTugas && !isLaporanTugasMandiri && (!deadline || String(deadline).trim() === '')) {
       return res.status(400).json({
         message: 'Batas waktu (tanggal dan jam) wajib diisi saat membuat tugas.',
       });
@@ -84,6 +145,8 @@ const createTicket = async (req, res) => {
         return res.status(400).json({ message: 'Format tanggal dan jam batas waktu tidak valid.' });
       }
       selectedDeadline = parsedDeadline;
+    } else if (isLaporanTugasMandiri) {
+      selectedDeadline = now;
     }
 
     // Validasi Relasi Arahan Induk (parentTicketId)
@@ -110,8 +173,19 @@ const createTicket = async (req, res) => {
       // Wariskan fotoInstruksi dari tiket induk jika tugas turunan tidak mengunggah foto baru
       inheritedFotoInstruksi = parentTicket.fotoInstruksi || null;
 
-      // Opsional: Jika ini turunan dari laporan lama, ubah status laporan lama menjadi DIPROSES
-      if (['MENUNGGU_TRIASE', 'HOLD_ESKALASI'].includes(parentTicket.status)) {
+      if (isLaporanTugasMandiri) {
+        // Laporan tugas mandiri Kadiv IT langsung berstatus SELESAI sehingga tiket laporan induk juga otomatis SELESAI
+        await prisma.ticket.update({
+          where: { id: selectedParentTicketId },
+          data: {
+            status: 'SELESAI',
+            completedAt: now,
+            penanggungJawabId: pembuatId,
+            pelaksanaId: pembuatId,
+          },
+        });
+      } else if (['MENUNGGU_TRIASE', 'HOLD_ESKALASI'].includes(parentTicket.status)) {
+        // Opsional: Jika ini turunan dari laporan lama, ubah status laporan lama menjadi DIPROSES
         await prisma.ticket.update({
           where: { id: selectedParentTicketId },
           data: { status: 'DIPROSES', penanggungJawabId: pembuatId },
@@ -122,7 +196,11 @@ const createTicket = async (req, res) => {
     let selectedPelaksanaId = null;
     let penanggungJawabId = null;
 
-    if (isBuatTugas) {
+    if (isLaporanTugasMandiri) {
+      // Kadiv IT mengerjakan dan menyelesaikan sendiri tanpa bawahan
+      penanggungJawabId = pembuatId;
+      selectedPelaksanaId = pembuatId;
+    } else if (isBuatTugas) {
       penanggungJawabId = pembuatId;
 
       if (!pelaksanaId) {
@@ -139,7 +217,7 @@ const createTicket = async (req, res) => {
         return res.status(400).json({ message: 'Penerima tugas / pelaksana tidak ditemukan.' });
       }
 
-      // ATURAN HIERARKI BISNIS 1: KADIV
+      // ATURAN HIERARKI BISNIS 1: KADIV (Non-IT)
       if (role === 'KADIV') {
         if (pelaksana.role === 'STAF') {
           return res.status(400).json({
@@ -201,19 +279,25 @@ const createTicket = async (req, res) => {
     const selectedPrioritas =
       prioritas && validPrioritas.includes(prioritas) ? prioritas : 'MEDIUM';
 
-    // Laporan masalah berstatus MENUNGGU_TRIASE, sedangkan pembuatan tugas yang menunjuk staf langsung DIPROSES
-    const initialStatus =
-      isBuatTugas && selectedPelaksanaId ? 'DIPROSES' : 'MENUNGGU_TRIASE';
+    // Laporan tugas mandiri Kadiv IT langsung SELESAI; tugas reguler DIPROSES; laporan masalah MENUNGGU_TRIASE
+    const initialStatus = isLaporanTugasMandiri
+      ? 'SELESAI'
+      : isBuatTugas && selectedPelaksanaId
+      ? 'DIPROSES'
+      : 'MENUNGGU_TRIASE';
 
     const finalFotoInstruksi =
       fotoInstruksi && String(fotoInstruksi).trim() !== ''
         ? String(fotoInstruksi).trim()
         : inheritedFotoInstruksi;
 
-    // Tentukan jenis tiket secara otomatis berdasarkan konteks pembuatan jika frontend tidak mengirimkannya
-    // Jika isBuatTugas = true (dari halaman tambah tugas), maka default-nya 'TUGAS'
-    // Jika isBuatTugas = false (dari halaman lapor masalah), maka default-nya 'LAPORAN'
-    const finalJenisTiket = jenisTiket ? String(jenisTiket).toUpperCase() : (isBuatTugas ? 'TUGAS' : 'LAPORAN');
+    const finalJenisTiket = isLaporanTugasMandiri
+      ? 'TUGAS'
+      : jenisTiket
+      ? String(jenisTiket).toUpperCase()
+      : isBuatTugas
+      ? 'TUGAS'
+      : 'LAPORAN';
 
     const newTicket = await prisma.ticket.create({
       data: {
@@ -223,6 +307,15 @@ const createTicket = async (req, res) => {
         prioritas: selectedPrioritas,
         status: initialStatus,
         fotoInstruksi: finalFotoInstruksi,
+        ...(isLaporanTugasMandiri
+          ? {
+              fotoBukti: String(fotoBukti).trim(),
+              laporanPenyelesaian: String(laporanPenyelesaian).trim(),
+              catatanRevisi:
+                'Laporan tugas mandiri Kepala Divisi IT & SIMRS (diselesaikan langsung tanpa validasi atasan).',
+              completedAt: now,
+            }
+          : {}),
         pembuatId,
         penanggungJawabId,
         divisiId: selectedDivisiId,
@@ -247,14 +340,18 @@ const createTicket = async (req, res) => {
       },
     });
 
-    let detailsLog = `${role} ${isBuatTugas ? 'membuat tugas' : 'melaporkan masalah'} #T-${String(newTicket.id).padStart(3, '0')} (${newTicket.judul}) ke Divisi ${newTicket.divisi?.nama}`;
+    let detailsLog = isLaporanTugasMandiri
+      ? `KADIV IT membuat dan menyelesaikan laporan tugas mandiri #T-${String(newTicket.id).padStart(3, '0')} (${newTicket.judul}) pada ${newTicket.divisi?.nama}`
+      : `${role} ${isBuatTugas ? 'membuat tugas' : 'melaporkan masalah'} #T-${String(newTicket.id).padStart(3, '0')} (${newTicket.judul}) ke Divisi ${newTicket.divisi?.nama}`;
     if (selectedParentTicketId) {
-      detailsLog += ` [Berdasarkan Arahan Induk #T-${String(selectedParentTicketId).padStart(3, '0')}]`;
+      detailsLog += ` [Berdasarkan Arahan/Laporan Induk #T-${String(selectedParentTicketId).padStart(3, '0')}]`;
     }
 
     await prisma.auditLog.create({
       data: {
-        action: isBuatTugas
+        action: isLaporanTugasMandiri
+          ? 'SUBMIT_COMPLETION_REPORT'
+          : isBuatTugas
           ? role === 'KADIV'
             ? 'CREATE_DIRECTIVE'
             : 'CREATE_TASK'
@@ -263,10 +360,11 @@ const createTicket = async (req, res) => {
         entityId: newTicket.id,
         userId: pembuatId,
         details: detailsLog,
+        ...(isLaporanTugasMandiri ? { createdAt: now } : {}),
       },
     });
 
-    if (isBuatTugas && selectedPelaksanaId) {
+    if (isBuatTugas && !isLaporanTugasMandiri && selectedPelaksanaId) {
       try {
         await dispatchTicketNotifications({
           previous: null,
@@ -289,7 +387,9 @@ const createTicket = async (req, res) => {
     }
 
     return res.status(201).json({
-      message: isBuatTugas
+      message: isLaporanTugasMandiri
+        ? 'Laporan tugas mandiri Kepala Divisi IT berhasil disimpan dan langsung berstatus Selesai!'
+        : isBuatTugas
         ? role === 'KADIV'
           ? 'Arahan divisi berhasil diterbitkan kepada Koordinator!'
           : 'Tugas operasional berhasil dibuat dan ditugaskan kepada Staf!'
@@ -666,9 +766,33 @@ const updateTicketStatus = async (req, res) => {
 
     const userId = Number(req.user.id);
     const userDivisiId = req.user.divisiId ? Number(req.user.divisiId) : null;
+    const callerIsKadivIT = await checkIsKadivIT(req.user);
+
+    const hasBuktiDanCatatan =
+      Boolean(fotoBukti || currentTicket.fotoBukti) &&
+      Boolean(
+        (laporanPenyelesaian && String(laporanPenyelesaian).trim()) ||
+          (currentTicket.laporanPenyelesaian && String(currentTicket.laporanPenyelesaian).trim())
+      );
+
+    const isKadivItSelfCompletion =
+      callerIsKadivIT &&
+      status === 'SELESAI' &&
+      (userId === currentTicket.pelaksanaId || !currentTicket.pelaksanaId);
+
+    if (isKadivItSelfCompletion && !hasBuktiDanCatatan) {
+      return res.status(400).json({
+        message: 'Foto bukti dokumentasi dan catatan penyelesaian wajib diisi untuk menyelesaikan tugas mandiri Kepala Divisi IT!',
+      });
+    }
 
     // 1. Validasi Pemisahan Pelaksana dan Pemeriksa (Segregation of Duties)
-    if (status === 'SELESAI' && currentTicket.pelaksanaId && userId === currentTicket.pelaksanaId) {
+    if (
+      status === 'SELESAI' &&
+      currentTicket.pelaksanaId &&
+      userId === currentTicket.pelaksanaId &&
+      !isKadivItSelfCompletion
+    ) {
       return res.status(400).json({
         message: 'Pelaksana tugas tidak dapat memverifikasi atau mengevaluasi pekerjaannya sendiri.',
       });
@@ -743,7 +867,10 @@ const updateTicketStatus = async (req, res) => {
       }
 
       if (role === 'KADIV') {
-        if (currentTicket.status !== 'HOLD_ESKALASI' || isAlreadyAtDirektur) {
+        const allowedKadivStatuses = callerIsKadivIT
+          ? ['MENUNGGU_TRIASE', 'DIPROSES', 'HOLD_ESKALASI']
+          : ['HOLD_ESKALASI'];
+        if (!allowedKadivStatuses.includes(currentTicket.status) || isAlreadyAtDirektur) {
           return res.status(403).json({
             message: 'Laporan ini belum dieskalasikan ke Kadiv atau sudah diteruskan ke Direktur.',
           });
@@ -793,6 +920,14 @@ const updateTicketStatus = async (req, res) => {
       }
     }
 
+    const nowCompletion = new Date();
+    const resolvedCompletedAt =
+      status === 'SELESAI'
+        ? currentTicket.completedAt || nowCompletion
+        : status === 'DIPROSES'
+        ? null
+        : currentTicket.completedAt;
+
     const dataToUpdate = {
       status,
       catatanRevisi:
@@ -811,12 +946,13 @@ const updateTicketStatus = async (req, res) => {
       lokasi: lokasi !== undefined ? lokasi : currentTicket.lokasi,
       divisiId: divisiId !== undefined && divisiId !== '' ? Number(divisiId) : currentTicket.divisiId,
       deadline: updatedDeadline,
-      completedAt:
-        status === 'SELESAI'
-          ? currentTicket.completedAt || new Date()
-          : status === 'DIPROSES'
-          ? null
-          : currentTicket.completedAt,
+      completedAt: resolvedCompletedAt,
+      ...(callerIsKadivIT && currentTicket.jenisTiket === 'LAPORAN' && status === 'DIPROSES'
+        ? { pelaksanaId: userId, penanggungJawabId: userId }
+        : {}),
+      ...(isKadivItSelfCompletion && !currentTicket.pelaksanaId
+        ? { pelaksanaId: userId }
+        : {}),
     };
 
     const updatedTicket = await prisma.ticket.update({
@@ -869,7 +1005,7 @@ const updateTicketStatus = async (req, res) => {
     await prisma.auditLog.create({
       data: {
         action:
-          status === 'MENUNGGU_VALIDASI'
+          status === 'MENUNGGU_VALIDASI' || isKadivItSelfCompletion
             ? 'SUBMIT_COMPLETION_REPORT'
             : status === 'SELESAI'
             ? 'APPROVE_EVALUATION'
@@ -880,6 +1016,7 @@ const updateTicketStatus = async (req, res) => {
         entityId: updatedTicket.id,
         userId: Number(req.user.id),
         details: `${role} mengubah status tiket #T-${String(updatedTicket.id).padStart(3, '0')} menjadi ${status}`,
+        ...(isKadivItSelfCompletion ? { createdAt: resolvedCompletedAt || nowCompletion } : {}),
       },
     });
 
@@ -897,6 +1034,8 @@ const updateTicketStatus = async (req, res) => {
       message:
         status === 'MENUNGGU_VALIDASI'
           ? 'Laporan penyelesaian dan foto bukti berhasil dikirim untuk dievaluasi atasan!'
+          : isKadivItSelfCompletion
+          ? 'Laporan penyelesaian tugas mandiri Kepala Divisi IT berhasil disimpan dan langsung berstatus Selesai!'
           : status === 'SELESAI'
           ? 'Evaluasi disetujui! Tugas resmi dinyatakan Selesai.'
           : status === 'HOLD_ESKALASI'
@@ -917,10 +1056,13 @@ const getAssignableStaff = async (req, res) => {
   try {
     const callerRole = req.user?.role;
     const userDivisiId = req.user?.divisiId ? Number(req.user.divisiId) : null;
+    const callerIsKadivIT = await checkIsKadivIT(req.user);
 
     let where = { role: 'STAF' };
     if (callerRole === 'DIREKTUR') {
       where.role = 'KADIV';
+    } else if (callerIsKadivIT) {
+      where = { id: Number(req.user.id) };
     } else if (callerRole === 'KADIV') {
       where.role = 'KOORDINATOR';
       if (userDivisiId) where.divisiId = userDivisiId;
@@ -1166,4 +1308,6 @@ module.exports = {
   getTicketById,
   updateSopById,
   deleteSopPermanently,
+  isDivisiIT,
+  checkIsKadivIT,
 };

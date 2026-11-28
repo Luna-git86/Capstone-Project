@@ -2,7 +2,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { getAuthRole, getAuthUserId, getAuthDivisiId } from '../utils/authStorage';
+import {
+  getAuthRole,
+  getAuthUserId,
+  getAuthDivisiId,
+  getAuthDivisiNama,
+  isDivisiIT,
+  isKadivIT,
+} from '../utils/authStorage';
 
 interface DivisiOption {
   id: number;
@@ -205,10 +212,17 @@ export default function DetailLaporan() {
     (currentUserId && Number(ticket?.pembuat?.id) === currentUserId)
   );
 
+  const userDivisiNama = getAuthDivisiNama('');
+  const userIsKadivIT = isKadivIT(userRole, userDivisiNama);
+  const targetIsDivisiIT = isDivisiIT(ticket?.divisi?.nama);
+
   const isDivisiSama = Boolean(
-    divisiIdFromAuth &&
-    ticket?.divisiId &&
-    Number(ticket.divisiId) === Number(divisiIdFromAuth)
+    (divisiIdFromAuth &&
+      ticket?.divisiId &&
+      Number(ticket.divisiId) === Number(divisiIdFromAuth)) ||
+      (userDivisiNama &&
+        ticket?.divisi?.nama &&
+        userDivisiNama.trim().toLowerCase() === ticket.divisi.nama.trim().toLowerCase())
   );
 
   // Status posisi eskalasi berjenjang berdasarkan catatanRevisi
@@ -230,8 +244,23 @@ export default function DetailLaporan() {
     !isPembuatLaporan &&
     isDivisiSama;
 
+  // Khusus Kadiv IT & SIMRS: karena tidak memiliki Koordinator/Staf bawahan, menangani langsung laporan masuk Divisi IT
+  const isAuthorizedKadivItTriase =
+    userIsKadivIT &&
+    ticket?.status === 'MENUNGGU_TRIASE' &&
+    !isPembuatLaporan &&
+    isDivisiSama;
+
+  const isAuthorizedKadivItProses =
+    userIsKadivIT &&
+    (ticket?.status === 'DIPROSES' ||
+      (ticket?.status === 'HOLD_ESKALASI' && !isEscalatedToDirektur)) &&
+    !isPembuatLaporan &&
+    isDivisiSama;
+
   const isAuthorizedKadivEscalation =
     userRole === 'KADIV' &&
+    !userIsKadivIT &&
     ticket?.status === 'HOLD_ESKALASI' &&
     !isEscalatedToDirektur &&
     !isPembuatLaporan &&
@@ -248,6 +277,22 @@ export default function DetailLaporan() {
     setEskalasiError('');
     setAlasanEskalasi('');
     setShowEskalasiModal(true);
+  };
+
+  const handleTerimaKerjakanKadivIT = async () => {
+    if (!ticket) return;
+    setIsSubmitting(true);
+    try {
+      await api.patch(`/tickets/${id}/status`, {
+        status: 'DIPROSES',
+      });
+      alert('Laporan masalah berhasil diterima dan berstatus Sedang Dikerjakan oleh Kepala Divisi IT.');
+      fetchDetail();
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Gagal memperbarui status laporan.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleTolakSubmit = async (e: React.FormEvent) => {
@@ -436,12 +481,13 @@ export default function DetailLaporan() {
     child,
     ...(child.childTickets || []),
   ]);
-  const totalChild = allSubTasks.length;
   const completedChild = allSubTasks.filter((c) => c.status === 'SELESAI').length;
 
   const shouldShowProgressSection =
     (ticket.childTickets && ticket.childTickets.length > 0) ||
     (!isAuthorizedKoor &&
+      !isAuthorizedKadivItTriase &&
+      !isAuthorizedKadivItProses &&
       !isAuthorizedKadivEscalation &&
       !isAuthorizedDirekturEscalation);
 
@@ -506,8 +552,14 @@ export default function DetailLaporan() {
               </span>
             </div>
             <h1 className="text-xl md:text-2xl font-bold text-slate-800">
-              {isAuthorizedKoor || isAuthorizedKadivEscalation || isAuthorizedDirekturEscalation
-                ? 'Ruang Evaluasi & Penugasan'
+              {isAuthorizedKoor ||
+              isAuthorizedKadivItTriase ||
+              isAuthorizedKadivItProses ||
+              isAuthorizedKadivEscalation ||
+              isAuthorizedDirekturEscalation
+                ? userIsKadivIT
+                  ? 'Penanganan Mandiri Kepala Divisi IT'
+                  : 'Ruang Evaluasi & Penugasan'
                 : 'Detail Laporan Insiden'}
             </h1>
           </div>
@@ -821,7 +873,7 @@ export default function DetailLaporan() {
           </div>
         )}
 
-        {/* PANEL AKSI: TRIASE KOORDINATOR / PENANGANAN KADIV / KEPUTUSAN DIREKTUR */}
+        {/* PANEL AKSI: TRIASE KOORDINATOR / PENANGANAN MANDIRI KADIV IT / ESKALASI KADIV / KEPUTUSAN DIREKTUR */}
         {isAuthorizedKoor ? (
           <div className="bg-white p-6 md:p-8 rounded-2xl border-t-4 border-t-emerald-600 border-x border-b border-slate-200 shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -875,6 +927,124 @@ export default function DetailLaporan() {
                 Eskalasikan ke Kepala Divisi
               </button>
             </div>
+          </div>
+        ) : isAuthorizedKadivItTriase ? (
+          <div className="bg-white p-6 md:p-8 rounded-2xl border-t-4 border-t-emerald-600 border-x border-b border-slate-200 shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wider mb-1">
+                  Penanganan Mandiri Kepala Divisi IT & SIMRS
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Karena Divisi IT tidak memiliki bawahan, Anda dapat langsung menerima pengerjaan, membuat laporan tugas selesai beserta foto bukti, atau menolak laporan.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2.5 w-full md:w-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTolakError('');
+                    setShowTolakModal(true);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 font-bold rounded-xl transition-colors text-xs shadow-2xs"
+                >
+                  Tolak & Kembalikan
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={handleTerimaKerjakanKadivIT}
+                  className="w-full sm:w-auto px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl transition-colors text-xs shadow-2xs disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Memproses...' : 'Terima & Kerjakan'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNavigasiKeTambahTugas}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl transition-colors text-xs shadow-xs flex items-center justify-center gap-2"
+                >
+                  <span>Buat Laporan Tugas Selesai</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M14 5l7 7m0 0l-7 7m7-7H3"
+                    ></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <span className="text-slate-500">
+                Membutuhkan pengadaan perangkat baru atau persetujuan anggaran tingkat rumah sakit?
+              </span>
+              <button
+                type="button"
+                onClick={() => openModalPimpinan('ESKALASI')}
+                className="text-slate-700 hover:text-emerald-700 font-bold underline text-left sm:text-right transition-colors"
+              >
+                Eskalasikan ke Direktur
+              </button>
+            </div>
+          </div>
+        ) : isAuthorizedKadivItProses ? (
+          <div className="bg-white p-6 md:p-8 rounded-2xl border-t-4 border-t-emerald-600 border-x border-b border-slate-200 shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wider mb-1">
+                  Penyelesaian Laporan oleh Kepala Divisi IT
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Setelah pekerjaan selesai ditangani, buat laporan penyelesaian tugas beserta foto bukti dokumentasi untuk menutup laporan ini.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2.5 w-full md:w-auto shrink-0">
+                {ticket.status === 'HOLD_ESKALASI' && (
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={handleTerimaKerjakanKadivIT}
+                    className="w-full sm:w-auto px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl transition-colors text-xs shadow-2xs disabled:opacity-50"
+                  >
+                    {isSubmitting ? 'Memproses...' : 'Tandai Sedang Dikerjakan'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleNavigasiKeTambahTugas}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl transition-colors text-xs shadow-xs flex items-center justify-center gap-2"
+                >
+                  <span>Buat Laporan Tugas Selesai</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M14 5l7 7m0 0l-7 7m7-7H3"
+                    ></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {!hasArahanDirektur && (
+              <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <span className="text-slate-500">
+                  Terkendala pengadaan perangkat atau butuh keputusan anggaran tingkat Direksi?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => openModalPimpinan('ESKALASI')}
+                  className="text-slate-700 hover:text-emerald-700 font-bold underline text-left sm:text-right transition-colors"
+                >
+                  Eskalasikan ke Direktur
+                </button>
+              </div>
+            )}
           </div>
         ) : isAuthorizedKadivEscalation ? (
           <div className="bg-white p-6 md:p-8 rounded-2xl border-t-4 border-t-emerald-600 border-x border-b border-slate-200 shadow-sm space-y-4">
@@ -1119,11 +1289,14 @@ export default function DetailLaporan() {
                       </svg>
                     </div>
                     <p className="font-bold text-slate-700 text-sm">
-                      Menunggu Analisis Koordinator
+                      {targetIsDivisiIT
+                        ? 'Menunggu Tindak Lanjut Kepala Divisi IT'
+                        : 'Menunggu Analisis Koordinator'}
                     </p>
                     <p className="text-xs text-slate-500 mt-1.5 text-center max-w-sm">
-                      Laporan ini telah diterima di sistem dan sedang menunggu koordinator untuk
-                      ditugaskan ke teknisi.
+                      {targetIsDivisiIT
+                        ? 'Laporan ini telah diterima di sistem dan sedang menunggu penanganan langsung oleh Kepala Divisi IT & SIMRS.'
+                        : 'Laporan ini telah diterima di sistem dan sedang menunggu koordinator untuk ditugaskan ke teknisi.'}
                     </p>
                   </>
                 ) : ticket.status === 'HOLD_ESKALASI' ? (

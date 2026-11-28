@@ -6,6 +6,7 @@ import {
   BookOpen,
   ClipboardCheck,
   ClipboardList,
+  FilePlus2,
   FileText,
   Home,
   Inbox,
@@ -14,7 +15,11 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import { canAccessAnalisisKunjungan } from '../utils/authStorage';
+import {
+  canAccessAnalisisKunjungan,
+  canAccessMenuLaporan,
+  isKadivIT,
+} from '../utils/authStorage';
 
 export interface MenuItem {
   title: string;
@@ -54,8 +59,15 @@ export const getMenuItems = (userRole: string, userDivisi?: string | null): Menu
       title: 'Menu Laporan',
       shortTitle: 'Laporan',
       path: '/menu-laporan',
-      allowedRoles: ['KOORDINATOR'],
+      allowedRoles: ['KOORDINATOR', 'KADIV'],
       icon: Inbox,
+    },
+    {
+      title: 'Buat Laporan Tugas',
+      shortTitle: 'Lapor Tugas',
+      path: '/tambah-tugas',
+      allowedRoles: ['KADIV'],
+      icon: FilePlus2,
     },
 
     //Rute untuk semua role
@@ -123,6 +135,12 @@ export const getMenuItems = (userRole: string, userDivisi?: string | null): Menu
 
   return menuItems.filter((item) => {
     if (!item.allowedRoles.includes(userRole)) return false;
+    if (item.path === '/menu-laporan') {
+      return canAccessMenuLaporan(userRole, userDivisi);
+    }
+    if (item.path === '/tambah-tugas') {
+      return isKadivIT(userRole, userDivisi);
+    }
     if (item.path === '/analisis-kunjungan') {
       return canAccessAnalisisKunjungan(userRole, userDivisi);
     }

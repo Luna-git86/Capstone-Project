@@ -15,7 +15,14 @@ import {
   X,
 } from 'lucide-react';
 import api from '../services/api';
-import { getAuthRole, getAuthDivisiId, getAuthUserId } from '../utils/authStorage';
+import {
+  getAuthRole,
+  getAuthDivisiId,
+  getAuthDivisiNama,
+  getAuthUserId,
+  getAuthUserName,
+  isKadivIT,
+} from '../utils/authStorage';
 
 interface Divisi {
   id: number;
@@ -67,12 +74,15 @@ export default function TambahTugas() {
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const buktiFileInputRef = useRef<HTMLInputElement>(null);
   const successAlertRef = useRef<HTMLDivElement>(null);
   const judulInputRef = useRef<HTMLInputElement>(null);
   const lokasiInputRef = useRef<HTMLInputElement>(null);
   const deskripsiInputRef = useRef<HTMLTextAreaElement>(null);
   const deadlineInputRef = useRef<HTMLInputElement>(null);
   const pelaksanaSectionRef = useRef<HTMLDivElement>(null);
+  const buktiSectionRef = useRef<HTMLDivElement>(null);
+  const laporanPenyelesaianRef = useRef<HTMLTextAreaElement>(null);
   const [searchParams] = useSearchParams();
 
   const paramParentId = searchParams.get('parentId');
@@ -85,8 +95,11 @@ export default function TambahTugas() {
 
   const userRole = getAuthRole() || 'KOORDINATOR';
   const userDivisiId = getAuthDivisiId() || '';
+  const userDivisiNama = getAuthDivisiNama('');
+  const userName = getAuthUserName('Kepala Divisi IT');
   const currentUserId = getAuthUserId();
   const isDirektur = userRole === 'DIREKTUR';
+  const userIsKadivIT = isKadivIT(userRole, userDivisiNama);
   const isDivisiLocked = !isDirektur && Boolean(userDivisiId);
 
   const [divisiList, setDivisiList] = useState<Divisi[]>([]);
@@ -109,12 +122,16 @@ export default function TambahTugas() {
     pelaksanaIds: [] as string[],
     deadline: '',
     fotoInstruksi: location.state?.fotoInstruksi || '',
+    fotoBukti: '',
+    laporanPenyelesaian: '',
   });
 
   const [isDragging, setIsDragging] = useState(false);
+  const [isDraggingBukti, setIsDraggingBukti] = useState(false);
   const [previewName, setPreviewName] = useState(
     formData.fotoInstruksi ? 'Lampiran dari Laporan Awal' : ''
   );
+  const [buktiPreviewName, setBuktiPreviewName] = useState('');
   const [staffSearch, setStaffSearch] = useState('');
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -125,6 +142,8 @@ export default function TambahTugas() {
     deskripsi?: string;
     divisi?: string;
     pelaksana?: string;
+    fotoBukti?: string;
+    laporanPenyelesaian?: string;
   }>({});
   const [successCount, setSuccessCount] = useState<number>(0);
 
@@ -155,6 +174,7 @@ export default function TambahTugas() {
               judul: prev.judul || sourceFromList.judul || '',
               lokasi: prev.lokasi || sourceFromList.lokasi || '',
               deskripsi: prev.deskripsi || sourceFromList.deskripsi || '',
+              fotoInstruksi: prev.fotoInstruksi || sourceFromList.fotoInstruksi || '',
               divisiId: isDivisiLocked
                 ? String(userDivisiId)
                 : prev.divisiId ||
@@ -171,32 +191,38 @@ export default function TambahTugas() {
         const listDivisi: Divisi[] = divRes.data?.data || divRes.data || [];
         setDivisiList(listDivisi);
         if (!isDirektur && !isDivisiLocked && listDivisi.length > 0) {
+          const matchedItDiv = userIsKadivIT
+            ? listDivisi.find((d) => /\bit\b|simrs/i.test(d.nama))
+            : undefined;
           setFormData((prev) => ({
             ...prev,
-            divisiId: prev.divisiId || String(listDivisi[0].id),
+            divisiId: prev.divisiId || String((matchedItDiv || listDivisi[0]).id),
           }));
         }
       } catch (e) {
         console.warn('Gagal memuat divisi:', e);
       }
 
-      try {
-        const staffRes = await api.get('/tickets/staff');
-        setAllStaffList(staffRes.data?.data || staffRes.data || []);
-      } catch {
+      if (!userIsKadivIT) {
         try {
-          const optRes = await api.get('/tickets/options');
-          setAllStaffList(optRes.data?.pelaksana || []);
-        } catch (errOpt) {
-          console.warn('Gagal memuat staf:', errOpt);
+          const staffRes = await api.get('/tickets/staff');
+          setAllStaffList(staffRes.data?.data || staffRes.data || []);
+        } catch {
+          try {
+            const optRes = await api.get('/tickets/options');
+            setAllStaffList(optRes.data?.pelaksana || []);
+          } catch (errOpt) {
+            console.warn('Gagal memuat staf:', errOpt);
+          }
         }
       }
     };
 
     loadInitialData();
-  }, [userRole, currentUserId, sourceTicketId, isDirektur, isDivisiLocked, userDivisiId]);
+  }, [userRole, currentUserId, sourceTicketId, isDirektur, isDivisiLocked, userDivisiId, userIsKadivIT]);
 
   useEffect(() => {
+    if (userIsKadivIT) return;
     const fetchPelaksanaByDivisi = async () => {
       try {
         setLoadingOptions(true);
@@ -211,7 +237,7 @@ export default function TambahTugas() {
       }
     };
     fetchPelaksanaByDivisi();
-  }, [formData.divisiId, isDivisiLocked, userDivisiId]);
+  }, [formData.divisiId, isDivisiLocked, userDivisiId, userIsKadivIT]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -228,10 +254,13 @@ export default function TambahTugas() {
     if (name === 'deskripsi' && value.trim()) {
       setFieldErrors((prev) => ({ ...prev, deskripsi: undefined }));
     }
+    if (name === 'laporanPenyelesaian' && value.trim()) {
+      setFieldErrors((prev) => ({ ...prev, laporanPenyelesaian: undefined }));
+    }
     if (name === 'divisiId') {
       setFieldErrors((prev) => ({ ...prev, divisi: undefined, pelaksana: undefined }));
     }
-    if (name === 'deadline') {
+    if (name === 'deadline' && !userIsKadivIT) {
       const currentMin = getCurrentLocalDateTime();
       setMinDeadline(currentMin);
       if (!value) {
@@ -248,6 +277,60 @@ export default function TambahTugas() {
       [name]: value,
       ...(name === 'divisiId' ? { pelaksanaIds: [] } : {}),
     }));
+  };
+
+  const handleBuktiFileProcess = async (file: File) => {
+    const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!allowedImageTypes.includes(file.type)) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        fotoBukti: 'Format file tidak didukung. Unggah gambar foto (JPG, PNG, WebP).',
+      }));
+      return;
+    }
+
+    try {
+      const base64Str = await compressImageToBase64(file);
+      setFormData((prev) => ({ ...prev, fotoBukti: base64Str }));
+      setBuktiPreviewName(file.name);
+      setFieldErrors((prev) => ({ ...prev, fotoBukti: undefined }));
+    } catch {
+      setFieldErrors((prev) => ({
+        ...prev,
+        fotoBukti: 'Gagal memproses foto bukti. Silakan coba gambar lain.',
+      }));
+    }
+  };
+
+  const onBuktiFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleBuktiFileProcess(e.target.files[0]);
+    }
+  };
+
+  const onDragOverBukti = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingBukti(true);
+  };
+
+  const onDragLeaveBukti = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingBukti(false);
+  };
+
+  const onDropBukti = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingBukti(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleBuktiFileProcess(e.dataTransfer.files[0]);
+      e.dataTransfer.clearData();
+    }
+  };
+
+  const hapusFotoBukti = () => {
+    setFormData((prev) => ({ ...prev, fotoBukti: '' }));
+    setBuktiPreviewName('');
+    if (buktiFileInputRef.current) buktiFileInputRef.current.value = '';
   };
 
   const handleFileProcess = async (file: File) => {
@@ -331,28 +414,44 @@ export default function TambahTugas() {
       deskripsi?: string;
       divisi?: string;
       pelaksana?: string;
+      fotoBukti?: string;
+      laporanPenyelesaian?: string;
     } = {};
     let nextDeadlineError = '';
 
     if (!formData.judul.trim()) {
-      nextFieldErrors.judul = 'Judul tugas wajib diisi';
+      nextFieldErrors.judul = userIsKadivIT
+        ? 'Judul pekerjaan wajib diisi'
+        : 'Judul tugas wajib diisi';
     }
     if (!formData.lokasi.trim()) {
       nextFieldErrors.lokasi = 'Lokasi / area wajib diisi';
     }
     if (!formData.deskripsi.trim()) {
-      nextFieldErrors.deskripsi = 'Instruksi detail pekerjaan wajib diisi';
+      nextFieldErrors.deskripsi = userIsKadivIT
+        ? 'Rincian pekerjaan wajib diisi'
+        : 'Instruksi detail pekerjaan wajib diisi';
     }
-    if (!formData.deadline) {
-      nextDeadlineError = 'Batas waktu target wajib diisi';
-    } else if (new Date(formData.deadline).getTime() < new Date().getTime()) {
-      nextDeadlineError = 'Batas waktu tidak boleh berada di masa lalu';
-    }
-    if (!isDirektur && !formData.divisiId) {
-      nextFieldErrors.divisi = 'Pilih divisi tujuan terlebih dahulu';
-    }
-    if (!isDirektur && formData.pelaksanaIds.length === 0) {
-      nextFieldErrors.pelaksana = 'Pilih minimal 1 staf pelaksana';
+
+    if (userIsKadivIT) {
+      if (!formData.fotoBukti) {
+        nextFieldErrors.fotoBukti = 'Foto bukti dokumentasi hasil kerja wajib diunggah';
+      }
+      if (!formData.laporanPenyelesaian.trim()) {
+        nextFieldErrors.laporanPenyelesaian = 'Catatan penyelesaian pekerjaan wajib diisi';
+      }
+    } else {
+      if (!formData.deadline) {
+        nextDeadlineError = 'Batas waktu target wajib diisi';
+      } else if (new Date(formData.deadline).getTime() < new Date().getTime()) {
+        nextDeadlineError = 'Batas waktu tidak boleh berada di masa lalu';
+      }
+      if (!isDirektur && !formData.divisiId) {
+        nextFieldErrors.divisi = 'Pilih divisi tujuan terlebih dahulu';
+      }
+      if (!isDirektur && formData.pelaksanaIds.length === 0) {
+        nextFieldErrors.pelaksana = 'Pilih minimal 1 staf pelaksana';
+      }
     }
 
     setFieldErrors(nextFieldErrors);
@@ -364,9 +463,15 @@ export default function TambahTugas() {
       nextFieldErrors.deskripsi ||
       nextDeadlineError ||
       nextFieldErrors.divisi ||
-      nextFieldErrors.pelaksana
+      nextFieldErrors.pelaksana ||
+      nextFieldErrors.fotoBukti ||
+      nextFieldErrors.laporanPenyelesaian
     ) {
-      setError('Mohon lengkapi semua kolom wajib yang ditandai merah sebelum menerbitkan tugas.');
+      setError(
+        userIsKadivIT
+          ? 'Mohon lengkapi semua kolom wajib termasuk foto bukti dan catatan penyelesaian sebelum menyimpan laporan tugas.'
+          : 'Mohon lengkapi semua kolom wajib yang ditandai merah sebelum menerbitkan tugas.'
+      );
 
       if (nextFieldErrors.judul) {
         judulInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -380,6 +485,11 @@ export default function TambahTugas() {
       } else if (nextDeadlineError) {
         deadlineInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         deadlineInputRef.current?.focus();
+      } else if (nextFieldErrors.fotoBukti) {
+        buktiSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (nextFieldErrors.laporanPenyelesaian) {
+        laporanPenyelesaianRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        laporanPenyelesaianRef.current?.focus();
       } else if (nextFieldErrors.divisi || nextFieldErrors.pelaksana) {
         pelaksanaSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
@@ -391,6 +501,51 @@ export default function TambahTugas() {
     setSubmitting(true);
 
     try {
+      if (userIsKadivIT) {
+        const resolvedDivisiId = isDivisiLocked
+          ? Number(userDivisiId)
+          : formData.divisiId
+          ? Number(formData.divisiId)
+          : undefined;
+
+        const payload: Record<string, unknown> = {
+          tipe: 'LAPORAN_TUGAS_MANDIRI',
+          ...(sourceTicketId ? { ticketId: Number(sourceTicketId) } : {}),
+          ...(paramParentId ? { parentTicketId: Number(paramParentId) } : {}),
+          judul: formData.judul.trim(),
+          lokasi: formData.lokasi.trim(),
+          deskripsi: formData.deskripsi.trim(),
+          prioritas: formData.prioritas,
+          ...(resolvedDivisiId ? { divisiId: resolvedDivisiId } : {}),
+          fotoBukti: formData.fotoBukti,
+          laporanPenyelesaian: formData.laporanPenyelesaian.trim(),
+          fotoInstruksi: formData.fotoInstruksi || null,
+        };
+
+        await api.post('/tickets', payload);
+        setSuccessCount(1);
+
+        setFormData((prev) => ({
+          ...prev,
+          judul: '',
+          lokasi: '',
+          deskripsi: '',
+          fotoInstruksi: '',
+          fotoBukti: '',
+          laporanPenyelesaian: '',
+        }));
+        setFieldErrors({});
+        setPreviewName('');
+        setBuktiPreviewName('');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (buktiFileInputRef.current) buktiFileInputRef.current.value = '';
+        setTimeout(() => {
+          successAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          successAlertRef.current?.focus();
+        }, 100);
+        return;
+      }
+
       const targetPelaksanaIds =
         formData.pelaksanaIds.length > 0 ? formData.pelaksanaIds : [''];
 
@@ -448,7 +603,12 @@ export default function TambahTugas() {
         successAlertRef.current?.focus();
       }, 100);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Terjadi kesalahan saat menerbitkan tugas.');
+      setError(
+        err.response?.data?.message ||
+          (userIsKadivIT
+            ? 'Terjadi kesalahan saat menyimpan laporan tugas mandiri.'
+            : 'Terjadi kesalahan saat menerbitkan tugas.')
+      );
     } finally {
       setSubmitting(false);
     }
@@ -467,14 +627,17 @@ export default function TambahTugas() {
     return list.filter((s) => s.nama.toLowerCase().includes(staffSearch.toLowerCase()));
   }, [pelaksanaList, allStaffList, formData.divisiId, isDivisiLocked, userDivisiId, staffSearch]);
 
-  const pageTitle =
-    userRole === 'DIREKTUR'
-      ? 'Terbitkan Arahan Direksi'
-      : userRole === 'KADIV'
-      ? 'Terbitkan Arahan Divisi'
-      : sourceTicketId
-      ? 'Terbitkan Tiket Operasional Lapangan'
-      : 'Penugasan Staf Lapangan';
+  const pageTitle = userIsKadivIT
+    ? sourceTicketId
+      ? 'Selesaikan Laporan & Buat Laporan Tugas IT'
+      : 'Buat Laporan Tugas Mandiri (Kadiv IT)'
+    : userRole === 'DIREKTUR'
+    ? 'Terbitkan Arahan Direksi'
+    : userRole === 'KADIV'
+    ? 'Terbitkan Arahan Divisi'
+    : sourceTicketId
+    ? 'Terbitkan Tiket Operasional Lapangan'
+    : 'Penugasan Staf Lapangan';
 
   return (
     <div className="min-h-screen bg-clinical-bg pb-28 md:pb-12">
@@ -483,13 +646,21 @@ export default function TambahTugas() {
         <div className="max-w-4xl mx-auto">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-brand-deep text-xs font-bold uppercase tracking-wider mb-2">
             <Users className="w-3.5 h-3.5" />
-            <span>Wewenang Penugasan ({userRole})</span>
+            <span>
+              {userIsKadivIT
+                ? 'Laporan Tugas Mandiri (KADIV IT & SIMRS)'
+                : `Wewenang Penugasan (${userRole})`}
+            </span>
           </div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-clinical-ink tracking-tight">
             {pageTitle}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 leading-relaxed">
-            {sourceTicketId
+            {userIsKadivIT
+              ? sourceTicketId
+                ? `Catat pengerjaan teknis, unggah foto bukti hasil kerja, dan selesaikan laporan masalah #L-${String(sourceTicketId).padStart(3, '0')} dalam satu langkah.`
+                : 'Khusus Kepala Divisi IT & SIMRS: isi detail pekerjaan, foto bukti hasil pengerjaan, dan catatan penyelesaian sekaligus (otomatis berstatus Selesai tanpa delegasi bawahan).'
+              : sourceTicketId
               ? `Anda sedang menugaskan staf untuk menangani laporan / tiket #T-${String(sourceTicketId).padStart(3, '0')}.`
               : 'Delegasikan instruksi operasional, target batas waktu, dan tunjuk pelaksana lapangan.'}
           </p>
@@ -502,10 +673,12 @@ export default function TambahTugas() {
           <div className="p-5 bg-blue-50/70 border border-brand-mint/40 rounded-3xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs">
             <div>
               <span className="text-[10px] font-bold text-brand-deep uppercase tracking-widest bg-white/80 px-2.5 py-0.5 rounded-full">
-                Tugas Turunan (Sub-Task)
+                {userIsKadivIT
+                  ? 'Tindak Lanjut Laporan Masalah IT'
+                  : 'Tugas Turunan (Sub-Task)'}
               </span>
               <p className="text-sm font-bold text-clinical-ink mt-1.5">
-                Sumber: #T-{String(sourceTicketId).padStart(3, '0')}{' '}
+                Sumber: #{paramParentId ? 'T' : 'L'}-{String(sourceTicketId).padStart(3, '0')}{' '}
                 {sourceTicketTitle && `— ${sourceTicketTitle}`}
               </p>
             </div>
@@ -537,24 +710,37 @@ export default function TambahTugas() {
                 <CheckCircle2 className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-base font-extrabold">Penugasan Berhasil Diterbitkan!</h3>
+                <h3 className="text-base font-extrabold">
+                  {userIsKadivIT
+                    ? 'Laporan Tugas Mandiri Berhasil Disimpan & Selesai!'
+                    : 'Penugasan Berhasil Diterbitkan!'}
+                </h3>
                 <p className="text-xs text-white/80 mt-0.5">
-                  Sebanyak <strong>{successCount} tiket penugasan</strong> telah diteruskan kepada{' '}
-                  {formData.pelaksanaIds.length > 0
-                    ? 'pelaksana yang dipilih.'
-                    : formData.divisiId
-                    ? 'divisi tujuan.'
-                    : 'semua divisi.'}
+                  {userIsKadivIT ? (
+                    <>
+                      Laporan pekerjaan beserta foto bukti penyelesaian telah tercatat otomatis dengan status{' '}
+                      <strong>Selesai</strong> pada Divisi IT & SIMRS.
+                    </>
+                  ) : (
+                    <>
+                      Sebanyak <strong>{successCount} tiket penugasan</strong> telah diteruskan kepada{' '}
+                      {formData.pelaksanaIds.length > 0
+                        ? 'pelaksana yang dipilih.'
+                        : formData.divisiId
+                        ? 'divisi tujuan.'
+                        : 'semua divisi.'}
+                    </>
+                  )}
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
-                onClick={() => navigate('/semua-tugas')}
+                onClick={() => navigate(userIsKadivIT ? '/riwayat' : '/semua-tugas')}
                 className="h-11 px-5 bg-white text-brand-deep font-bold text-xs rounded-2xl shadow-sm hover:bg-slate-100 active:scale-95 transition"
               >
-                Lihat di Daftar Tugas →
+                {userIsKadivIT ? 'Lihat di Riwayat Selesai →' : 'Lihat di Daftar Tugas →'}
               </button>
               <button
                 type="button"
@@ -570,7 +756,7 @@ export default function TambahTugas() {
                 className="h-11 px-5 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs rounded-2xl active:scale-95 transition inline-flex items-center gap-1.5"
               >
                 <Plus className="w-4 h-4" />
-                <span>Buat Tugas Baru</span>
+                <span>{userIsKadivIT ? 'Buat Laporan Tugas Baru' : 'Buat Tugas Baru'}</span>
               </button>
             </div>
           </div>
@@ -591,7 +777,11 @@ export default function TambahTugas() {
                 <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
                   1
                 </span>
-                <span>Informasi Tugas & Lokasi *</span>
+                <span>
+                  {userIsKadivIT
+                    ? 'Informasi Pekerjaan & Lokasi *'
+                    : 'Informasi Tugas & Lokasi *'}
+                </span>
               </label>
               <span className="text-[11px] font-semibold text-slate-400">Tahap 1</span>
             </div>
@@ -599,7 +789,8 @@ export default function TambahTugas() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <label className="block text-xs font-bold text-clinical-ink">
-                  Judul Tugas / Arahan <span className="text-rose-600">*</span>
+                  {userIsKadivIT ? 'Judul Pekerjaan / Tugas IT' : 'Judul Tugas / Arahan'}{' '}
+                  <span className="text-rose-600">*</span>
                 </label>
                 {fieldErrors.judul && (
                   <span className="text-xs font-bold text-rose-600">{fieldErrors.judul}</span>
@@ -611,7 +802,11 @@ export default function TambahTugas() {
                 name="judul"
                 value={formData.judul}
                 onChange={handleChange}
-                placeholder="Contoh: Perbaikan & Cuci AC Ruang Nifas"
+                placeholder={
+                  userIsKadivIT
+                    ? 'Contoh: Perbaikan Jaringan SIMRS & Pemeliharaan Server Poli'
+                    : 'Contoh: Perbaikan & Cuci AC Ruang Nifas'
+                }
                 className={`w-full h-12 px-4 rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none transition ${
                   fieldErrors.judul
                     ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
@@ -636,7 +831,11 @@ export default function TambahTugas() {
                   name="lokasi"
                   value={formData.lokasi}
                   onChange={handleChange}
-                  placeholder="Contoh: Gedung Utama Lt. 2"
+                  placeholder={
+                    userIsKadivIT
+                      ? 'Contoh: Ruang Server IT / Poliklinik Anak Lt. 1'
+                      : 'Contoh: Gedung Utama Lt. 2'
+                  }
                   className={`w-full h-12 pl-11 pr-4 rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none transition ${
                     fieldErrors.lokasi
                       ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
@@ -650,7 +849,10 @@ export default function TambahTugas() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <label className="block text-xs font-bold text-clinical-ink">
-                  Instruksi Detail Pekerjaan <span className="text-rose-600">*</span>
+                  {userIsKadivIT
+                    ? 'Deskripsi / Rincian Pekerjaan'
+                    : 'Instruksi Detail Pekerjaan'}{' '}
+                  <span className="text-rose-600">*</span>
                 </label>
                 {fieldErrors.deskripsi && (
                   <span className="text-xs font-bold text-rose-600">{fieldErrors.deskripsi}</span>
@@ -662,7 +864,11 @@ export default function TambahTugas() {
                 rows={3}
                 value={formData.deskripsi}
                 onChange={handleChange}
-                placeholder="Tuliskan standar hasil kerja yang Anda harapkan..."
+                placeholder={
+                  userIsKadivIT
+                    ? 'Jelaskan permasalahan atau ruang lingkup pekerjaan teknis IT yang dikerjakan...'
+                    : 'Tuliskan standar hasil kerja yang Anda harapkan...'
+                }
                 className={`w-full p-4 rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none transition leading-relaxed ${
                   fieldErrors.deskripsi
                     ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
@@ -672,16 +878,22 @@ export default function TambahTugas() {
             </div>
           </div>
 
-          {/* STEP 2: Prioritas & Batas Waktu */}
+          {/* STEP 2: Prioritas (& Batas Waktu untuk non-Kadiv IT) */}
           <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
                   2
                 </span>
-                <span>Tingkat Prioritas & Batas Waktu *</span>
+                <span>
+                  {userIsKadivIT
+                    ? 'Tingkat Prioritas Pekerjaan *'
+                    : 'Tingkat Prioritas & Batas Waktu *'}
+                </span>
               </label>
-              <span className="text-[11px] font-semibold text-slate-400">Target Waktu</span>
+              <span className="text-[11px] font-semibold text-slate-400">
+                {userIsKadivIT ? 'Prioritas' : 'Target Waktu'}
+              </span>
             </div>
 
             {/* Selectable Cards Prioritas */}
@@ -735,201 +947,364 @@ export default function TambahTugas() {
               </button>
             </div>
 
-            <div className="space-y-1.5 pt-2">
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-bold text-clinical-ink">
-                  Batas Waktu Target <span className="text-rose-600">*</span>
-                </label>
-                {deadlineError && (
-                  <span className="text-xs font-bold text-rose-600">
-                    {deadlineError}
-                  </span>
-                )}
+            {userIsKadivIT ? (
+              <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 flex items-center gap-3 text-xs text-emerald-900">
+                <CheckCircle2 className="w-4 h-4 text-[#0f5c43] shrink-0" />
+                <span>
+                  <strong>Pengesahan Otomatis:</strong> Laporan tugas mandiri Kepala Divisi IT langsung tercatat berstatus{' '}
+                  <strong>Selesai</strong> pada waktu pengiriman tanpa perlu menunggu validasi Direktur.
+                </span>
               </div>
-              <div className="relative">
-                <input
-                  ref={deadlineInputRef}
-                  type="datetime-local"
-                  name="deadline"
-                  min={minDeadline}
-                  value={formData.deadline}
+            ) : (
+              <div className="space-y-1.5 pt-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-bold text-clinical-ink">
+                    Batas Waktu Target <span className="text-rose-600">*</span>
+                  </label>
+                  {deadlineError && (
+                    <span className="text-xs font-bold text-rose-600">
+                      {deadlineError}
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    ref={deadlineInputRef}
+                    type="datetime-local"
+                    name="deadline"
+                    min={minDeadline}
+                    value={formData.deadline}
+                    onChange={handleChange}
+                    className={`w-full h-12 pl-11 pr-4 rounded-2xl text-xs sm:text-sm font-bold text-clinical-ink focus:outline-none transition ${
+                      deadlineError
+                        ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
+                        : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-brand-deep focus:bg-white'
+                    }`}
+                  />
+                  <Calendar className="w-4 h-4 text-slate-400 absolute left-4 top-4" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* STEP 3: Khusus Kadiv IT -> Bukti & Catatan Penyelesaian (1 Form) | Role Lain -> Multi-Delegasi Tim Pelaksana */}
+          {userIsKadivIT ? (
+            <div
+              ref={buktiSectionRef}
+              className={`bg-clinical-surface p-5 sm:p-7 rounded-3xl shadow-xs space-y-5 transition ${
+                fieldErrors.fotoBukti || fieldErrors.laporanPenyelesaian
+                  ? 'border-2 border-rose-500 ring-2 ring-rose-500/15'
+                  : 'border border-clinical-border'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
+                    3
+                  </span>
+                  <span>Bukti Dokumentasi & Catatan Penyelesaian *</span>
+                </label>
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-[#0f5c43]">
+                  Tugas Mandiri IT
+                </span>
+              </div>
+
+              {/* Kartu Identitas Pelaksana Mandiri Kadiv IT */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-clinical-border flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-brand-deep text-white font-extrabold text-xs flex items-center justify-center shrink-0">
+                    {userName.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-extrabold text-clinical-ink truncate">
+                      {userName}
+                    </p>
+                    <p className="text-[11px] text-slate-500 truncate">
+                      Pelaksana Mandiri • {userDivisiNama || 'Divisi IT & SIMRS'} (Tanpa Bawahan)
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full bg-blue-50 text-brand-deep border border-brand-mint/40 shrink-0">
+                  Dikerjakan Sendiri
+                </span>
+              </div>
+
+              {/* Foto Bukti Dokumentasi Selesai (Wajib) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-xs font-bold text-clinical-ink">
+                    Foto Bukti Dokumentasi Hasil Kerja <span className="text-rose-600">*</span>
+                  </label>
+                  {fieldErrors.fotoBukti && (
+                    <span className="text-xs font-bold text-rose-600">
+                      {fieldErrors.fotoBukti}
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  onDragOver={onDragOverBukti}
+                  onDragLeave={onDragLeaveBukti}
+                  onDrop={onDropBukti}
+                  className={`border-2 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center text-center transition-all ${
+                    fieldErrors.fotoBukti
+                      ? 'border-rose-400 bg-rose-50/40'
+                      : isDraggingBukti
+                      ? 'border-brand-deep bg-blue-50'
+                      : 'border-clinical-border bg-slate-50/70 hover:bg-slate-100 hover:border-slate-400'
+                  }`}
+                >
+                  {formData.fotoBukti ? (
+                    <div className="w-full max-w-sm space-y-3">
+                      <img
+                        src={formData.fotoBukti}
+                        alt="Preview Foto Bukti Penyelesaian"
+                        className="h-48 w-full object-cover rounded-2xl border border-clinical-border shadow-xs"
+                      />
+                      {buktiPreviewName && (
+                        <p className="text-xs font-bold text-clinical-ink truncate px-2">
+                          {buktiPreviewName}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={hapusFotoBukti}
+                        className="inline-flex items-center gap-1.5 h-9 px-4 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus & Ganti Foto Bukti</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-[#0f5c43] flex items-center justify-center mx-auto">
+                        <ImageIcon className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-clinical-ink">
+                          Unggah Foto Bukti Pekerjaan Selesai
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Tarik & lepas foto ke sini atau klik tombol di bawah (JPG / PNG / WebP)
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => buktiFileInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 h-10 px-4 bg-white border border-clinical-border hover:bg-slate-50 text-clinical-ink text-xs font-bold rounded-2xl shadow-xs transition"
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                        <span>Pilih Foto Bukti</span>
+                      </button>
+                      <input
+                        type="file"
+                        ref={buktiFileInputRef}
+                        onChange={onBuktiFileInputChange}
+                        accept="image/png, image/jpeg, image/jpg, image/webp"
+                        className="hidden"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Catatan Penyelesaian Pekerjaan (Wajib) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-xs font-bold text-clinical-ink">
+                    Catatan Penyelesaian Pekerjaan <span className="text-rose-600">*</span>
+                  </label>
+                  {fieldErrors.laporanPenyelesaian && (
+                    <span className="text-xs font-bold text-rose-600">
+                      {fieldErrors.laporanPenyelesaian}
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  ref={laporanPenyelesaianRef}
+                  name="laporanPenyelesaian"
+                  rows={3}
+                  value={formData.laporanPenyelesaian}
                   onChange={handleChange}
-                  className={`w-full h-12 pl-11 pr-4 rounded-2xl text-xs sm:text-sm font-bold text-clinical-ink focus:outline-none transition ${
-                    deadlineError
+                  placeholder="Jelaskan tindakan perbaikan, konfigurasi, atau hasil akhir pekerjaan yang telah diselesaikan..."
+                  className={`w-full p-4 rounded-2xl text-xs sm:text-sm font-medium text-clinical-ink focus:outline-none transition leading-relaxed ${
+                    fieldErrors.laporanPenyelesaian
                       ? 'bg-rose-50/40 border-2 border-rose-500 ring-2 ring-rose-500/15'
                       : 'bg-slate-50 border border-clinical-border focus:ring-2 focus:ring-brand-deep focus:bg-white'
                   }`}
                 />
-                <Calendar className="w-4 h-4 text-slate-400 absolute left-4 top-4" />
               </div>
             </div>
-          </div>
-
-          {/* STEP 3: Multi-Delegasi Tim Pelaksana */}
-          <div
-            ref={pelaksanaSectionRef}
-            className={`bg-clinical-surface p-5 sm:p-7 rounded-3xl shadow-xs space-y-4 transition ${
-              fieldErrors.pelaksana || fieldErrors.divisi
-                ? 'border-2 border-rose-500 ring-2 ring-rose-500/15'
-                : 'border border-clinical-border'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
-                  3
-                </span>
-                <span>
-                  {isDirektur
-                    ? 'Divisi Tujuan & Pelaksana (Opsional)'
-                    : 'Pemilihan Tim Pelaksana (Multi-Select) *'}
-                </span>
-              </label>
-              <div className="flex items-center gap-2">
-                {(fieldErrors.divisi || fieldErrors.pelaksana) && (
-                  <span className="text-xs font-bold text-rose-600">
-                    {fieldErrors.divisi || fieldErrors.pelaksana}
+          ) : (
+            <div
+              ref={pelaksanaSectionRef}
+              className={`bg-clinical-surface p-5 sm:p-7 rounded-3xl shadow-xs space-y-4 transition ${
+                fieldErrors.pelaksana || fieldErrors.divisi
+                  ? 'border-2 border-rose-500 ring-2 ring-rose-500/15'
+                  : 'border border-clinical-border'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
+                    3
                   </span>
-                )}
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-brand-deep">
-                  {formData.pelaksanaIds.length} Terpilih
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1">
-                  {isDirektur ? 'Divisi Tujuan' : 'Divisi Anda (Terkunci)'}
+                  <span>
+                    {isDirektur
+                      ? 'Divisi Tujuan & Pelaksana (Opsional)'
+                      : 'Pemilihan Tim Pelaksana (Multi-Select) *'}
+                  </span>
                 </label>
-                <select
-                  name="divisiId"
-                  value={formData.divisiId}
-                  onChange={handleChange}
-                  disabled={isDivisiLocked}
-                  className={`w-full h-11 px-3 border border-clinical-border rounded-2xl text-xs font-semibold focus:outline-none ${
-                    isDivisiLocked
-                      ? 'bg-slate-100 text-slate-500 cursor-not-allowed'
-                      : 'bg-slate-50 text-clinical-ink focus:ring-2 focus:ring-brand-deep'
-                  }`}
-                >
-                  {isDirektur && <option value="">-- Semua Divisi --</option>}
-                  {divisiList.map((d) => (
-                    <option key={d.id} value={String(d.id)}>
-                      {d.nama}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-2">
+                  {(fieldErrors.divisi || fieldErrors.pelaksana) && (
+                    <span className="text-xs font-bold text-rose-600">
+                      {fieldErrors.divisi || fieldErrors.pelaksana}
+                    </span>
+                  )}
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-brand-deep">
+                    {formData.pelaksanaIds.length} Terpilih
+                  </span>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1">
-                  Cari Nama Pelaksana
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ketik nama staf / kadiv..."
-                  value={staffSearch}
-                  onChange={(e) => setStaffSearch(e.target.value)}
-                  className="w-full h-11 px-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
-                />
-              </div>
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1">
+                    {isDirektur ? 'Divisi Tujuan' : 'Divisi Anda (Terkunci)'}
+                  </label>
+                  <select
+                    name="divisiId"
+                    value={formData.divisiId}
+                    onChange={handleChange}
+                    disabled={isDivisiLocked}
+                    className={`w-full h-11 px-3 border border-clinical-border rounded-2xl text-xs font-semibold focus:outline-none ${
+                      isDivisiLocked
+                        ? 'bg-slate-100 text-slate-500 cursor-not-allowed'
+                        : 'bg-slate-50 text-clinical-ink focus:ring-2 focus:ring-brand-deep'
+                    }`}
+                  >
+                    {isDirektur && <option value="">-- Semua Divisi --</option>}
+                    {divisiList.map((d) => (
+                      <option key={d.id} value={String(d.id)}>
+                        {d.nama}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* Chip Pelaksana Terpilih */}
-            {formData.pelaksanaIds.length > 0 && (
-              <div className="p-3.5 bg-blue-50/60 border border-brand-mint/40 rounded-2xl space-y-2">
-                <p className="text-[11px] font-bold text-brand-deep uppercase tracking-wider">
-                  Tim Pelaksana Terpilih ({formData.pelaksanaIds.length})
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {formData.pelaksanaIds.map((id) => {
-                    const st =
-                      pelaksanaList.find((s) => String(s.id) === id) ||
-                      allStaffList.find((s) => String(s.id) === id);
-                    if (!st) return null;
-                    return (
-                      <span
-                        key={id}
-                        className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-white text-brand-deep border border-brand-mint/40 text-xs font-bold shadow-2xs"
-                      >
-                        <span>{st.nama}</span>
-                        <button
-                          type="button"
-                          onClick={() => togglePelaksana(id)}
-                          className="w-5 h-5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center text-xs transition"
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1">
+                    Cari Nama Pelaksana
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ketik nama staf / kadiv..."
+                    value={staffSearch}
+                    onChange={(e) => setStaffSearch(e.target.value)}
+                    className="w-full h-11 px-4 bg-slate-50 border border-clinical-border rounded-2xl text-xs font-medium text-clinical-ink focus:outline-none focus:ring-2 focus:ring-brand-deep"
+                  />
+                </div>
+              </div>
+
+              {/* Chip Pelaksana Terpilih */}
+              {formData.pelaksanaIds.length > 0 && (
+                <div className="p-3.5 bg-blue-50/60 border border-brand-mint/40 rounded-2xl space-y-2">
+                  <p className="text-[11px] font-bold text-brand-deep uppercase tracking-wider">
+                    Tim Pelaksana Terpilih ({formData.pelaksanaIds.length})
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.pelaksanaIds.map((id) => {
+                      const st =
+                        pelaksanaList.find((s) => String(s.id) === id) ||
+                        allStaffList.find((s) => String(s.id) === id);
+                      if (!st) return null;
+                      return (
+                        <span
+                          key={id}
+                          className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-white text-brand-deep border border-brand-mint/40 text-xs font-bold shadow-2xs"
                         >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    );
-                  })}
+                          <span>{st.nama}</span>
+                          <button
+                            type="button"
+                            onClick={() => togglePelaksana(id)}
+                            className="w-5 h-5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center text-xs transition"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Grid Selectable Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto p-1">
-              {loadingOptions ? (
-                <div className="col-span-full py-8 text-center text-xs text-slate-400 font-semibold animate-pulse">
-                  Memuat data pelaksana...
-                </div>
-              ) : filteredStaff.length === 0 ? (
-                <div className="col-span-full py-8 text-center text-xs text-slate-400 font-medium border border-dashed border-clinical-border rounded-2xl">
-                  {isDirektur
-                    ? 'Belum ada personel terdaftar. Arahan tetap dapat diterbitkan tanpa memilih pelaksana spesifik.'
-                    : 'Tidak ada staf di divisi ini.'}
-                </div>
-              ) : (
-                filteredStaff.map((staf) => {
-                  const isSelected = formData.pelaksanaIds.includes(String(staf.id));
+              {/* Grid Selectable Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto p-1">
+                {loadingOptions ? (
+                  <div className="col-span-full py-8 text-center text-xs text-slate-400 font-semibold animate-pulse">
+                    Memuat data pelaksana...
+                  </div>
+                ) : filteredStaff.length === 0 ? (
+                  <div className="col-span-full py-8 text-center text-xs text-slate-400 font-medium border border-dashed border-clinical-border rounded-2xl">
+                    {isDirektur
+                      ? 'Belum ada personel terdaftar. Arahan tetap dapat diterbitkan tanpa memilih pelaksana spesifik.'
+                      : 'Tidak ada staf di divisi ini.'}
+                  </div>
+                ) : (
+                  filteredStaff.map((staf) => {
+                    const isSelected = formData.pelaksanaIds.includes(String(staf.id));
 
-                  return (
-                    <button
-                      key={staf.id}
-                      type="button"
-                      onClick={() => togglePelaksana(String(staf.id))}
-                      className={`p-3.5 rounded-2xl border-2 text-left transition-all active:scale-95 flex items-center gap-3 ${
-                        isSelected
-                          ? 'border-brand-deep bg-blue-50/80 shadow-xs'
-                          : 'border-clinical-border bg-white hover:bg-slate-50'
-                      }`}
-                    >
-                      <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                    return (
+                      <button
+                        key={staf.id}
+                        type="button"
+                        onClick={() => togglePelaksana(String(staf.id))}
+                        className={`p-3.5 rounded-2xl border-2 text-left transition-all active:scale-95 flex items-center gap-3 ${
                           isSelected
-                            ? 'bg-brand-deep text-white'
-                            : 'bg-brand-peach text-brand-deep'
+                            ? 'border-brand-deep bg-blue-50/80 shadow-xs'
+                            : 'border-clinical-border bg-white hover:bg-slate-50'
                         }`}
                       >
-                        {staf.nama.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className={`text-xs font-bold truncate ${isSelected ? 'text-brand-deep' : 'text-clinical-ink'}`}>
-                          {staf.nama}
-                        </p>
-                        <p className="text-[10px] text-slate-400 truncate">
-                          {staf.divisi?.nama || staf.role}
-                        </p>
-                      </div>
-                      {isSelected && (
-                        <CheckCircle2 className="w-4 h-4 text-brand-deep shrink-0" />
-                      )}
-                    </button>
-                  );
-                })
-              )}
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                            isSelected
+                              ? 'bg-brand-deep text-white'
+                              : 'bg-brand-peach text-brand-deep'
+                          }`}
+                        >
+                          {staf.nama.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-xs font-bold truncate ${isSelected ? 'text-brand-deep' : 'text-clinical-ink'}`}>
+                            {staf.nama}
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate">
+                            {staf.divisi?.nama || staf.role}
+                          </p>
+                        </div>
+                        {isSelected && (
+                          <CheckCircle2 className="w-4 h-4 text-brand-deep shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* STEP 4: Lampiran Referensi / Instruksi (Gambar atau PDF) */}
+          {/* STEP 4: Lampiran Referensi / Instruksi Awal (Gambar atau PDF) */}
           <div className="bg-clinical-surface p-5 sm:p-7 rounded-3xl border border-clinical-border shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-xs font-extrabold uppercase tracking-wider text-clinical-ink flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-brand-deep text-white flex items-center justify-center text-xs">
                   4
                 </span>
-                <span>Lampiran Referensi / Instruksi (Opsional)</span>
+                <span>
+                  {userIsKadivIT
+                    ? 'Lampiran Masalah / Referensi Awal (Opsional)'
+                    : 'Lampiran Referensi / Instruksi (Opsional)'}
+                </span>
               </label>
               <span className="text-[11px] font-semibold text-slate-400">Gambar / PDF</span>
             </div>
@@ -1029,12 +1404,18 @@ export default function TambahTugas() {
                 className="flex-1 sm:flex-initial h-12 px-8 bg-brand-orange hover:bg-brand-orange/90 active:scale-98 disabled:opacity-50 text-white font-extrabold text-sm rounded-2xl shadow-md shadow-brand-orange/20 transition flex items-center justify-center gap-2"
               >
                 {submitting ? (
-                  <span>Memproses Penugasan...</span>
+                  <span>
+                    {userIsKadivIT
+                      ? 'Menyimpan Laporan Tugas...'
+                      : 'Memproses Penugasan...'}
+                  </span>
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
                     <span>
-                      {isDirektur && formData.pelaksanaIds.length === 0
+                      {userIsKadivIT
+                        ? 'Simpan & Selesaikan Laporan Tugas'
+                        : isDirektur && formData.pelaksanaIds.length === 0
                         ? formData.divisiId
                           ? 'Terbitkan Arahan ke Divisi'
                           : 'Terbitkan Arahan ke Semua Divisi'

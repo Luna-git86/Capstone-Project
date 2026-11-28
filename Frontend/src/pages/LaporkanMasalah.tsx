@@ -288,7 +288,10 @@ export default function LaporkanMasalah() {
                 <h3 className="text-lg font-extrabold mt-1">Laporan Berhasil Diajukan!</h3>
                 <p className="text-xs text-white/80 mt-1 leading-relaxed">
                   Laporan telah masuk ke bagian{' '}
-                  <strong className="text-white underline">{createdTicket.divisi?.nama}</strong> dan menunggu dibuatkan penugasan oleh Koordinator.
+                  <strong className="text-white underline">{createdTicket.divisi?.nama}</strong> dan menunggu{' '}
+                  {/\bit\b|simrs/i.test(createdTicket.divisi?.nama || '')
+                    ? 'ditindaklanjuti langsung oleh Kepala Divisi IT & SIMRS.'
+                    : 'dibuatkan penugasan oleh Koordinator.'}
                 </p>
               </div>
             </div>

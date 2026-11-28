@@ -17,6 +17,7 @@ import {
   getAuthRole,
   getAuthUserDivisiId,
   getAuthDivisiNama,
+  isKadivIT,
 } from '../../utils/authStorage';
 
 interface Divisi {
@@ -283,7 +284,9 @@ export default function AntreanLaporan() {
             Manajemen Laporan Masuk
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Pantau keluhan fasilitas yang masuk ke divisi Anda dan distribusikan menjadi penugasan teknis.
+            {isKadivIT(userRole, userDivisiNama)
+              ? 'Pantau laporan kendala IT & SIMRS yang masuk dan tangani langsung menjadi laporan penyelesaian tugas mandiri.'
+              : 'Pantau keluhan fasilitas yang masuk ke divisi Anda dan distribusikan menjadi penugasan teknis.'}
           </p>
         </div>
       </div>

@@ -6,6 +6,7 @@ import {
   getAuthRole,
   getAuthDivisiNama,
   canAccessAnalisisKunjungan,
+  canAccessMenuLaporan,
 } from './utils/authStorage';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -105,6 +106,24 @@ const AnalisisKunjunganProtectedRoute = () => {
   return <Outlet />;
 };
 
+// 2c. Penjaga Khusus Menu Laporan Masuk (KOORDINATOR & Khusus KADIV IT & SIMRS)
+const MenuLaporanProtectedRoute = () => {
+  const token = getAuthToken();
+  const role = getAuthRole();
+  const divisi = getAuthDivisiNama('');
+
+  if (!token || !role) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!canAccessMenuLaporan(role, divisi)) {
+    alert('Akses Ditolak! Menu Laporan Masuk hanya tersedia untuk Koordinator dan Kepala Divisi IT & SIMRS.');
+    return <Navigate to={getDashboardByRole(role)} replace />;
+  }
+
+  return <Outlet />;
+};
+
 
 // Pengatur Judul Tab Browser Dinamis Sesuai Status Otentikasi dan Role
 const DynamicDocumentTitle = () => {
@@ -169,6 +188,10 @@ function App() {
             {/* 4. Beranda Koordinator (Khusus Koordinator) */}
             <Route element={<RoleProtectedRoute allowedRoles={['KOORDINATOR']} />}>
               <Route path="/dashboard-koordinator" element={<DashboardKoordinator />} />
+            </Route>
+
+            {/* 4b. Menu Laporan Masuk (Koordinator & Khusus Kepala Divisi IT & SIMRS) */}
+            <Route element={<MenuLaporanProtectedRoute />}>
               <Route path="/menu-laporan" element={<MenuLaporan />} />
             </Route>
 

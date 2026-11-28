@@ -19,7 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import api from '../services/api';
-import { getAuthRole, getAuthUserId } from '../utils/authStorage';
+import { getAuthRole, getAuthUserId, getAuthDivisiNama, isKadivIT } from '../utils/authStorage';
 
 interface TicketLog {
   id: number;
@@ -118,6 +118,7 @@ export default function DetailTugas() {
 
   const userRole = getAuthRole() || 'STAF';
   const currentUserId = getAuthUserId();
+  const userIsKadivIT = isKadivIT(userRole, getAuthDivisiNama(''));
   const isKadivDir = ['KADIV', 'DIREKTUR'].includes(userRole);
   const isKadiv = userRole === 'KADIV';
   const isKoor = userRole === 'KOORDINATOR';
@@ -331,13 +332,18 @@ export default function DetailTugas() {
     setLaporSelesaiErrors({});
     setIsSubmitting(true);
     try {
+      const targetStatus = userIsKadivIT ? 'SELESAI' : 'MENUNGGU_VALIDASI';
       await api.patch(`/tickets/${id}/status`, {
-        status: 'MENUNGGU_VALIDASI',
+        status: targetStatus,
         laporanPenyelesaian: laporanText,
         fotoBukti: fotoBase64,
       });
-      alert('Laporan penyelesaian berhasil dikirim untuk divalidasi!');
-      navigate('/semua-tugas');
+      alert(
+        userIsKadivIT
+          ? 'Laporan penyelesaian tugas berhasil disimpan dan langsung berstatus Selesai!'
+          : 'Laporan penyelesaian berhasil dikirim untuk divalidasi!'
+      );
+      navigate(userIsKadivIT ? '/riwayat' : '/semua-tugas');
     } catch (error: any) {
       alert(error.response?.data?.message || 'Gagal mengirim laporan.');
     } finally {
@@ -1497,8 +1503,8 @@ export default function DetailTugas() {
               </div>
             )}
 
-            {/* C. ATASAN: DELEGASI TUGAS */}
-            {(isKoor || isKadiv) &&
+            {/* C. ATASAN: DELEGASI TUGAS (Kecuali Kadiv IT karena tidak memiliki bawahan) */}
+            {(isKoor || (isKadiv && !userIsKadivIT)) &&
               (ticket.status === 'MENUNGGU_TRIASE' ||
                 ticket.status === 'DIPROSES' ||
                 (ticket.status === 'HOLD_ESKALASI' && canHandleEscalation)) && (

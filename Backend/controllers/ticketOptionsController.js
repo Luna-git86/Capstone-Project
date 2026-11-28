@@ -29,26 +29,39 @@ const getTicketOptions = async (req, res) => {
       selectedDivisiId = callerDivisiId;
     }
 
+    const callerDivisiNama =
+      req.user?.divisi ||
+      (callerDivisiId ? divisi.find((d) => Number(d.id) === callerDivisiId)?.nama : null);
+    const callerIsKadivIT =
+      callerRole === 'KADIV' &&
+      Boolean(callerDivisiNama && /\bit\b|simrs/i.test(String(callerDivisiNama).trim()));
+
     // 2. Tentukan target role pelaksana sesuai aturan hierarki:
     // - DIREKTUR -> KADIV
-    // - KADIV -> KOORDINATOR
+    // - KADIV IT & SIMRS -> Dirinya sendiri (tidak memiliki bawahan)
+    // - KADIV lainnya -> KOORDINATOR
     // - KOORDINATOR -> STAF
     // - Lainnya / Default -> STAF
-    let allowedRoles = ['STAF'];
-    if (callerRole === 'DIREKTUR') {
-      allowedRoles = ['KADIV'];
-    } else if (callerRole === 'KADIV') {
-      allowedRoles = ['KOORDINATOR'];
-    } else if (callerRole === 'KOORDINATOR') {
-      allowedRoles = ['STAF'];
-    }
+    let wherePelaksana;
+    if (callerIsKadivIT && req.user?.id) {
+      wherePelaksana = { id: Number(req.user.id) };
+    } else {
+      let allowedRoles = ['STAF'];
+      if (callerRole === 'DIREKTUR') {
+        allowedRoles = ['KADIV'];
+      } else if (callerRole === 'KADIV') {
+        allowedRoles = ['KOORDINATOR'];
+      } else if (callerRole === 'KOORDINATOR') {
+        allowedRoles = ['STAF'];
+      }
 
-    const wherePelaksana = {
-      role: { in: allowedRoles },
-    };
+      wherePelaksana = {
+        role: { in: allowedRoles },
+      };
 
-    if (selectedDivisiId) {
-      wherePelaksana.divisiId = selectedDivisiId;
+      if (selectedDivisiId) {
+        wherePelaksana.divisiId = selectedDivisiId;
+      }
     }
 
     // 3. Ambil daftar user pelaksana yang berwenang
