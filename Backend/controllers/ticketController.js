@@ -111,10 +111,10 @@ const createTicket = async (req, res) => {
       inheritedFotoInstruksi = parentTicket.fotoInstruksi || null;
 
       // Opsional: Jika ini turunan dari laporan lama, ubah status laporan lama menjadi DIPROSES
-      if (parentTicket.status === 'MENUNGGU_TRIASE') {
+      if (['MENUNGGU_TRIASE', 'HOLD_ESKALASI'].includes(parentTicket.status)) {
         await prisma.ticket.update({
           where: { id: selectedParentTicketId },
-          data: { status: 'DIPROSES', penanggungJawabId: pembuatId }
+          data: { status: 'DIPROSES', penanggungJawabId: pembuatId },
         });
       }
     }
@@ -325,16 +325,17 @@ const getTickets = async (req, res) => {
       }
       roleConditions = { OR: orConditions };
     } else if (role === 'KOORDINATOR') {
-      // Koordinator melihat tugas yang dibuatnya, ditugaskan kepadanya, atau dia penanggung jawabnya;
-      // serta tiket laporan masalah masuk (MENUNGGU_TRIASE) atau tugas divisi yang pelaksananya Staf.
-      // Arahan Direksi ke Kadiv tidak akan tampil sampai Kadiv mendelegasikannya ke Koordinator.
       const orConditions = [
         { pembuatId: Number(userId) },
         { pelaksanaId: Number(userId) },
         { penanggungJawabId: Number(userId) },
       ];
       if (divisiId) {
-        orConditions.push({ divisiId: Number(divisiId), status: 'MENUNGGU_TRIASE' });
+        orConditions.push({
+          divisiId: Number(divisiId),
+          jenisTiket: 'LAPORAN',
+          status: { in: ['MENUNGGU_TRIASE', 'DIPROSES', 'MENUNGGU_VALIDASI', 'SELESAI', 'DITOLAK'] },
+        });
         orConditions.push({
           divisiId: Number(divisiId),
           pelaksana: { role: 'STAF' },
@@ -673,6 +674,13 @@ const updateTicketStatus = async (req, res) => {
       });
     }
 
+    // 1b. Pembuat tiket tidak dapat menolak atau men-triase laporannya sendiri
+    if (status === 'DITOLAK' && currentTicket.pembuatId === userId) {
+      return res.status(403).json({
+        message: 'Pembuat laporan tidak dapat menolak laporannya sendiri.',
+      });
+    }
+
     // 2. Validasi Isolasi Divisi & Kepemilikan Tugas Berdasarkan Role
     if (role === 'KADIV') {
       const isPembuat = currentTicket.pembuatId === userId;
@@ -688,6 +696,21 @@ const updateTicketStatus = async (req, res) => {
         (userDivisiId && currentTicket.divisiId === userDivisiId);
       if (!isTerkait) {
         return res.status(403).json({ message: 'Koordinator tidak memiliki hak akses untuk mengubah tiket dari divisi lain.' });
+      }
+
+      // Kunci opsi Koordinator pada tiket jenis LAPORAN:
+      // Hanya boleh menolak (DITOLAK) atau mengeskalasikan (HOLD_ESKALASI) saat MENUNGGU_TRIASE
+      if (currentTicket.jenisTiket === 'LAPORAN') {
+        if (currentTicket.status !== 'MENUNGGU_TRIASE') {
+          return res.status(403).json({
+            message: 'Laporan ini sudah diproses atau sedang dalam eskalasi pimpinan.',
+          });
+        }
+        if (!['DITOLAK', 'HOLD_ESKALASI'].includes(status)) {
+          return res.status(403).json({
+            message: 'Koordinator hanya dapat menolak laporan atau menugaskan staf (melalui pembuatan tugas).',
+          });
+        }
       }
     } else if (role === 'STAF') {
       // Staf berhak memperbarui tugas yang ditugaskan kepadanya ATAU laporan yang dibuatnya sendiri
@@ -705,6 +728,34 @@ const updateTicketStatus = async (req, res) => {
         return res.status(403).json({
           message: `Staf tidak memiliki wewenang untuk mengubah status tiket menjadi ${status}.`,
         });
+      }
+    }
+
+    // 2b. Validasi Alur Eskalasi Berjenjang Khusus Tiket LAPORAN
+    if (currentTicket.jenisTiket === 'LAPORAN' && status === 'HOLD_ESKALASI') {
+      const currentNote = currentTicket.catatanRevisi || '';
+      const isAlreadyAtDirektur = currentNote.includes('[Eskalasi KADIV ke DIREKTUR]');
+
+      if (role === 'KOORDINATOR' && currentTicket.status !== 'MENUNGGU_TRIASE') {
+        return res.status(403).json({
+          message: 'Laporan hanya dapat dieskalasikan saat menunggu triase.',
+        });
+      }
+
+      if (role === 'KADIV') {
+        if (currentTicket.status !== 'HOLD_ESKALASI' || isAlreadyAtDirektur) {
+          return res.status(403).json({
+            message: 'Laporan ini belum dieskalasikan ke Kadiv atau sudah diteruskan ke Direktur.',
+          });
+        }
+      }
+
+      if (role === 'DIREKTUR') {
+        if (currentTicket.status !== 'HOLD_ESKALASI' || !isAlreadyAtDirektur) {
+          return res.status(403).json({
+            message: 'Direktur hanya dapat memberikan arahan pada laporan yang dieskalasikan oleh Kadiv.',
+          });
+        }
       }
     }
 

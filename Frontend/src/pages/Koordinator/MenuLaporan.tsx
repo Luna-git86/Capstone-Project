@@ -93,7 +93,19 @@ export default function AntreanLaporan() {
 
     fetchData(false);
     const intervalId = setInterval(() => fetchData(true), 10000);
-    return () => clearInterval(intervalId);
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData(true);
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
   }, []);
 
   // Sinkronkan status efektif jika seluruh tugas turunan (childTickets) sudah SELESAI
@@ -165,17 +177,17 @@ export default function AntreanLaporan() {
           badge: 'bg-blue-50 text-blue-800 border-blue-200',
           dot: 'bg-blue-500',
         };
+      case 'HOLD_ESKALASI':
+        return {
+          label: 'Dieskalasikan',
+          badge: 'bg-orange-50 text-orange-800 border-orange-200',
+          dot: 'bg-orange-500',
+        };
       case 'MENUNGGU_VALIDASI':
         return {
           label: 'Menunggu Validasi',
           badge: 'bg-purple-50 text-purple-800 border-purple-200',
           dot: 'bg-purple-500',
-        };
-      case 'HOLD_ESKALASI':
-        return {
-          label: 'Terkendala (Hold)',
-          badge: 'bg-rose-50 text-rose-800 border-rose-200',
-          dot: 'bg-rose-500',
         };
       case 'SELESAI':
         return {

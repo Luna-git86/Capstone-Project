@@ -511,7 +511,13 @@ export default function TambahTugas() {
             </div>
             <button
               type="button"
-              onClick={() => navigate(`/detail-laporan/${sourceTicketId}`)}
+              onClick={() =>
+                navigate(
+                  paramParentId
+                    ? `/detail-tugas/${sourceTicketId}`
+                    : `/detail-laporan/${sourceTicketId}`
+                )
+              }
               className="h-10 px-4 bg-white hover:bg-slate-50 border border-clinical-border text-brand-deep font-bold text-xs rounded-2xl shadow-xs transition whitespace-nowrap self-start sm:self-auto"
             >
               Lihat Tiket Sumber

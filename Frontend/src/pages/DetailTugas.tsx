@@ -544,13 +544,19 @@ export default function DetailTugas() {
   const canHandleEscalation =
     ticket.status === 'HOLD_ESKALASI' &&
     !isAssignedToCurrentUser &&
-    ((isKoor && !isEscalatedToKadiv && !isEscalatedToDirektur) ||
+    ((isKoor &&
+      isCreatorOfTicket &&
+      !isEscalatedToKadiv &&
+      !isEscalatedToDirektur) ||
       (isKadiv &&
         (isEscalatedToKadiv ||
-          (!isEscalatedToDirektur && ticket.pembuat?.role !== 'KOORDINATOR'))) ||
+          (!isEscalatedToDirektur &&
+            isCreatorOfTicket &&
+            ticket.pembuat?.role !== 'KOORDINATOR'))) ||
       (userRole === 'DIREKTUR' &&
         (isEscalatedToDirektur ||
           (!isEscalatedToKadiv &&
+            isCreatorOfTicket &&
             ticket.pembuat?.role !== 'KOORDINATOR' &&
             ticket.pembuat?.role !== 'KADIV'))));
 
@@ -1495,7 +1501,7 @@ export default function DetailTugas() {
             {(isKoor || isKadiv) &&
               (ticket.status === 'MENUNGGU_TRIASE' ||
                 ticket.status === 'DIPROSES' ||
-                ticket.status === 'HOLD_ESKALASI') && (
+                (ticket.status === 'HOLD_ESKALASI' && canHandleEscalation)) && (
                 <div className="bg-clinical-surface p-5 rounded-3xl border border-clinical-border shadow-xs space-y-3">
                   <h3 className="text-sm font-extrabold text-clinical-ink">
                     Pendelegasian Tugas

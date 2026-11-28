@@ -23,6 +23,7 @@ import TaskSubNav from '../components/TaskSubNav';
 
 interface Ticket {
   id: number;
+  jenisTiket?: 'TUGAS' | 'LAPORAN';
   judul: string;
   lokasi: string | null;
   deskripsi: string;
@@ -102,7 +103,35 @@ export default function SemuaTugas() {
         ? ticketRes.data
         : ticketRes.data?.data || [];
 
-      setTickets(rawTickets);
+      let combinedTickets: Ticket[] = rawTickets.map((t) => ({
+        ...t,
+        jenisTiket: t.jenisTiket || 'TUGAS',
+      }));
+
+      // Khusus KADIV dan DIREKTUR: ambil juga tiket LAPORAN yang sedang dieskalasikan (HOLD_ESKALASI)
+      if (userRole === 'KADIV' || userRole === 'DIREKTUR') {
+        try {
+          const laporanRes = await api.get('/tickets?jenis=LAPORAN');
+          const rawLaporan: Ticket[] = Array.isArray(laporanRes.data)
+            ? laporanRes.data
+            : laporanRes.data?.data || [];
+
+          const escalatedLaporan = rawLaporan
+            .filter((l) => {
+              if (l.status !== 'HOLD_ESKALASI') return false;
+              const isToDirektur = (l.catatanRevisi || '').includes('[Eskalasi KADIV ke DIREKTUR]');
+              if (userRole === 'DIREKTUR') return isToDirektur;
+              return true;
+            })
+            .map((l) => ({ ...l, jenisTiket: 'LAPORAN' as const }));
+
+          combinedTickets = [...escalatedLaporan, ...combinedTickets];
+        } catch (errLap) {
+          console.warn('Gagal memuat laporan eskalasi:', errLap);
+        }
+      }
+
+      setTickets(combinedTickets);
 
       try {
         const divRes = await api.get('/auth/divisi');
@@ -123,7 +152,7 @@ export default function SemuaTugas() {
       fetchData(true);
     }, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [userRole]);
 
   const activeTickets = useMemo(() => {
     return tickets.filter(
@@ -244,7 +273,8 @@ export default function SemuaTugas() {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTitle = t.judul.toLowerCase().includes(q);
-        const matchId = `t-${String(t.id).padStart(3, '0')}`.includes(q);
+        const prefix = t.jenisTiket === 'LAPORAN' ? 'l' : 't';
+        const matchId = `${prefix}-${String(t.id).padStart(3, '0')}`.includes(q);
         const matchLoc = (t.lokasi || '').toLowerCase().includes(q);
         const matchPelaksana = (t.pelaksana?.nama || '').toLowerCase().includes(q);
         const matchDivisi = (t.divisi?.nama || '').toLowerCase().includes(q);
@@ -278,6 +308,15 @@ export default function SemuaTugas() {
   };
 
   const getStatusBadge = (t: Ticket) => {
+    if (t.jenisTiket === 'LAPORAN' && t.status === 'HOLD_ESKALASI') {
+      const isToDirektur = (t.catatanRevisi || '').includes('[Eskalasi KADIV ke DIREKTUR]');
+      return {
+        label: isToDirektur ? 'Eskalasi ke Direktur' : 'Eskalasi Laporan',
+        bg: 'bg-amber-50 text-amber-800 border-amber-200',
+        dot: 'bg-amber-500',
+      };
+    }
+
     if (t.status === 'DIPROSES' && t.catatanRevisi) {
       return {
         label: 'Perlu Revisi',
@@ -492,7 +531,7 @@ export default function SemuaTugas() {
                     { key: 'DIPROSES', label: 'Sedang Dikerjakan', count: sidebarCounts.sedangDikerjakan },
                     { key: 'MENUNGGU_VALIDASI', label: 'Menunggu Evaluasi', count: sidebarCounts.menungguEvaluasi },
                     { key: 'PERLU_REVISI', label: 'Perlu Revisi', count: sidebarCounts.perluRevisi },
-                    { key: 'HOLD_ESKALASI', label: 'Ada Kendala', count: sidebarCounts.adaKendala },
+                    { key: 'HOLD_ESKALASI', label: 'Ada Kendala / Eskalasi', count: sidebarCounts.adaKendala },
                     { key: 'OVERDUE', label: 'Tugas Terlambat', count: sidebarCounts.overdue },
                   ].map((item) => (
                     <label
@@ -674,13 +713,17 @@ export default function SemuaTugas() {
             <div className="space-y-3.5">
               {filteredActiveTickets.map((t) => {
                 const badge = getStatusBadge(t);
+                const isLaporanEskalasi = t.jenisTiket === 'LAPORAN';
                 const dlDate = t.deadline ? new Date(t.deadline) : null;
                 const isOverdue = dlDate ? new Date() > dlDate : false;
                 const isArahanDivisi =
-                  ['KADIV', 'DIREKTUR'].includes(t.pembuat?.role || '') ||
-                  ['KADIV', 'DIREKTUR'].includes(t.parentTicket?.pembuat?.role || '');
+                  !isLaporanEskalasi &&
+                  (['KADIV', 'DIREKTUR'].includes(t.pembuat?.role || '') ||
+                    ['KADIV', 'DIREKTUR'].includes(t.parentTicket?.pembuat?.role || ''));
 
-                const priorityBorder = isOverdue
+                const priorityBorder = isLaporanEskalasi
+                  ? 'border-l-amber-500'
+                  : isOverdue
                   ? 'border-l-rose-600'
                   : t.prioritas === 'HIGH'
                   ? 'border-l-rose-500'
@@ -690,24 +733,30 @@ export default function SemuaTugas() {
 
                 return (
                   <div
-                    key={t.id}
+                    key={`${t.jenisTiket || 'TUGAS'}-${t.id}`}
                     className={`rounded-2xl md:rounded-3xl border border-l-4 ${priorityBorder} shadow-xs hover:shadow-md transition-all p-4 sm:p-5 space-y-3.5 ${
-                      isOverdue
+                      isOverdue && !isLaporanEskalasi
                         ? 'bg-rose-50/70 border-rose-300'
                         : 'bg-white border-slate-200/90'
                     }`}
                   >
                     {/* Baris 1: ID Tiket, Badge Status, Prioritas, dan Deadline */}
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono font-extrabold text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-lg">
-                          #T-{String(t.id).padStart(3, '0')}
+                          #{isLaporanEskalasi ? 'L' : 'T'}-{String(t.id).padStart(3, '0')}
                         </span>
                         
                         <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${badge.bg}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
                           {badge.label}
                         </span>
+
+                        {isLaporanEskalasi && (
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 uppercase tracking-wider">
+                            Laporan Masalah
+                          </span>
+                        )}
 
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
@@ -754,7 +803,7 @@ export default function SemuaTugas() {
                       )}
                     </div>
 
-                    {/* Baris 3: Rincian Lokasi, Divisi & Pelaksana */}
+                    {/* Baris 3: Rincian Lokasi, Divisi & Pelaksana/Pelapor */}
                     <div className="flex flex-wrap items-center gap-y-1.5 gap-x-4 text-xs text-slate-500 pt-0.5">
                       {t.divisi?.nama && (
                         <span className="inline-flex items-center gap-1 text-slate-700 font-semibold bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80">
@@ -770,22 +819,52 @@ export default function SemuaTugas() {
                         </span>
                       )}
 
-                      <span className="inline-flex items-center gap-1 text-slate-600">
-                        <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Pelaksana:</span>
-                        <strong className="text-slate-800">
-                          {t.pelaksana?.nama || 'Belum Ditunjuk'}
-                        </strong>
-                      </span>
+                      {isLaporanEskalasi ? (
+                        <span className="inline-flex items-center gap-1 text-slate-600">
+                          <UserCheck className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Pelapor:</span>
+                          <strong className="text-slate-800">
+                            {t.pembuat?.nama || '-'} ({t.pembuat?.role || '-'})
+                          </strong>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-slate-600">
+                          <UserCheck className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Pelaksana:</span>
+                          <strong className="text-slate-800">
+                            {t.pelaksana?.nama || 'Belum Ditunjuk'}
+                          </strong>
+                        </span>
+                      )}
                     </div>
 
-                    {/* Catatan Kendala / Revisi Jika Ada */}
+                    {/* Catatan Kendala / Eskalasi / Revisi Jika Ada */}
                     {t.catatanRevisi && (
-                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2">
-                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                        <div>
-                          <strong className="block font-bold">Catatan Kendala / Perbaikan:</strong>
-                          <span>{t.catatanRevisi}</span>
+                      <div
+                        className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
+                          isLaporanEskalasi
+                            ? 'bg-amber-50/60 border-amber-200/80 text-slate-700'
+                            : 'bg-rose-50 border-rose-200 text-rose-800'
+                        }`}
+                      >
+                        <AlertTriangle
+                          className={`w-4 h-4 shrink-0 mt-0.5 ${
+                            isLaporanEskalasi ? 'text-amber-600' : 'text-rose-600'
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <strong
+                            className={`block font-bold mb-0.5 ${
+                              isLaporanEskalasi ? 'text-amber-900' : 'text-rose-900'
+                            }`}
+                          >
+                            {isLaporanEskalasi
+                              ? 'Catatan Eskalasi Laporan:'
+                              : 'Catatan Kendala / Perbaikan:'}
+                          </strong>
+                          <span className="line-clamp-2 whitespace-pre-line">
+                            {t.catatanRevisi}
+                          </span>
                         </div>
                       </div>
                     )}
@@ -806,15 +885,25 @@ export default function SemuaTugas() {
                       </div>
                     )}
 
-                    {/* Baris 4: ACTION BAR (Hanya Tombol Lihat Detail Tiket) */}
+                    {/* Baris 4: ACTION BAR */}
                     <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
                       <button
                         type="button"
-                        onClick={() => navigate(`/detail-tugas/${t.id}`)}
-                        className="w-full sm:w-auto h-10 px-4 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
+                        onClick={() =>
+                          navigate(
+                            isLaporanEskalasi
+                              ? `/detail-laporan/${t.id}`
+                              : `/detail-tugas/${t.id}`
+                          )
+                        }
+                        className={`w-full sm:w-auto h-10 px-4 active:scale-95 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 ${
+                          isLaporanEskalasi
+                            ? 'bg-[#0f5c43] hover:bg-[#0b4633] text-white shadow-xs'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }`}
                       >
                         <Eye className="w-4 h-4" />
-                        <span>Lihat Detail</span>
+                        <span>{isLaporanEskalasi ? 'Tindak Lanjuti Laporan' : 'Lihat Detail'}</span>
                       </button>
                     </div>
                   </div>
